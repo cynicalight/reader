@@ -47,7 +47,7 @@ claude auth login
 
 ## 本地数据
 
-桌面模式：Electron `userData/library`（macOS 开发版通常位于 `~/Library/Application Support/@reader/desktop/library`，以实际 app.getPath 为准）。开发模式：根目录 `.reader/`。
+桌面模式：Electron `userData/library`（macOS 开发版位于 `~/Library/Application Support/Reader/library`）。开发模式：根目录 `.reader/`。
 
 ```text
 reader.sqlite          文档、阅读进度、批注、对话、设置、FTS5
@@ -73,7 +73,7 @@ pnpm build
 
 ## 当前限制
 
-尚未支持 DRM EPUB、OCR、密码 PDF 输入、PDF 缩略图、后台 PDF FTS、批量翻译、跨文档 AI 检索、独立多会话管理、Ollama/API provider、统计、自动更新及签名安装包。EPUB FTS5 采用 unicode61，对中文无空格短词的匹配有限。PDF 搜索按页返回；复杂跨页选区暂不创建高亮。仅验证 macOS 开发环境；固定版式 EPUB、竖排、RTL 与大文件需要真实文档人工回归。
+尚未支持 DRM EPUB、OCR、密码 PDF 输入、PDF 缩略图、后台 PDF FTS、批量翻译、跨文档 AI 检索、独立多会话管理、Ollama/API provider、统计、自动更新及签名安装包。EPUB 搜索使用 FTS5，并以字面子串匹配补足中文短词。PDF 搜索按页返回；复杂跨页选区暂不创建高亮。仅验证 macOS 开发环境；固定版式 EPUB、竖排、RTL 与大文件需要真实文档人工回归。
 
 Electron 已接入 macOS open-file 事件，但未注册系统文件关联。开发目录可直接运行，尚未制作可分发安装包。
 

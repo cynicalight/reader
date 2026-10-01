@@ -1,3 +1,4 @@
+import { selectionLocator } from "./selection-locator";
 import {
   EpubNavigator,
   EpubPreferences,
@@ -113,9 +114,18 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       handleLocator: (locator) => /^[a-z]+:/i.test(locator.href),
       textSelected: (selection) => {
         if (!selection.text.trim()) return;
-        const location = selection.locator
-          ? this.fromLocator(selection.locator)
-          : { ...this.location, quote: selection.text };
+        const frame = Array.from(
+          this.container.querySelectorAll("iframe"),
+        ).find((frame) => frame.src === selection.targetFrameSrc);
+        const selected = frame?.contentWindow?.getSelection();
+        const exact =
+          selection.locator && selected?.rangeCount
+            ? selectionLocator(selection.locator, selected.getRangeAt(0))
+            : undefined;
+        // A quote alone cannot identify repeated passages. Only expose selections
+        // once their exact DOM range has been captured in the Readium locator.
+        if (!exact) return;
+        const location = this.fromLocator(exact);
         this.selection = { text: selection.text, location };
         this.events.selection(this.selection);
       },

@@ -102,9 +102,10 @@ func eventText(provider string, line []byte) (text string, failed bool) {
 }
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Provider string `json:"provider"`
-		Prompt   string `json:"prompt"`
-		Context  string `json:"context"`
+		Provider   string          `json:"provider"`
+		Prompt     string          `json:"prompt"`
+		Context    string          `json:"context"`
+		References json.RawMessage `json:"references"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -153,7 +154,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 		for i := len(items) - 1; i >= 0; i-- {
-			history += items[i].Role + ": " + items[i].Content + "\n"
+			history += items[i].Role + ": " + items[i].Content + "\n" + "Source excerpts: " + items[i].Context + "\n"
 		}
 		if len(history) > 24000 {
 			history = history[len(history)-24000:]
@@ -175,7 +176,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法启动 AI CLI")
 		return
 	}
-	if err = s.Store.saveMessage(d.ID, "user", req.Prompt); err != nil {
+	if err = s.Store.saveMessage(Message{DocumentID: d.ID, Role: "user", Content: req.Prompt, Context: req.Context, References: req.References}); err != nil {
 		cancel()
 		_ = cmd.Wait()
 		fail(w, 500, "无法保存对话")
@@ -218,7 +219,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		send("error", map[string]string{"error": "CLI 未完成回答。请检查终端登录、网络或订阅额度后重试。"})
 		return
 	}
-	if err = s.Store.saveMessage(d.ID, "assistant", answer.String()); err != nil {
+	if err = s.Store.saveMessage(Message{DocumentID: d.ID, Role: "assistant", Content: answer.String()}); err != nil {
 		send("error", map[string]string{"error": "回答已收到，但无法保存到本地数据库"})
 		return
 	}

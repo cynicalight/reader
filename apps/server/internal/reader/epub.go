@@ -80,6 +80,33 @@ func prepareEPUB(ctx context.Context, filename, cache string) (map[string]any, m
 		return nil, nil, err
 	}
 	texts := map[string]string{}
+	activeContent := map[string]bool{}
+	readingOrder := map[string]bool{}
+	links := append(append(manifest.LinkList{}, p.Manifest.ReadingOrder...), p.Manifest.Resources...)
+	for _, link := range links {
+		u := link.URL(nil, nil)
+		if u == nil {
+			continue
+		}
+		name, e := safeResource(u.String())
+		if e != nil {
+			return nil, nil, e
+		}
+		if link.MediaType != nil {
+			mt := strings.ToLower(strings.Split(link.MediaType.String(), ";")[0])
+			activeContent[name] = activeContent[name] || mt == "application/xhtml+xml" || mt == "text/html" || mt == "image/svg+xml"
+		}
+	}
+	for _, link := range p.Manifest.ReadingOrder {
+		u := link.URL(nil, nil)
+		if u != nil {
+			name, e := safeResource(u.String())
+			if e == nil {
+				readingOrder[name] = true
+			}
+		}
+	}
+
 	for _, entry := range z.File {
 		if entry.FileInfo().IsDir() {
 			continue
@@ -95,11 +122,14 @@ func prepareEPUB(ctx context.Context, filename, cache string) (map[string]any, m
 			return nil, nil, ex
 		}
 		ext := strings.ToLower(path.Ext(name))
-		if ext == ".xhtml" || ext == ".html" || ext == ".htm" || ext == ".svg" {
+		if activeContent[name] || ext == ".xhtml" || ext == ".html" || ext == ".htm" || ext == ".svg" {
 			data, texts[name], err = sanitizeContent(data)
 			if err != nil {
 				return nil, nil, err
 			}
+		}
+		if !readingOrder[name] {
+			delete(texts, name)
 		}
 		target := filepath.Join(cache, filepath.FromSlash(name))
 		if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {

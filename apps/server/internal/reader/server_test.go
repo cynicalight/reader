@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -263,13 +264,15 @@ func TestChatWithFakeCLI(t *testing.T) {
 	dir := t.TempDir()
 	script := `#!/bin/sh
 if [ "$1" = login ]; then exit 0; fi
-cat >/dev/null
+cat > "$READER_TEST_CAPTURE"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Test answer"}}' '{"type":"turn.completed"}'
 `
 	if e := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0700); e != nil {
 		t.Fatal(e)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	capture := filepath.Join(dir, "prompt.txt")
+	t.Setenv("READER_TEST_CAPTURE", capture)
 	w := upload(t, s, "paper.pdf", sample(t, "reading-notes.pdf"))
 	var d Document
 	json.Unmarshal(w.Body.Bytes(), &d)
@@ -282,5 +285,67 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"T
 	json.Unmarshal(w.Body.Bytes(), &messages)
 	if len(messages) != 2 {
 		t.Fatal(w.Body.String())
+	}
+	if messages[0].Context != "Some text" {
+		t.Fatal("source excerpts were not persisted")
+	}
+	w = request(t, s, "POST", "/api/documents/"+d.ID+"/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain the previous excerpt","context":"A new page"}`))
+	if !strings.Contains(w.Body.String(), "event: done") {
+		t.Fatal(w.Body.String())
+	}
+	prompt, e := os.ReadFile(capture)
+	if e != nil || !strings.Contains(string(prompt), "Source excerpts: Some text") {
+		t.Fatal("prior context missing from follow-up", e)
+	}
+
+}
+
+func TestEPUBDeclaredMediaTypeSanitized(t *testing.T) {
+	s := testServer(t)
+	original := sample(t, "the-art-of-reading.epub")
+	source, e := zip.NewReader(bytes.NewReader(original), int64(len(original)))
+	if e != nil {
+		t.Fatal(e)
+	}
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	for _, file := range source.File {
+		r, _ := file.Open()
+		body, _ := io.ReadAll(r)
+		r.Close()
+		name := file.Name
+		if name == "EPUB/package.opf" || name == "EPUB/nav.xhtml" {
+			body = bytes.ReplaceAll(body, []byte("chapter1.xhtml"), []byte("chapter1.xml"))
+		}
+		if name == "EPUB/package.opf" {
+			body = bytes.Replace(body, []byte("</manifest>"), []byte(`<item id="alias" href="chapter1.xml" media-type="text/plain"/></manifest>`), 1)
+		}
+		if name == "EPUB/chapter1.xhtml" {
+			name = "EPUB/chapter1.xml"
+			body = bytes.Replace(body, []byte("<body>"), []byte(`<body onload="evil()"><script>parent.stolen=true</script>`), 1)
+		}
+		w, _ := writer.Create(name)
+		w.Write(body)
+	}
+	writer.Close()
+	response := upload(t, s, "mismatch.epub", out.Bytes())
+	if response.Code != 201 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	var d Document
+	json.Unmarshal(response.Body.Bytes(), &d)
+	response = request(t, s, "GET", "/pub/test-secret/"+d.ID+"/EPUB/chapter1.xml", nil)
+	if response.Code != 200 || strings.Contains(response.Body.String(), "<script") || strings.Contains(response.Body.String(), "onload") {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	response = request(t, s, "GET", "/api/documents/"+d.ID+"/search?q="+url.QueryEscape("阅读之前"), nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "chapter1.xml") {
+		t.Fatal("CJK search:", response.Body.String())
+	}
+}
+func TestSVGRemainsSVG(t *testing.T) {
+	out, _, e := sanitizeContent([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/><script>evil()</script></svg>`))
+	if e != nil || !strings.HasPrefix(string(out), "<svg") || strings.Contains(string(out), "<script") {
+		t.Fatal(string(out), e)
 	}
 }

@@ -100,6 +100,8 @@ export interface Provider {
   status: string;
 }
 export interface Message {
+  context?: string;
+  references?: ReaderSelection[];
   id: string;
   documentId: string;
   role: "user" | "assistant";

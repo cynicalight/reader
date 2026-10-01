@@ -393,6 +393,10 @@ export interface paths {
             provider: "codex" | "claude";
             prompt: string;
             context: string;
+            references?: {
+              text: string;
+              location: components["schemas"]["DocumentLocation"];
+            }[];
           };
         };
       };
@@ -606,6 +610,11 @@ export interface components {
       role: "user" | "assistant";
       content: string;
       createdAt: string;
+      context?: string;
+      references?: {
+        text: string;
+        location: components["schemas"]["DocumentLocation"];
+      }[];
     };
     Provider: {
       /** @enum {unknown} */

@@ -84,6 +84,7 @@ import {
 import { toast } from "sonner";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
+import { scheduleProgress, flushProgress } from "./progress";
 function IconButton({
   label,
   children,
@@ -200,13 +201,6 @@ export function Workspace({
   const [sending, setSending] = useState(false);
   const [pageInput, setPageInput] = useState("");
   const abort = useRef<AbortController | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  const pendingProgress = useRef<{
-    progress: DocumentLocation;
-    percentage: number;
-  } | null>(null);
   const searchSerial = useRef(0);
   const messageEnd = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -222,11 +216,7 @@ export function Workspace({
     return () => {
       alive = false;
       abort.current?.abort();
-      clearTimeout(saveTimer.current);
-      if (pendingProgress.current)
-        void api
-          .update(doc.id, pendingProgress.current)
-          .catch((e) => toast.error(e.message));
+      void flushProgress().catch((e) => toast.error(e.message));
     };
   }, [doc.id]);
   useEffect(() => {
@@ -239,14 +229,9 @@ export function Workspace({
     setLocation(next);
     setPercentage(percent);
     if (next.type === "pdf") setPageInput(String(next.page));
-    pendingProgress.current = { progress: next, percentage: percent };
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      const update = pendingProgress.current;
-      pendingProgress.current = null;
-      if (update)
-        void api.update(doc.id, update).catch((e) => toast.error(e.message));
-    }, 500);
+    scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
+      toast.error(e.message),
+    );
   };
   const annotate = async (kind: Annotation["kind"], noteText = "") => {
     const target = kind === "bookmark" ? location : selection?.location;
@@ -326,6 +311,7 @@ export function Workspace({
         context.slice(0, 21000),
         controller.signal,
         (text) => setStream((s) => s + text),
+        selected,
       );
       setMessages(await api.messages(doc.id));
       setStream("");
@@ -361,7 +347,14 @@ export function Workspace({
     <div className="workspace">
       <header className="reader-toolbar">
         <div className="reader-title-group">
-          <IconButton label="返回书库" onClick={onBack}>
+          <IconButton
+            label="返回书库"
+            onClick={() => {
+              void flushProgress()
+                .then(onBack)
+                .catch((e) => toast.error(e.message));
+            }}
+          >
             <ArrowLeft />
           </IconButton>
           <span className="toolbar-divider" />
@@ -758,6 +751,29 @@ export function Workspace({
                                 {message.role === "user" ? "你" : "Reader AI"}
                               </span>
                               <div>{message.content}</div>
+                              {message.context && (
+                                <Popover>
+                                  <PopoverTrigger
+                                    render={
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="mt-2 h-6 text-[10px]"
+                                      />
+                                    }
+                                  >
+                                    <Quote className="size-3" />
+                                    引用原文
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80">
+                                    <ScrollArea className="max-h-72">
+                                      <p className="whitespace-pre-wrap text-xs leading-6">
+                                        {message.context}
+                                      </p>
+                                    </ScrollArea>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
                             </div>
                           ))
                         )}

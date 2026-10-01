@@ -33,6 +33,7 @@ import { Toaster, toast } from "sonner";
 import { useReaderStore, refreshLibrary } from "./store";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
+import { flushProgress } from "./progress";
 export function App() {
   const { documents, active, theme, setTheme, open } = useReaderStore();
   const [settings, setSettings] = useState(false);
@@ -78,6 +79,21 @@ export function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
+  }, []);
+  useEffect(
+    () =>
+      window.readerDesktop?.onBeforeClose(async () => {
+        await flushProgress();
+        await api.saveSettings(useReaderStore.getState().theme);
+      }),
+    [],
+  );
+  useEffect(() => {
+    const flush = () => {
+      void flushProgress().catch(() => {});
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
   }, []);
   const chooseFiles = () => {
     if (window.readerDesktop)

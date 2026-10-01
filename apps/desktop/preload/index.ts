@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("readerDesktop", {
+  onBeforeClose: (callback: () => Promise<void>) => {
+    const listener = () => {
+      void callback().then(
+        () => ipcRenderer.send("reader:flushed", null),
+        (error) => ipcRenderer.send("reader:flushed", String(error)),
+      );
+    };
+    ipcRenderer.on("reader:flush", listener);
+    return () => ipcRenderer.removeListener("reader:flush", listener);
+  },
   importFiles: () => ipcRenderer.invoke("reader:import"),
   onLibraryChanged: (callback: () => void) => {
     const listener = () => callback();

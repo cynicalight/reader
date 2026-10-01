@@ -476,6 +476,23 @@
                                   "provider": { "enum": ["codex", "claude"] },
                                   "prompt": { "type": "string" },
                                   "context": { "type": "string" },
+                                  "references":
+                                    {
+                                      "type": "array",
+                                      "items":
+                                        {
+                                          "type": "object",
+                                          "properties":
+                                            {
+                                              "text": { "type": "string" },
+                                              "location":
+                                                {
+                                                  "$ref": "#/components/schemas/DocumentLocation",
+                                                },
+                                            },
+                                          "required": ["text", "location"],
+                                        },
+                                    },
                                 },
                               "required": ["provider", "prompt", "context"],
                             },
@@ -727,6 +744,24 @@
                   "role": { "enum": ["user", "assistant"] },
                   "content": { "type": "string" },
                   "createdAt": { "type": "string" },
+                  "context": { "type": "string" },
+                  "references":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "object",
+                          "properties":
+                            {
+                              "text": { "type": "string" },
+                              "location":
+                                {
+                                  "$ref": "#/components/schemas/DocumentLocation",
+                                },
+                            },
+                          "required": ["text", "location"],
+                        },
+                    },
                 },
               "required": ["id", "documentId", "role", "content", "createdAt"],
             },

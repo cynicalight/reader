@@ -10,6 +10,8 @@ let serverURL = "";
 let serverToken = "";
 let window: BrowserWindow | undefined;
 let quitting = false;
+let closing = false;
+let flushed = false;
 const root = resolve(__dirname, "../..");
 async function startServer() {
   serverToken = randomBytes(32).toString("hex");
@@ -127,6 +129,45 @@ app
         sandbox: true,
       },
     });
+    window.on("close", (event) => {
+      if (flushed) return;
+      event.preventDefault();
+      if (closing) return;
+      closing = true;
+      window!.webContents.send("reader:flush");
+      const timer = setTimeout(() => {
+        void finish("保存超时，请重试。");
+      }, 10000);
+      const handler = (event: Electron.IpcMainEvent, error: string | null) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          return;
+        void finish(error);
+      };
+      const finish = async (error: string | null) => {
+        clearTimeout(timer);
+        ipcMain.removeListener("reader:flushed", handler);
+        if (error) {
+          const result = await dialog.showMessageBox(window!, {
+            type: "warning",
+            message: "阅读数据尚未保存",
+            detail: error,
+            buttons: ["返回阅读", "仍然退出"],
+            defaultId: 0,
+            cancelId: 0,
+          });
+          if (result.response === 0) {
+            closing = false;
+            return;
+          }
+        }
+        flushed = true;
+        window?.close();
+      };
+      ipcMain.on("reader:flushed", handler);
+    });
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     window.webContents.on("will-navigate", (event, target) => {
       if (new URL(target).origin !== url) event.preventDefault();
@@ -153,8 +194,15 @@ app
     dialog.showErrorBox("无法打开 Reader", String(error));
     app.quit();
   });
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (window && !window.isDestroyed() && !flushed) {
+    event.preventDefault();
+    window.close();
+    return;
+  }
   quitting = true;
   child?.kill();
 });
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => app.quit());
 app.on("window-all-closed", () => app.quit());

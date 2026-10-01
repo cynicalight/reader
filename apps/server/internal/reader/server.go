@@ -296,7 +296,11 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		d.Favorite = *v.Favorite
 	}
 	d.LastOpenedAt = now()
-	_, err = s.Store.DB.Exec("UPDATE documents SET favorite=?,progress=?,percentage=?,last_opened_at=? WHERE id=?", d.Favorite, string(d.Progress), d.Percentage, d.LastOpenedAt, d.ID)
+	var progress any
+	if v.Progress != nil {
+		progress = string(v.Progress)
+	}
+	_, err = s.Store.DB.Exec("UPDATE documents SET favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=? WHERE id=?", v.Favorite, progress, v.Percentage, d.LastOpenedAt, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return
@@ -405,20 +409,55 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := "\"" + strings.ReplaceAll(q, "\"", "\"\"") + "\""
-	rows, err := s.Store.DB.Query("SELECT href,snippet(search_index,2,'','', ' … ',36) FROM search_index WHERE document_id=? AND search_index MATCH ? LIMIT 100", r.PathValue("id"), query)
+	rows, err := s.Store.DB.Query("SELECT href,content FROM search_index WHERE document_id=? AND (search_index MATCH ?) LIMIT 100", r.PathValue("id"), query)
+	if err != nil {
+		fail(w, 500, "搜索失败")
+		return
+	}
+	type hit struct{ href, text string }
+	hits := []hit{}
+	seen := map[string]bool{}
+	for rows.Next() {
+		var h hit
+		if rows.Scan(&h.href, &h.text) == nil {
+			hits = append(hits, h)
+			seen[h.href] = true
+		}
+	}
+	rows.Close()
+	// unicode61 does not segment CJK words. A literal substring fallback also
+	// supports short Chinese queries; percent and underscore are escaped.
+	literal := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(q)
+	rows, err = s.Store.DB.Query("SELECT href,content FROM search_index WHERE document_id=? AND content LIKE ? ESCAPE '\\' LIMIT 100", r.PathValue("id"), "%"+literal+"%")
 	if err != nil {
 		fail(w, 500, "搜索失败")
 		return
 	}
 	defer rows.Close()
-	out := []any{}
 	for rows.Next() {
-		var href, excerpt string
-		if err = rows.Scan(&href, &excerpt); err != nil {
-			fail(w, 500, "搜索失败")
-			return
+		var h hit
+		if rows.Scan(&h.href, &h.text) == nil && !seen[h.href] {
+			hits = append(hits, h)
 		}
-		out = append(out, map[string]any{"id": href, "excerpt": excerpt, "location": map[string]any{"type": "epub", "href": href, "quote": q}})
+	}
+	out := []any{}
+	for _, h := range hits {
+		runes := []rune(h.text)
+		lower := strings.ToLower(h.text)
+		index := strings.Index(lower, strings.ToLower(q))
+		start := 0
+		if index >= 0 {
+			start = len([]rune(lower[:index])) - 35
+		}
+		if start < 0 {
+			start = 0
+		}
+		end := min(len(runes), start+150)
+		excerpt := string(runes[start:end])
+		out = append(out, map[string]any{"id": h.href, "excerpt": excerpt, "location": map[string]any{"type": "epub", "href": h.href, "quote": q}})
+		if len(out) == 100 {
+			break
+		}
 	}
 	respond(w, 200, out)
 }
@@ -438,12 +477,13 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 200, out)
 }
-func (s *Store) saveMessage(docID, role, content string) error {
-	m := Message{id(), docID, role, content, now()}
+func (s *Store) saveMessage(m Message) error {
+	m.ID = id()
+	m.CreatedAt = now()
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.Exec("INSERT INTO messages VALUES(?,?,?,?)", m.ID, docID, string(b), m.CreatedAt)
+	_, err = s.DB.Exec("INSERT INTO messages VALUES(?,?,?,?)", m.ID, m.DocumentID, string(b), m.CreatedAt)
 	return err
 }

@@ -8,6 +8,7 @@ import type {
   Provider,
   Message,
   ReaderTheme,
+  ReaderSelection,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -100,6 +101,7 @@ export async function chat(
   context: string,
   signal: AbortSignal,
   onDelta: (text: string) => void,
+  references: ReaderSelection[] = [],
 ) {
   const response = await fetch(`/api/documents/${id}/chat`, {
     method: "POST",
@@ -107,7 +109,7 @@ export async function chat(
       Authorization: `Bearer ${sessionToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ provider, prompt, context }),
+    body: JSON.stringify({ provider, prompt, context, references }),
     signal,
   });
   if (!response.ok) {
