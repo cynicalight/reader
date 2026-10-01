@@ -1,0 +1,9 @@
+node_modules/
+dist/
+bin/
+.reader/
+*.log
+.DS_Store
+coverage/
+.env
+apps/web/public/pdf-assets/

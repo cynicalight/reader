@@ -1,0 +1,754 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Reader Local API", "version": "0.1.0" },
+  "security": [{ "session": [] }],
+  "paths":
+    {
+      "/api/documents":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/Document" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "multipart/form-data":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "file":
+                                    { "type": "string", "format": "binary" },
+                                },
+                              "required": ["file"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}":
+        {
+          "patch":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "favorite": { "type": "boolean" },
+                                  "progress":
+                                    {
+                                      "$ref": "#/components/schemas/DocumentLocation",
+                                    },
+                                  "percentage": { "type": "number" },
+                                },
+                              "required": [],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/annotations":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/Annotation",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+          "post":
+            {
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Annotation" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "id": { "type": "string" },
+                                  "documentId": { "type": "string" },
+                                  "kind":
+                                    {
+                                      "enum":
+                                        [
+                                          "highlight",
+                                          "underline",
+                                          "note",
+                                          "bookmark",
+                                        ],
+                                    },
+                                  "location":
+                                    {
+                                      "$ref": "#/components/schemas/DocumentLocation",
+                                    },
+                                  "quote": { "type": "string" },
+                                  "note": { "type": "string" },
+                                  "color": { "type": "string" },
+                                  "createdAt": { "type": "string" },
+                                },
+                              "required":
+                                ["kind", "location", "quote", "note", "color"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/annotations/{annotation}":
+        {
+          "delete":
+            {
+              "responses":
+                {
+                  "204":
+                    {
+                      "description": "Success",
+                      "content": { "application/json": { "schema": {} } },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "in": "path",
+                    "name": "annotation",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+        },
+      "/api/documents/{id}/search":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/SearchResult",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "in": "query",
+                    "name": "q",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+        },
+      "/api/documents/{id}/messages":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/Message" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+            },
+        },
+      "/api/documents/{id}/chat":
+        {
+          "post":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "SSE: status, delta {text}, error {error}, done {ok}. Disconnection cancels CLI.",
+                      "content":
+                        {
+                          "text/event-stream":
+                            { "schema": { "type": "string" } },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "provider": { "enum": ["codex", "claude"] },
+                                  "prompt": { "type": "string" },
+                                  "context": { "type": "string" },
+                                },
+                              "required": ["provider", "prompt", "context"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/providers":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/Provider" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/settings":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Settings" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Settings" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema": { "$ref": "#/components/schemas/Settings" },
+                        },
+                    },
+                },
+            },
+        },
+    },
+  "components":
+    {
+      "securitySchemes": { "session": { "type": "http", "scheme": "bearer" } },
+      "schemas":
+        {
+          "DocumentLocation":
+            {
+              "oneOf":
+                [
+                  {
+                    "type": "object",
+                    "properties":
+                      {
+                        "type": { "const": "pdf" },
+                        "page": { "type": "integer", "minimum": 1 },
+                        "x": { "type": "number" },
+                        "y": { "type": "number" },
+                        "quote": { "type": "string" },
+                        "rects":
+                          {
+                            "type": "array",
+                            "items":
+                              {
+                                "type": "object",
+                                "properties":
+                                  {
+                                    "x": { "type": "number" },
+                                    "y": { "type": "number" },
+                                    "width": { "type": "number" },
+                                    "height": { "type": "number" },
+                                  },
+                                "required": ["x", "y", "width", "height"],
+                              },
+                          },
+                      },
+                    "required": ["type", "page"],
+                  },
+                  {
+                    "type": "object",
+                    "properties":
+                      {
+                        "type": { "const": "epub" },
+                        "href": { "type": "string" },
+                        "locator": { "type": "string" },
+                        "progression": { "type": "number" },
+                        "quote": { "type": "string" },
+                      },
+                    "required": ["type", "href"],
+                  },
+                ],
+            },
+          "Document":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "type": { "enum": ["pdf", "epub"] },
+                  "title": { "type": "string" },
+                  "author": { "type": "string" },
+                  "size": { "type": "number" },
+                  "createdAt": { "type": "string" },
+                  "lastOpenedAt": { "type": "string" },
+                  "favorite": { "type": "boolean" },
+                  "percentage": { "type": "number" },
+                  "progress":
+                    { "$ref": "#/components/schemas/DocumentLocation" },
+                },
+              "required":
+                [
+                  "id",
+                  "type",
+                  "title",
+                  "author",
+                  "size",
+                  "createdAt",
+                  "lastOpenedAt",
+                  "favorite",
+                  "percentage",
+                ],
+            },
+          "Annotation":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "documentId": { "type": "string" },
+                  "kind":
+                    { "enum": ["highlight", "underline", "note", "bookmark"] },
+                  "location":
+                    { "$ref": "#/components/schemas/DocumentLocation" },
+                  "quote": { "type": "string" },
+                  "note": { "type": "string" },
+                  "color": { "type": "string" },
+                  "createdAt": { "type": "string" },
+                },
+              "required":
+                [
+                  "id",
+                  "documentId",
+                  "kind",
+                  "location",
+                  "quote",
+                  "note",
+                  "color",
+                  "createdAt",
+                ],
+            },
+          "SearchResult":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "excerpt": { "type": "string" },
+                  "location":
+                    { "$ref": "#/components/schemas/DocumentLocation" },
+                },
+              "required": ["id", "excerpt", "location"],
+            },
+          "Message":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "documentId": { "type": "string" },
+                  "role": { "enum": ["user", "assistant"] },
+                  "content": { "type": "string" },
+                  "createdAt": { "type": "string" },
+                },
+              "required": ["id", "documentId", "role", "content", "createdAt"],
+            },
+          "Provider":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "enum": ["codex", "claude"] },
+                  "installed": { "type": "boolean" },
+                  "authenticated": { "type": "boolean" },
+                  "status": { "type": "string" },
+                },
+              "required": ["id", "installed", "authenticated", "status"],
+            },
+          "Settings": { "type": "object", "additionalProperties": true },
+          "Error":
+            {
+              "type": "object",
+              "properties": { "error": { "type": "string" } },
+              "required": ["error"],
+            },
+        },
+    },
+}

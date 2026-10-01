@@ -1,0 +1,160 @@
+import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import { spawn, type ChildProcess } from "node:child_process";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
+let child: ChildProcess | undefined;
+let serverURL = "";
+let serverToken = "";
+let window: BrowserWindow | undefined;
+let quitting = false;
+const root = resolve(__dirname, "../..");
+async function startServer() {
+  serverToken = randomBytes(32).toString("hex");
+  const binary = app.isPackaged
+    ? join(
+        process.resourcesPath,
+        "bin",
+        process.platform === "win32" ? "reader-server.exe" : "reader-server",
+      )
+    : join(root, "desktop", "bin", "reader-server");
+  const web = app.isPackaged
+    ? join(process.resourcesPath, "web")
+    : join(root, "web", "dist");
+  const pathValue = [
+    join(homedir(), ".local", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    process.env.PATH,
+  ]
+    .filter(Boolean)
+    .join(process.platform === "win32" ? ";" : ":");
+  child = spawn(
+    binary,
+    [
+      "--port",
+      "0",
+      "--data",
+      join(app.getPath("userData"), "library"),
+      "--web",
+      web,
+    ],
+    {
+      env: { ...process.env, READER_TOKEN: serverToken, PATH: pathValue },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  child.stderr?.on("data", (data) => process.stderr.write(data));
+  return new Promise<string>((accept, reject) => {
+    const timer = setTimeout(() => {
+      child?.kill();
+      reject(new Error("本地服务启动超时"));
+    }, 20000);
+    child!.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child!.once("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`本地服务已退出 (${code})`));
+      if (window && !quitting) {
+        dialog.showErrorBox(
+          "Reader 本地服务已停止",
+          "请重新打开 Reader。已保存的文档和笔记仍保留在本地。",
+        );
+        app.quit();
+      }
+    });
+    const lines = createInterface({ input: child!.stdout! });
+    lines.once("line", (line) => {
+      try {
+        const ready = JSON.parse(line);
+        serverURL = ready.url;
+        clearTimeout(timer);
+        lines.close();
+        accept(serverURL);
+      } catch {
+        clearTimeout(timer);
+        reject(new Error("本地服务返回了无效启动信息"));
+      }
+    });
+  });
+}
+async function importPaths(paths: string[]) {
+  for (const path of paths) {
+    if (!/\.(epub|pdf)$/i.test(path)) continue;
+    const data = await readFile(path);
+    const form = new FormData();
+    form.append("file", new Blob([data]), path.split(/[\\/]/).pop()!);
+    const response = await fetch(`${serverURL}/api/documents`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serverToken}` },
+      body: form,
+    });
+    if (!response.ok) throw new Error((await response.json()).error);
+  }
+  window?.webContents.send("reader:library-changed");
+}
+const pendingFiles: string[] = [];
+app.on("open-file", (event, path) => {
+  event.preventDefault();
+  if (serverURL)
+    void importPaths([path]).catch((e) =>
+      dialog.showErrorBox("导入失败", e.message),
+    );
+  else pendingFiles.push(path);
+});
+app
+  .whenReady()
+  .then(async () => {
+    const url = await startServer();
+    session.defaultSession.setPermissionRequestHandler(
+      (_contents, _permission, callback) => callback(false),
+    );
+    window = new BrowserWindow({
+      width: 1440,
+      height: 940,
+      minWidth: 1000,
+      minHeight: 660,
+      title: "Reader",
+      backgroundColor: "#ffffff",
+      webPreferences: {
+        preload: join(__dirname, "preload.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    window.webContents.on("will-navigate", (event, target) => {
+      if (new URL(target).origin !== url) event.preventDefault();
+    });
+    window.webContents.on("will-attach-webview", (event) =>
+      event.preventDefault(),
+    );
+    ipcMain.handle("reader:import", async (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      const selected = await dialog.showOpenDialog(window, {
+        properties: ["openFile", "multiSelections"],
+        filters: [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
+      });
+      if (!selected.canceled) await importPaths(selected.filePaths);
+    });
+    await window.loadURL(`${url}/#token=${serverToken}`);
+    if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
+  })
+  .catch((error) => {
+    dialog.showErrorBox("无法打开 Reader", String(error));
+    app.quit();
+  });
+app.on("before-quit", () => {
+  quitting = true;
+  child?.kill();
+});
+app.on("window-all-closed", () => app.quit());
