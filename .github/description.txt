@@ -1,0 +1,1 @@
+Local-first EPUB/PDF reader with annotations and AI assistance through Claude Code and Codex CLI. Built with React, TypeScript, shadcn/ui, Go, and Electron.
