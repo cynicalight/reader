@@ -209,7 +209,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
         <Streamdown
           {...markdownOptions}
           content={content}
-          smoothing="realtime"
+          smoothing="silky"
           granularity="word"
         />
       ) : (

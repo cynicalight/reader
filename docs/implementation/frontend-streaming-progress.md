@@ -1,6 +1,6 @@
 # 前端流式迁移交付记录
 
-工作树：`/Users/bu44er/Developer/Projects/Reader-streaming-frontend`。分支：`frontend/lobehub-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。本轮仅修改前端、SDK 消费、共享 ScrollArea、前端依赖/锁文件及本报告；未改 Go、OpenAPI、生成类型或冻结契约。未复制主工作区未提交产品代码，不合并、不推送、不部署。
+工作树：`/Users/bu44er/Developer/Projects/Reader-streaming-frontend`。分支：`frontend/lobehub-streaming`。共同基线：`85f21938f13914c48131a455cb586d4e964b90c9`。前端实施仅修改自己拥有的文件；后端 Go、OpenAPI、生成类型和契约通过用户最新授权的任务分支合并引入。未复制主工作区未提交产品代码；不合入 main、不推送、不部署。
 
 **交付边界：F1–F4 代码已接入正式聊天，自动检查和 Codex/Kimi 真实 HTTP 文字/图片联调通过；人工视觉/滚动验收、Claude 登录后的真实验证及最终协调集成未完成。因此不宣称“迁移验收完成”。**
 
@@ -22,9 +22,9 @@ ScrollArea 仅扩展真实 Viewport ref/props。`useChatScroll` 监听实际滚�
 
 ## F3：动画与性能
 
-只有 Streamdown realtime/word 控制视觉节奏；ChatSession 每帧合并发布，不添加逐字队列或传输缓冲。reduced motion、后台页面和超过 32,768 字符时关闭动画；本次消息后台恢复后保持即时显示。done/error/取消立即卸载动画调度并显示收到的原文，历史不重新播放。取消/终态/减少动态效果/后台恢复与清理有功能测试。
+按用户最新要求固定 Streamdown silky/word 控制视觉节奏，无速度选项；ChatSession 每帧合并发布，不添加逐字队列或传输缓冲。reduced motion、后台页面和超过 32,768 字符时关闭动画；本次消息后台恢复后保持即时显示。done/error/取消立即卸载动画调度并显示收到的原文，历史不重新播放。取消/终态/减少动态效果/后台恢复与清理有功能测试。
 
-同机 Apple M3 Pro / arm64 / Darwin 25.6.0，Electron 44.5.1 / Chromium 152，Vite 开发构建、360px 宽。数值探针使用独立临时 profile 隐藏窗口，只记录数字，无截图、无视觉断言。样本每 4096 Unicode 字符 / 20ms；原始结果见 [benchmark JSON](./frontend-streaming-benchmark.json)。不是生产性能承诺。
+以下数值为切换 silky 之前 realtime 模式的历史测量，不代表最终 silky 数值。按用户避免过度测试的要求，不重跑性能矩阵。同机 Apple M3 Pro / arm64 / Darwin 25.6.0，Electron 44.5.1 / Chromium 152，Vite 开发构建、360px 宽。数值探针使用独立临时 profile 隐藏窗口，只记录数字，无截图、无视觉断言。样本每 4096 Unicode 字符 / 20ms；原始结果见 [benchmark JSON](./frontend-streaming-benchmark.json)。不是生产性能承诺。
 
 初次全文解析基线的 1,048,500 字节无动画样本：147 次 commit、React 累计 40,851.3ms、135 个长任务共 43,152ms、终态提交 557.7ms。修正后，超过 32,768 字符且不含全局定义/公式的文本，按完整顶层 Markdown token 聚合约 8192 字符组，复用不变组，不切断列表/代码/表格。一次受 HMR 干扰的旧动画样本作废。以下是修正后同一代码的关闭/打开动画比较：
 
@@ -82,3 +82,13 @@ node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 集成前只读核对 main 仍为 `2afe113e8f02593da79b3ad5fbc5c8f1c721a639`。已通过授权的 codex queue 向协调会话报告主要阶段、性能问题及联调结果，未派活或打断原有会话。提交后由协调会话做联合人工验收和集成。
 
 CLI 状态在本会话交付前再次核对：Codex 0.160.0、Kimi 2.0.2、Claude Code 2.1.220；Claude `auth status` 仅输出布尔值 `loggedIn=false`，未读取凭据文件。无契约接口阻塞；剩余环境阻塞是 Claude 登录及人工验收。
+
+## 用户追加授权后的联合交付
+
+前端实施提交：`dba1b34`。用户明确要求只使用 `smoothing="silky"`，不提供速度选项，避免过度测试；已照此修改，并保留既有减少动态/终态立即追齐逻辑。原性能表及构建尺寸是切换 silky 前的历史快照，不将其冒充最终 silky 性能。
+
+用户明确授权在本 worktree 合入 `backend/unified-streaming@2b1a49f`，取代原先不合并任务分支的限制。合并提交 `29bbb8a`，无冲突；未合入 main。后端 `2b1a49f` 相对此前实际联调的 `439130d` 仅有进度文档更新，因此不重复 Codex/Kimi 模型矩阵。
+
+联合分支的必要检查已完成：`pnpm typecheck` 通过；`pnpm test` 的 Go 全包通过（21.205s），Vitest 78 通过 / 3 个显式启用的真实测试默认跳过；`pnpm build` 通过。另以合并后的本地 `docs/fixtures/agent-streaming-v1.json` 执行 SDK writer-fixtures 测试通过（6ms）。减少动态、终态追齐和取消测试在 silky 配置下随全量测试通过。未重复性能矩阵或浏览器视觉测试。
+
+预览 `http://127.0.0.1:50351` 使用本 worktree 的 dist，构建后即可刷新到 silky；后端二进制与已合入后端代码一致。人工验收与 Claude 未登录的边界仍保持，不声称未做的检查已完成。最终 smoothing/记录提交可由本分支 HEAD 查询；工作树清洁状态在提交后再次核对。
