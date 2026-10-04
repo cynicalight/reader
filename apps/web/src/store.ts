@@ -32,3 +32,10 @@ export const useReaderStore = create<{
 export async function refreshLibrary() {
   useReaderStore.getState().setDocuments(await api.documents());
 }
+export async function refreshAIConfig() {
+  const before = useReaderStore.getState().aiConfig;
+  const config = await api.aiConfig();
+  // A concurrent settings save owns its newer snapshot.
+  if (useReaderStore.getState().aiConfig === before)
+    useReaderStore.getState().setAIConfig(config);
+}

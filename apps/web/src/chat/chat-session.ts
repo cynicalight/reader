@@ -1,5 +1,6 @@
 import { api, chat, type ChatStreamEvent } from "@reader/api";
 import type { ImageAttachment, Message, SourceReference } from "@reader/core";
+import { refreshAIConfig } from "../store";
 export type ChatInput = {
   provider: string;
   prompt: string;
@@ -44,19 +45,25 @@ export interface ChatTransport {
 }
 const transport: ChatTransport = {
   messages: api.messages,
-  stream: (id, input, signal, emit) =>
-    chat(
-      id,
-      input.provider,
-      input.prompt,
-      input.context,
-      signal,
-      () => {},
-      input.references,
-      input.attachments.map((image) => image.id),
-      undefined,
-      emit,
-    ),
+  stream: async (id, input, signal, emit) => {
+    try {
+      await chat(
+        id,
+        input.provider,
+        input.prompt,
+        input.context,
+        signal,
+        () => {},
+        input.references,
+        input.attachments.map((image) => image.id),
+        undefined,
+        emit,
+      );
+    } finally {
+      // The server records failed primary attempts even when a fallback succeeds.
+      void refreshAIConfig().catch(() => {});
+    }
+  },
 };
 /** A per-document store keeps delta renders inside AssistantPanel, outside Workspace. */
 export class ChatSession {

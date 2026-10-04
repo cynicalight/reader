@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ProviderIdentity } from "./ProviderIdentity";
 import { api } from "@reader/api";
-import type { Provider, AIConfig } from "@reader/core";
+import type { Provider } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -42,14 +42,19 @@ export function Settings({
   onOpenChange: (value: boolean) => void;
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [config, setConfig] = useState<AIConfig>();
   const [testing, setTesting] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const checked = useRef(new Set<string>());
   const refreshing = useRef(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { theme, setTheme, setAIConfig, aiModelSaving } = useReaderStore();
+  const {
+    theme,
+    setTheme,
+    aiConfig: config,
+    setAIConfig,
+    aiModelSaving,
+  } = useReaderStore();
   const refresh = async (force = false) => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -60,10 +65,12 @@ export function Settings({
         api.aiConfig(),
       ]);
       setProviders(providers);
-      setConfig(config);
       setAIConfig(config);
       const pending = providers.filter((provider) => {
         if (!provider.installed) return false;
+        // Saved results survive dialog remounts and application restarts.
+        // Only an explicit retry replaces an existing result, including failures.
+        if (!force && config.capabilities[provider.id]) return false;
         const key = JSON.stringify([
           provider.id,
           provider.authenticated,
@@ -86,13 +93,12 @@ export function Settings({
         pending.map(async ({ id }) => {
           try {
             const capability = await api.testAI(id);
-            setConfig(
-              (current) =>
-                current && {
-                  ...current,
-                  capabilities: { ...current.capabilities, [id]: capability },
-                },
-            );
+            const current = useReaderStore.getState().aiConfig;
+            if (current && current.models[id] === config.models[id])
+              setAIConfig({
+                ...current,
+                capabilities: { ...current.capabilities, [id]: capability },
+              });
           } catch (error) {
             setErrors((current) => ({
               ...current,
@@ -186,7 +192,6 @@ export function Settings({
                         ...latest,
                         primary: value,
                       });
-                      setConfig(saved);
                       setAIConfig(saved);
                     } catch (e) {
                       toast.error((e as Error).message);
@@ -228,7 +233,7 @@ export function Settings({
               {(["codex", "claude", "kimi"] as const).map((name) => {
                 const p = providers.find((p) => p.id === name);
                 const capability = config?.capabilities[name];
-                const pending = loading || testing.has(name);
+                const pending = testing.has(name);
                 const error = errors[name] || capability?.error;
                 return (
                   <div key={name} className="min-w-0 rounded-xl border p-4">
@@ -240,7 +245,7 @@ export function Settings({
                         <Badge variant="outline">未安装</Badge>
                       )}
                     </div>
-                    {(pending || p?.installed) && (
+                    {(pending || p?.installed || capability) && (
                       <div className="flex flex-wrap gap-x-5">
                         {(
                           [
