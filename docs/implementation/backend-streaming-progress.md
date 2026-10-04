@@ -65,7 +65,7 @@ go test ./internal/reader -run 'TestAPIFallbackStreamsOverHTTP|TestAgentCancella
 
 [OpenAPI](../openapi.yaml) 的 `ChatStreamEvent` 是解码后联合类型，线上仍是 event/data 行。生成文件：`packages/api-client/src/schema.d.ts`。共用 [v1 fixtures](../fixtures/agent-streaming-v1.json)（success/fallback/partial-error/missing-terminal），`TestFrozenStreamFixtures` 通过实际 writer 回放；前端可只读消费。契约正文实现状态已更新，冻结项未改。
 
-本机后端预览已运行在 `http://127.0.0.1:65219`，使用独立临时书库及本工作树构建的基线 UI。HTTP 检查 `/`、health 和带认证 documents 返回 200，无认证 documents 返回 401。启动状态和本机会话 token 存在权限 0600 的 `/tmp/reader-streaming-backend-preview.json`，不进 Git。打开方式：读取该文件，将 `url + '/#token=' + token` 作为地址。预览是进程存活期间的本机地址，不是部署或合并前端后的视觉验收。
+前轮后端单独预览曾运行在 `http://127.0.0.1:65219`，使用独立临时书库及本工作树构建的基线 UI。当前 F4 联调使用下节的 `17840` 后端与 `15174` 前端；此处仅保留早期预览证据。HTTP 检查 `/`、health 和带认证 documents 返回 200，无认证 documents 返回 401。启动状态和本机会话 token 存在权限 0600 的 `/tmp/reader-streaming-backend-preview.json`，不进 Git。打开方式：读取该文件，将 `url + '/#token=' + token` 作为地址。预览是进程存活期间的本机地址，不是部署或合并前端后的视觉验收。
 
 重新启动可在此工作树运行：
 
@@ -80,7 +80,7 @@ apps/desktop/bin/reader-server --data "$(mktemp -d /tmp/reader-streaming-preview
 
 ## 双 worktree 联调启动（2026-10-05 补充）
 
-可运行后端候选为 `backend/unified-streaming@439130d`（实现提交 `2f7f820`）；本节只补启动文档，不改变 Go 或冻结 wire。B2/B3 当前没有已知未完成的实现项，模拟/HTTP 生命周期测试已通过；尚未验证的是商业备用 API 厂商端兼容性、Claude 未登录情况下无法执行的真实文字/图片/取消，以及双 worktree 的人工交互和视觉效果。这些未验证项不阻塞启动。
+可运行后端候选为 `backend/unified-streaming@47aab55`（实现提交 `2f7f820`，含完整联调启动文档）；本节只补启动文档，不改变 Go 或冻结 wire。B2/B3 当前没有已知未完成的实现项，模拟/HTTP 生命周期测试已通过；尚未验证的是商业备用 API 厂商端兼容性、Claude 未登录情况下无法执行的真实文字/图片/取消，以及双 worktree 的人工交互和视觉效果。这些未验证项不阻塞启动。
 
 本轮已实际启动后端 `http://127.0.0.1:17840` 和前端 `http://127.0.0.1:15174`。启动前两端口均通过 loopback bind 检查；前端会话既有 `15173` 监听保持不动。当前独立运行目录为 `/tmp/reader-streaming-backend-integration.zo5NBG`，书库仅在其 `data/` 下；未读取用户已有 `.reader`。运行目录指针保存在 `/tmp/reader-streaming-backend-integration.current`。以下命令可复现；若本轮进程仍在运行，直接执行初始化步骤，无需再次启动。
 
@@ -165,3 +165,12 @@ PY
 打开正式界面后，在隔离书库导入项目合成样本。Codex/Claude 文字可按现有 CLI 登录使用；Kimi、图片及备用 API 需在这个全新的书库设置页重新做所需能力测试，不能假定已有用户书库的配置被继承。测试真实模型时仅发送原创摘录与合成图片。
 
 前端和后端分别在自己的终端按 Ctrl-C 停止，只停止本次启动的进程。停止后暂保留临时目录，便于 messages/保存竞态核对；不要批量删除 `/tmp` 或用户书库。本轮运行中的进程由协调会话按实际需要继续使用或停止。
+
+
+### 最终交付核对
+
+已清除旧的“B2 实现中”和“真实测试尚未执行”状态，当前状态以上方“完成边界”和精确测试表为准。协调会话已核对 `ChatStreamEvent` 及四组共享 fixtures 符合冻结契约，并通知前端只读对照。B2/B3 的代码及自动测试完成；Claude 真实调用、商业 API 厂商端兼容性和 F4 人工联合验收仍明确标为未验证。
+
+本次再次检查：`127.0.0.1:17840/api/health` 返回 200；`15174` 经 Vite proxy 的认证 documents 查询返回 200；原有 `15173/__streaming` 仍返回 200。`ready.json` 权限为 0600，未把其会话值写入文档或回报。服务已可供 F4 使用，无需等待视觉验收。
+
+实现代码自 `2f7f820` 后未改变。本轮沿用该代码已经完成的 `pnpm test`（Go 20.556s，16 个 Vitest 文件 / 46 项）及 `go test -race ./...`（35.858s）证据；启动补充另执行必要后端用例通过（9.003s）。后续提交仅维护交付文档，没有将旧记录表述为新执行的测试。正式检查、启动命令、临时书库和不输出 token 的会话初始化脚本均在本文件内可重现。
