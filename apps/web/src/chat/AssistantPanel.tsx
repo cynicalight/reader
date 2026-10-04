@@ -80,12 +80,6 @@ export function AssistantPanel({
                 key={key}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
-                <span className="message-author">
-                  {assistant ? "Reader AI" : "你"}{" "}
-                  {answer?.phase === "generating" && (
-                    <span className="pulse-dot" />
-                  )}
-                </span>
                 {assistant ? (
                   <Suspense
                     fallback={
