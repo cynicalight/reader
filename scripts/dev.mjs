@@ -1,17 +1,26 @@
 import { spawn, execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
-execFileSync("pnpm", ["--filter", "@reader/processor", "build"], {
-  stdio: "inherit",
-});
+const pnpm = process.env.npm_execpath;
+if (!pnpm) throw new Error("Start development with pnpm dev");
+execFileSync(
+  process.execPath,
+  [pnpm, "--filter", "@reader/processor", "build"],
+  {
+    stdio: "inherit",
+  },
+);
 const token = randomBytes(32).toString("hex");
 execFileSync(
-  "go",
-  ["build", "-o", "../desktop/bin/reader-server", "./cmd/reader-server"],
-  { cwd: new URL("../apps/server/", import.meta.url), stdio: "inherit" },
+  process.execPath,
+  [fileURLToPath(new URL("./build-server.mjs", import.meta.url))],
+  { stdio: "inherit" },
 );
+const binary =
+  process.platform === "win32" ? "reader-server.exe" : "reader-server";
 const server = spawn(
-  "../desktop/bin/reader-server",
+  `../desktop/bin/${binary}`,
   ["--data", "../../.reader", "--port", "17840"],
   {
     cwd: new URL("../apps/server/", import.meta.url),
@@ -19,17 +28,18 @@ const server = spawn(
       ...process.env,
       READER_TOKEN: token,
       READER_NODE: process.execPath,
-      READER_PROCESSOR: new URL(
-        "../apps/processor/dist/main.mjs",
-        import.meta.url,
-      ).pathname,
+      READER_PROCESSOR: fileURLToPath(
+        new URL("../apps/processor/dist/main.mjs", import.meta.url),
+      ),
     },
     stdio: ["ignore", "pipe", "inherit"],
   },
 );
 let web;
 createInterface({ input: server.stdout }).once("line", () => {
-  web = spawn("pnpm", ["--filter", "@reader/web", "dev"], { stdio: "inherit" });
+  web = spawn(process.execPath, [pnpm, "--filter", "@reader/web", "dev"], {
+    stdio: "inherit",
+  });
   console.log(`\nReader: http://127.0.0.1:5173/#token=${token}\n`);
   web.once("exit", () => stop());
 });

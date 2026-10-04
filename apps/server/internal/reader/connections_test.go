@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestConnectionSecretsAndFingerprint(t *testing.T) {
 		t.Fatal("stale model capability trusted")
 	}
 	info, e := os.Stat(filepath.Join(store.Root, "ai-connections.json"))
-	if e != nil || info.Mode().Perm() != 0600 {
+	if e != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatal("config permissions", e)
 	}
 }

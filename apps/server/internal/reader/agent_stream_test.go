@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -25,12 +26,21 @@ func fakeAgent(t *testing.T, provider, mode string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nexec \"$READER_AGENT_BINARY\" -test.run='^TestAgentProcess$' -- \"$@\"\n"
-	if err := os.WriteFile(filepath.Join(dir, provider), []byte(script), 0700); err != nil {
-		t.Fatal(err)
+	name := provider
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	target := filepath.Join(dir, name)
+	if err := os.Link(binary, target); err != nil {
+		data, err := os.ReadFile(binary)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, data, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("READER_AGENT_BINARY", binary)
 	t.Setenv("READER_AGENT_HELPER", provider)
 	t.Setenv("READER_AGENT_MODE", mode)
 	ack := filepath.Join(dir, "received")
@@ -38,7 +48,7 @@ func fakeAgent(t *testing.T, provider, mode string) string {
 	return ack
 }
 
-func TestAgentProcess(t *testing.T) {
+func runAgentProcess() {
 	provider := os.Getenv("READER_AGENT_HELPER")
 	if provider == "" {
 		return
