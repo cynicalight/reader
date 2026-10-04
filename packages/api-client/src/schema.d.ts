@@ -390,18 +390,21 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {unknown} */
-            provider: "codex" | "claude";
+            provider: "codex" | "claude" | "kimi";
+            attachments?: string[];
             prompt: string;
             context: string;
             references?: {
               text: string;
+              /** @enum {unknown} */
+              kind?: "selection" | "section";
               location: components["schemas"]["DocumentLocation"];
             }[];
           };
         };
       };
       responses: {
-        /** @description SSE: status, delta {text}, error {error}, done {ok}. Disconnection cancels CLI. */
+        /** @description SSE: status, delta {text}, fallback {message}, error {error}, done {ok}. Disconnection cancels CLI. */
         200: {
           headers: {
             [name: string]: unknown;
@@ -869,8 +872,16 @@ export interface components {
       content: string;
       createdAt: string;
       context?: string;
+      attachments?: {
+        id: string;
+        page: number;
+        label: string;
+        caption?: string;
+      }[];
       references?: {
         text: string;
+        /** @enum {unknown} */
+        kind?: "selection" | "section";
         location: components["schemas"]["DocumentLocation"];
       }[];
     };
@@ -913,6 +924,8 @@ export interface components {
         height: number;
       };
       text: string;
+      /** @enum {unknown} */
+      kind?: "selection" | "section";
       image?: string;
       caption?: string;
     };

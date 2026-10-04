@@ -29,7 +29,7 @@ import {
   AlignJustify,
   Check,
 } from "lucide-react";
-import { api, chat } from "@reader/api";
+import { api, chat, blockImageURL } from "@reader/api";
 import {
   locationLabel,
   type Annotation,
@@ -44,6 +44,8 @@ import {
   type ReaderTheme,
   type Processing,
   type PDFBlock,
+  type PDFBlockAction,
+  type ImageAttachment,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Badge } from "@reader/ui/components/badge";
@@ -88,6 +90,7 @@ import {
 import { toast } from "sonner";
 import { ProviderIdentity } from "./ProviderIdentity";
 import { SourceReferences } from "./SourceReferences";
+import { ImagePreview, imageLabel } from "./ImagePreview";
 import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -191,6 +194,10 @@ export function Workspace({
   const { setTheme } = useReaderStore();
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
+  const renderBlockImage = useMemo(
+    () => adapter?.renderBlockImage?.bind(adapter),
+    [adapter],
+  );
   const referenceNavigation = useMemo(
     () => (adapter ? new ReferenceNavigation(adapter) : undefined),
     [adapter],
@@ -241,6 +248,17 @@ export function Workspace({
   const [provider, setProvider] = useState("codex");
   const [prompt, setPrompt] = useState("");
   const [quotes, setQuotes] = useState<ReaderSelection[]>([]);
+  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [previewImage, setPreviewImage] = useState<ImageAttachment>();
+  const composeInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    void api
+      .aiConfig()
+      .then((config) => {
+        if (config.primary) setProvider(config.primary);
+      })
+      .catch(() => {});
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [stream, setStream] = useState("");
   const [sending, setSending] = useState(false);
@@ -337,8 +355,13 @@ export function Workspace({
     question = prompt,
     selected = quotes,
     useSection = false,
+    attachments = images,
+    directImage = false,
   ) => {
-    if (!question.trim() || sending) return;
+    if (sending) return;
+    if (!question.trim() && attachments.length)
+      question = "请解释附件中的图表或公式。";
+    if (!question.trim()) return;
     setSending(true);
     setStream("");
     setRight(true);
@@ -375,10 +398,11 @@ export function Workspace({
           content: question,
           context: context.slice(0, 21000),
           references,
+          attachments,
           createdAt: new Date().toISOString(),
         },
       ]);
-      setPrompt("");
+      if (!directImage) setPrompt("");
       await chat(
         doc.id,
         provider,
@@ -387,10 +411,19 @@ export function Workspace({
         controller.signal,
         (text) => setStream((s) => s + text),
         references,
+        attachments.map((image) => image.id),
+        (message) => toast.info(message),
       );
       setMessages(await api.messages(doc.id));
       setStream("");
-      setQuotes([]);
+      if (!directImage) {
+        setQuotes([]);
+        setImages((current) =>
+          current.filter(
+            (image) => !attachments.some((sent) => sent.id === image.id),
+          ),
+        );
+      }
     } catch (e) {
       if ((e as Error).name !== "AbortError") toast.error((e as Error).message);
       setMessages(await api.messages(doc.id).catch(() => messages));
@@ -400,6 +433,79 @@ export function Workspace({
       abort.current = null;
     }
   };
+  const blockAction = (block: PDFBlock, action: PDFBlockAction) => {
+    const image: ImageAttachment = {
+      id: block.id,
+      page: block.page,
+      label: block.label,
+      caption: block.caption,
+    };
+    if (action === "preview") {
+      setPreviewImage(image);
+      return;
+    }
+    if (sending) {
+      toast.info("请等待当前回答完成");
+      return;
+    }
+    setRight(true);
+    setRightTab("ai");
+    if (action === "explain") {
+      void send(
+        "请详细解释这张图表或公式，说明图中信息、符号及其在原文中的含义，区分事实与推断。",
+        [],
+        false,
+        [image],
+        true,
+      );
+      return;
+    }
+    if (images.some((item) => item.id === image.id)) {
+      composeInput.current?.focus();
+      return;
+    }
+    if (images.length >= 4) {
+      toast.info("每次最多附加 4 张图片");
+      return;
+    }
+    setImages((current) => [...current, image]);
+    requestAnimationFrame(() => composeInput.current?.focus());
+  };
+  const imageAttachments = (items: ImageAttachment[], removable = false) => (
+    <div className="image-attachments">
+      {items.map((image) => (
+        <div key={image.id} className="image-attachment">
+          <Button
+            className="attachment-preview"
+            variant="ghost"
+            aria-label={`查看附件：${imageLabel(image)}`}
+            onClick={() => setPreviewImage(image)}
+          >
+            <img
+              src={blockImageURL(doc.id, image.id)}
+              alt={imageLabel(image)}
+            />
+            <span>{imageLabel(image)}</span>
+          </Button>
+          {removable && (
+            <Button
+              className="attachment-remove"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`移除附件：${imageLabel(image)}`}
+              onClick={() =>
+                setImages((current) =>
+                  current.filter((item) => item.id !== image.id),
+                )
+              }
+            >
+              <X />
+            </Button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
   const exportNotes = () => {
     const text =
       `# ${doc.title}\n\n` +
@@ -732,7 +838,11 @@ export function Workspace({
                 setAdapter(engine);
                 setTOC(items);
               }}
-              events={{ location: saveLocation, selection: setSelection }}
+              events={{
+                location: saveLocation,
+                selection: setSelection,
+                blockAction,
+              }}
             />
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
@@ -882,6 +992,8 @@ export function Workspace({
                                 {message.role === "user" ? "你" : "Reader AI"}
                               </span>
                               <div>{message.content}</div>
+                              {!!message.attachments?.length &&
+                                imageAttachments(message.attachments)}
                               <SourceReferences
                                 message={message}
                                 toc={toc}
@@ -925,7 +1037,9 @@ export function Workspace({
                           ))}
                         </div>
                       )}
+                      {!!images.length && imageAttachments(images, true)}
                       <Textarea
+                        ref={composeInput}
                         aria-label="向 AI 提问"
                         placeholder="问一个问题，或引用选中的文字…"
                         value={prompt}
@@ -960,6 +1074,9 @@ export function Workspace({
                             <SelectItem value="claude">
                               <ProviderIdentity provider="claude" />
                             </SelectItem>
+                            <SelectItem value="kimi">
+                              <ProviderIdentity provider="kimi" />
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         {sending ? (
@@ -975,7 +1092,9 @@ export function Workspace({
                           <Button
                             size="icon-sm"
                             aria-label="发送问题"
-                            disabled={!adapter || !prompt.trim()}
+                            disabled={
+                              !adapter || (!prompt.trim() && !images.length)
+                            }
                             onClick={() => void send()}
                           >
                             <Send className="size-3.5" />
@@ -1057,6 +1176,15 @@ export function Workspace({
         )}
       </ResizablePanelGroup>
 
+      {previewImage && (
+        <ImagePreview
+          key={previewImage.id}
+          documentId={doc.id}
+          image={previewImage}
+          renderImage={renderBlockImage}
+          onClose={() => setPreviewImage(undefined)}
+        />
+      )}
       <Dialog
         open={noteOpen}
         onOpenChange={(open) => {

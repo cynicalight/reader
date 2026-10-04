@@ -379,6 +379,11 @@ func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("resource")
 	if d.Type == "pdf" {
+		if strings.HasPrefix(name, "assets/") && strings.HasSuffix(name, ".png") {
+			blockID := strings.TrimSuffix(strings.TrimPrefix(name, "assets/"), ".png")
+			s.blockImage(w, r, d.ID, blockID)
+			return
+		}
 		if name != "original.pdf" {
 			http.NotFound(w, r)
 			return

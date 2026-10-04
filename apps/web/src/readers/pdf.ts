@@ -38,6 +38,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private fitWidth = true;
   private disposed = false;
   private blocks: PDFBlockOverlay;
+  private blockData: PDFBlock[] = [];
   private selecting = false;
   private pointer?: { x: number; y: number };
   constructor(
@@ -45,7 +46,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
     private events: ReaderEvents,
   ) {
     container.classList.add("pdf-container");
-    this.blocks = new PDFBlockOverlay(container);
+    this.blocks = new PDFBlockOverlay(container, (block, action) =>
+      this.events.blockAction?.(block, action),
+    );
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
     container.append(viewer);
@@ -370,7 +373,54 @@ export class PDFReaderAdapter implements ReaderAdapter {
     return this.pageText(this.location.page);
   }
   setBlocks(blocks: PDFBlock[]) {
+    this.blockData = blocks;
     this.blocks.setBlocks(blocks);
+  }
+  async renderBlockImage(blockId: string, signal: AbortSignal): Promise<Blob> {
+    const block = this.blockData.find((item) => item.id === blockId);
+    if (!block || !this.pdf || this.disposed) throw new Error("图片位置不可用");
+    signal.throwIfAborted();
+    const page = await this.pdf.getPage(block.page);
+    signal.throwIfAborted();
+    const base = page.getViewport({ scale: 1 });
+    const bounds = block.bounds;
+    const area = base.width * bounds.width * base.height * bounds.height;
+    const scale = Math.min(6, Math.sqrt(8_000_000 / area));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.ceil(viewport.width * bounds.width));
+    canvas.height = Math.max(1, Math.ceil(viewport.height * bounds.height));
+    const task = page.render({
+      canvas,
+      canvasContext: canvas.getContext("2d")!,
+      viewport,
+      transform: [
+        1,
+        0,
+        0,
+        1,
+        -viewport.width * bounds.x,
+        -viewport.height * bounds.y,
+      ],
+      annotationMode: pdfjs.AnnotationMode.DISABLE,
+      background: "white",
+    });
+    const cancel = () => task.cancel();
+    signal.addEventListener("abort", cancel, { once: true });
+    try {
+      await task.promise;
+      signal.throwIfAborted();
+      return await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (blob) =>
+            blob ? resolve(blob) : reject(new Error("无法生成原图预览")),
+          "image/png",
+        ),
+      );
+    } finally {
+      signal.removeEventListener("abort", cancel);
+      canvas.width = canvas.height = 0;
+    }
   }
   async destroy() {
     this.blocks.destroy();

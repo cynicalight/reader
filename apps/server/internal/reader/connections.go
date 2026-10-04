@@ -49,7 +49,19 @@ type savedConfig struct {
 type AIInput struct {
 	Prompt string
 	Image  []byte
+	Images [][]byte
 }
+
+func (in AIInput) images() [][]byte {
+	if len(in.Images) > 0 {
+		return in.Images
+	}
+	if len(in.Image) > 0 {
+		return [][]byte{in.Image}
+	}
+	return nil
+}
+
 type AIResult struct {
 	Text     string
 	Provider string
@@ -262,14 +274,16 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 	s.wakeProcessing()
 }
 func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
-	c := s.aiConfig()
+	return s.generateWithConfig(ctx, s.aiConfig(), in, delta, fallback)
+}
+func (s *Server) generateWithConfig(ctx context.Context, c AIConfig, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
 	if !validAgent(c.Primary) {
 		return AIResult{}, errors.New("请在设置中指定主 Agent 并测试")
 	}
 	p := c.Primary
 	var text string
 	var err error
-	if capable(c, p, len(in.Image) > 0) {
+	if capable(c, p, len(in.images()) > 0) {
 		text, err = s.invoke(ctx, c, p, in, nil)
 	} else {
 		err = errors.New("主 Agent 尚未通过所需能力测试")
@@ -284,10 +298,10 @@ func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), f
 		return AIResult{}, ctx.Err()
 	}
 	target := "text-api"
-	if len(in.Image) > 0 {
+	if len(in.images()) > 0 {
 		target = "image-api"
 	}
-	if !capable(c, target, len(in.Image) > 0) {
+	if !capable(c, target, len(in.images()) > 0) {
 		return AIResult{}, fmt.Errorf("%s：%s；没有经过验证的备用 %s", p, err, target)
 	}
 	if fallback != nil {
@@ -313,8 +327,12 @@ func invokeAPI(ctx context.Context, c APIConnection, in AIInput, delta func(stri
 		return "", errors.New("未配置 API")
 	}
 	var content any = in.Prompt
-	if len(in.Image) > 0 {
-		content = []any{map[string]any{"type": "text", "text": in.Prompt}, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageData(in.Image)}}}
+	if len(in.images()) > 0 {
+		parts := []any{map[string]any{"type": "text", "text": in.Prompt}}
+		for _, image := range in.images() {
+			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageData(image)}})
+		}
+		content = parts
 	}
 	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{map[string]any{"role": "user", "content": content}}, "stream": false})
 	req, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.URL, "/")+"/chat/completions", bytes.NewReader(body))

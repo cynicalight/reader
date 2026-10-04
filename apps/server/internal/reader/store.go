@@ -32,13 +32,14 @@ type Annotation struct {
 	CreatedAt  string          `json:"createdAt"`
 }
 type Message struct {
-	Context    string          `json:"context,omitempty"`
-	References json.RawMessage `json:"references,omitempty"`
-	ID         string          `json:"id"`
-	DocumentID string          `json:"documentId"`
-	Role       string          `json:"role"`
-	Content    string          `json:"content"`
-	CreatedAt  string          `json:"createdAt"`
+	Attachments []ImageAttachment `json:"attachments,omitempty"`
+	Context     string            `json:"context,omitempty"`
+	References  json.RawMessage   `json:"references,omitempty"`
+	ID          string            `json:"id"`
+	DocumentID  string            `json:"documentId"`
+	Role        string            `json:"role"`
+	Content     string            `json:"content"`
+	CreatedAt   string            `json:"createdAt"`
 }
 type Store struct {
 	DB   *sql.DB

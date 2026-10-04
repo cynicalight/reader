@@ -432,7 +432,7 @@
                 {
                   "200":
                     {
-                      "description": "SSE: status, delta {text}, error {error}, done {ok}. Disconnection cancels CLI.",
+                      "description": "SSE: status, delta {text}, fallback {message}, error {error}, done {ok}. Disconnection cancels CLI.",
                       "content":
                         {
                           "text/event-stream":
@@ -473,7 +473,18 @@
                               "type": "object",
                               "properties":
                                 {
-                                  "provider": { "enum": ["codex", "claude"] },
+                                  "provider":
+                                    { "enum": ["codex", "claude", "kimi"] },
+                                  "attachments":
+                                    {
+                                      "type": "array",
+                                      "maxItems": 4,
+                                      "items":
+                                        {
+                                          "type": "string",
+                                          "pattern": "^p[1-9][0-9]*-b[1-9][0-9]*$",
+                                        },
+                                    },
                                   "prompt": { "type": "string" },
                                   "context": { "type": "string" },
                                   "references":
@@ -485,6 +496,11 @@
                                           "properties":
                                             {
                                               "text": { "type": "string" },
+                                              "kind":
+                                                {
+                                                  "enum":
+                                                    ["selection", "section"],
+                                                },
                                               "location":
                                                 {
                                                   "$ref": "#/components/schemas/DocumentLocation",
@@ -988,6 +1004,22 @@
                   "content": { "type": "string" },
                   "createdAt": { "type": "string" },
                   "context": { "type": "string" },
+                  "attachments":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "object",
+                          "properties":
+                            {
+                              "id": { "type": "string" },
+                              "page": { "type": "integer" },
+                              "label": { "type": "string" },
+                              "caption": { "type": "string" },
+                            },
+                          "required": ["id", "page", "label"],
+                        },
+                    },
                   "references":
                     {
                       "type": "array",
@@ -997,6 +1029,7 @@
                           "properties":
                             {
                               "text": { "type": "string" },
+                              "kind": { "enum": ["selection", "section"] },
                               "location":
                                 {
                                   "$ref": "#/components/schemas/DocumentLocation",
@@ -1088,6 +1121,7 @@
                       "required": ["x", "y", "width", "height"],
                     },
                   "text": { "type": "string" },
+                  "kind": { "enum": ["selection", "section"] },
                   "image": { "type": "string" },
                   "caption": { "type": "string" },
                 },

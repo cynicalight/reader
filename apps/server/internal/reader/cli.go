@@ -35,16 +35,23 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 		args = append(args, "--model", model)
 	}
 	var input io.Reader = strings.NewReader(in.Prompt)
-	if len(in.Image) > 0 {
+	if len(in.images()) > 0 {
 		if provider == "codex" {
-			file := filepath.Join(work, "region.png")
-			if e = os.WriteFile(file, in.Image, 0600); e != nil {
-				return "", e
+			for i, image := range in.images() {
+				file := filepath.Join(work, fmt.Sprintf("region-%d.png", i+1))
+				if e = os.WriteFile(file, image, 0600); e != nil {
+					return "", e
+				}
+				args = append(args, "--image", file)
 			}
-			args = append(args, "--image", file)
 		} else {
 			args = append(args, "--input-format", "stream-json")
-			b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{map[string]any{"type": "image", "source": map[string]string{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(in.Image)}}, map[string]string{"type": "text", "text": in.Prompt}}}})
+			parts := []any{}
+			for _, image := range in.images() {
+				parts = append(parts, map[string]any{"type": "image", "source": map[string]string{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(image)}})
+			}
+			parts = append(parts, map[string]string{"type": "text", "text": in.Prompt})
+			b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": parts}})
 			input = strings.NewReader(string(b) + "\n")
 		}
 	}
@@ -190,7 +197,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	if e != nil {
 		return "", e
 	}
-	if len(in.Image) > 0 {
+	if len(in.images()) > 0 {
 		var c struct {
 			Capabilities struct {
 				Prompt struct {
@@ -215,8 +222,10 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		return "", errors.New("Kimi 会话无效")
 	}
 	parts := []any{map[string]string{"type": "text", "text": in.Prompt}}
-	if len(in.Image) > 0 {
-		parts = append(parts, map[string]string{"type": "image", "mimeType": "image/png", "data": base64.StdEncoding.EncodeToString(in.Image)})
+	if len(in.images()) > 0 {
+		for _, image := range in.images() {
+			parts = append(parts, map[string]string{"type": "image", "mimeType": "image/png", "data": base64.StdEncoding.EncodeToString(image)})
+		}
 	}
 	raw, e = request(3, "session/prompt", map[string]any{"sessionId": session.ID, "prompt": parts})
 	if e != nil {

@@ -21,6 +21,12 @@ export function configureAPI(token: string) {
 export function publicationURL(documentId: string, resource: string) {
   return `/pub/${encodeURIComponent(sessionToken)}/${encodeURIComponent(documentId)}/${resource}`;
 }
+export function blockImageURL(documentId: string, blockId: string) {
+  return publicationURL(
+    documentId,
+    `assets/${encodeURIComponent(blockId)}.png`,
+  );
+}
 export const client = createClient<paths>();
 client.use({
   onRequest({ request }) {
@@ -118,6 +124,8 @@ export async function chat(
   signal: AbortSignal,
   onDelta: (text: string) => void,
   references: SourceReference[] = [],
+  attachments: string[] = [],
+  onFallback?: (message: string) => void,
 ) {
   const response = await fetch(`/api/documents/${id}/chat`, {
     method: "POST",
@@ -125,7 +133,13 @@ export async function chat(
       Authorization: `Bearer ${sessionToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ provider, prompt, context, references }),
+    body: JSON.stringify({
+      provider,
+      prompt,
+      context,
+      references,
+      attachments,
+    }),
     signal,
   });
   if (!response.ok) {
@@ -158,6 +172,7 @@ export async function chat(
         const data = JSON.parse(raw);
         if (event === "error") throw new Error(data.error);
         if (event === "delta") onDelta(data.text);
+        if (event === "fallback") onFallback?.(data.message);
         if (event === "done") done = true;
       }
     }

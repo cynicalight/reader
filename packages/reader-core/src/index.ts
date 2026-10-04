@@ -79,7 +79,9 @@ export const defaultTheme: ReaderTheme = {
   scroll: false,
   zoom: "width",
 };
+export type PDFBlockAction = "attach" | "preview" | "explain";
 export interface ReaderEvents {
+  blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;
   selection: (selection: ReaderSelection | null) => void;
 }
@@ -97,6 +99,7 @@ export interface ReaderAdapter {
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;
   setBlocks?(blocks: PDFBlock[]): void;
+  renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   destroy(): Promise<void>;
 }
 export function locationLabel(location?: DocumentLocation): string {
@@ -116,7 +119,14 @@ export interface SourceReference {
   location: DocumentLocation;
   kind?: "selection" | "section";
 }
+export interface ImageAttachment {
+  id: string;
+  page: number;
+  label: string;
+  caption?: string;
+}
 export interface Message {
+  attachments?: ImageAttachment[];
   context?: string;
   references?: SourceReference[];
   id: string;

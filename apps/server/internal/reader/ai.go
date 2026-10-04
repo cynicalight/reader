@@ -106,15 +106,16 @@ func eventText(provider string, line []byte) (text string, failed bool) {
 }
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Provider   string          `json:"provider"`
-		Prompt     string          `json:"prompt"`
-		Context    string          `json:"context"`
-		References json.RawMessage `json:"references"`
+		Provider    string          `json:"provider"`
+		Prompt      string          `json:"prompt"`
+		Context     string          `json:"context"`
+		References  json.RawMessage `json:"references"`
+		Attachments []string        `json:"attachments"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	if req.Provider != "codex" && req.Provider != "claude" {
+	if !validAgent(req.Provider) {
 		fail(w, 400, "未知 AI 服务")
 		return
 	}
@@ -125,6 +126,10 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
 	if err != nil {
 		fail(w, 404, "文档不存在")
+		return
+	}
+	if len(req.Attachments) > 0 || req.Provider == "kimi" {
+		s.imageChat(w, r, d.ID, d.Title, req.Provider, req.Prompt, req.Context, req.References, req.Attachments)
 		return
 	}
 	if !s.aiMu.TryLock() {

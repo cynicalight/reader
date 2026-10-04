@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { expect, it } from "vitest";
+import { act } from "react";
+import { expect, it, vi } from "vitest";
 import { PDFBlockOverlay, hitBlock } from "./pdf-blocks";
 import type { PDFBlock } from "@reader/core";
 const block: PDFBlock = {
@@ -15,7 +16,7 @@ it("hits normalized regions only on their source page", () => {
   expect(hitBlock([block], 1, 0.2, 0.3)).toBeUndefined();
   expect(hitBlock([block], 2, 0.8, 0.3)).toBeUndefined();
 });
-it("positions one non-interactive whole-block overlay and clears during selection, scroll and disposal", () => {
+it("positions the whole-block overlay and clears during selection, scroll and disposal", async () => {
   const host = document.createElement("div");
   host.innerHTML =
     '<div class="page" data-page-number="2"><span>text layer</span></div>';
@@ -36,7 +37,7 @@ it("positions one non-interactive whole-block overlay and clears during selectio
   expect(overlay.style.left).toBe("10%");
   expect(overlay.style.height).toBe("40%");
   expect(overlay.dataset.blockId).toBe(block.id);
-  expect(overlay.getAttribute("aria-hidden")).toBe("true");
+  expect(overlay.getAttribute("aria-hidden")).toBeNull();
   target.dispatchEvent(
     new MouseEvent("pointermove", {
       bubbles: true,
@@ -64,4 +65,59 @@ it("positions one non-interactive whole-block overlay and clears during selectio
     }),
   );
   expect(page.querySelector(".reader-block-hover")).toBeNull();
+});
+
+it("attaches clicks, keeps action buttons interactive, and does not attach drags", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  document.body.append(host);
+  host.innerHTML =
+    '<div class="page" data-page-number="2"><span>image</span></div>';
+  const page = host.firstElementChild as HTMLElement;
+  page.getBoundingClientRect = () => new DOMRect(10, 20, 1000, 1400);
+  const action = vi.fn();
+  const layer = new PDFBlockOverlay(host, action);
+  layer.setBlocks([block]);
+  const target = page.firstElementChild!;
+  const event = (type: string, x = 210, buttons = 0) =>
+    target.dispatchEvent(
+      new MouseEvent(type, {
+        bubbles: true,
+        clientX: x,
+        clientY: 440,
+        buttons,
+      }),
+    );
+  await act(async () => {
+    event("pointermove");
+  });
+  const explain = page.querySelector<HTMLButtonElement>(
+    '[data-block-action="explain"]',
+  )!;
+  const preview = page.querySelector<HTMLButtonElement>(
+    '[data-block-action="preview"]',
+  )!;
+  expect(explain).not.toBeNull();
+  expect(preview).not.toBeNull();
+  await act(async () => {
+    explain.dispatchEvent(
+      new MouseEvent("pointermove", { bubbles: true, buttons: 1 }),
+    );
+    explain.click();
+    preview.click();
+  });
+  expect(action.mock.calls.map((call) => call[1])).toEqual([
+    "explain",
+    "preview",
+  ]);
+  event("pointerdown");
+  event("click");
+  expect(action).toHaveBeenLastCalledWith(block, "attach");
+  event("pointerdown");
+  event("pointermove", 230, 1);
+  event("click", 230);
+  expect(action).toHaveBeenCalledTimes(3);
+  await act(async () => layer.destroy());
+  host.remove();
+  vi.unstubAllGlobals();
 });
