@@ -1,0 +1,149 @@
+import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
+import type { Message } from "@reader/core";
+import { Button } from "@reader/ui/components/button";
+import { ScrollArea } from "@reader/ui/components/scroll-area";
+import {
+  ChatSession,
+  type ChatSnapshot,
+  type PendingAnswer,
+} from "./chat-session";
+import { copyText } from "./clipboard";
+const MessageMarkdown = lazy(() =>
+  import("./MessageMarkdown").then((module) => ({
+    default: module.MessageMarkdown,
+  })),
+);
+import { useChatScroll } from "./useChatScroll";
+export type ChatRow = {
+  key: string;
+  message?: Message;
+  pending?: PendingAnswer;
+};
+export function chatRows(state: ChatSnapshot): ChatRow[] {
+  const { pending } = state;
+  const rows: ChatRow[] = state.messages.map((message) => ({
+    key: state.messageKeys[message.id] || message.id,
+    message,
+    pending: pending?.savedId === message.id ? pending : undefined,
+  }));
+  for (const answer of state.archived) {
+    const userIndex = rows.findIndex((row) => row.key === `${answer.key}-user`);
+    rows.splice(userIndex < 0 ? rows.length : userIndex + 1, 0, {
+      key: answer.key,
+      pending: answer,
+    });
+  }
+  if (pending && !pending.savedId) {
+    if (!rows.some((row) => row.key === `${pending.key}-user`))
+      rows.push({
+        key: `${pending.key}-user`,
+        message: {
+          id: `${pending.key}-user`,
+          documentId: "",
+          role: "user",
+          content: pending.input.prompt,
+          context: pending.input.context,
+          references: pending.input.references,
+          attachments: pending.input.attachments,
+          createdAt: "",
+        },
+      });
+    rows.push({ key: pending.key, pending });
+  }
+  return rows;
+}
+export function AssistantPanel({
+  session,
+  empty,
+  extras,
+}: {
+  session: ChatSession;
+  empty: ReactNode;
+  extras: (message: Message) => ReactNode;
+}) {
+  const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const scroll = useChatScroll(state.pending?.key);
+  const pending = state.pending;
+  return (
+    <>
+      <ScrollArea className="chat-scroll" viewportRef={scroll.viewportRef}>
+        <div className="chat-messages" ref={scroll.contentRef}>
+          {!state.loaded && (
+            <p className="chat-status">{state.loadError || "正在加载对话…"}</p>
+          )}
+          {!state.messages.length && !pending && state.loaded && empty}
+          {chatRows(state).map(({ key, message, pending: answer }) => {
+            const assistant = answer || message?.role === "assistant",
+              content = answer?.content ?? message?.content ?? "";
+            return (
+              <div
+                key={key}
+                className={`chat-message ${assistant ? "assistant" : "user"}`}
+              >
+                <span className="message-author">
+                  {assistant ? "Reader AI" : "你"}{" "}
+                  {answer?.phase === "generating" && (
+                    <span className="pulse-dot" />
+                  )}
+                </span>
+                {assistant ? (
+                  <Suspense
+                    fallback={
+                      <div style={{ whiteSpace: "pre-wrap" }}>{content}</div>
+                    }
+                  >
+                    <MessageMarkdown
+                      content={content}
+                      generating={answer?.phase === "generating"}
+                    />
+                  </Suspense>
+                ) : (
+                  <div>{content}</div>
+                )}
+                {answer?.fallback && (
+                  <p className="chat-status">{answer.fallback}</p>
+                )}
+                {answer?.notice && (
+                  <p role="status" className="chat-status">
+                    {answer.notice}
+                  </p>
+                )}
+                {assistant && !!content && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void copyText(content)}
+                  >
+                    复制回答
+                  </Button>
+                )}
+                {message && extras(message)}
+              </div>
+            );
+          })}
+          {(state.loadError ||
+            (pending && !["generating", "saved"].includes(pending.phase))) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={state.busy}
+              onClick={() => void session.retry()}
+            >
+              重试同步
+            </Button>
+          )}
+        </div>
+      </ScrollArea>
+      {!scroll.following && (
+        <Button
+          className="chat-follow"
+          variant="secondary"
+          size="sm"
+          onClick={scroll.bottom}
+        >
+          回到底部
+        </Button>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,6 @@
+{"integration":"real-http-sdk-session","provider":"codex","input":"original-text","chunks":231,"bytes":923,"firstMs":10569.843916,"terminalMs":17200.895291,"saved":true}
+{"integration":"real-http-sdk-cancel","provider":"codex","cancelChunks":1,"returnMs":2.635083000001032,"phase":"cancelled","assistantCount":3}
+{"integration":"real-http-sdk-session","provider":"kimi","input":"original-text","chunks":247,"bytes":1029,"firstMs":6616.497083,"terminalMs":12270.65275,"saved":true}
+{"integration":"real-http-sdk-cancel","provider":"kimi","cancelChunks":1,"returnMs":4.880583999998635,"phase":"cancelled","assistantCount":4}
+{"integration":"real-http-sdk-session","provider":"codex","input":"seeded-synthetic-image","chunks":91,"bytes":464,"firstMs":5292.199208000002,"terminalMs":8106.74425,"saved":true}
+{"integration":"real-http-sdk-session","provider":"kimi","input":"seeded-synthetic-image","chunks":107,"bytes":524,"firstMs":7462.723291999999,"terminalMs":10727.242291999999,"saved":true}
