@@ -86,6 +86,7 @@ import {
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
 import { ProviderIdentity } from "./ProviderIdentity";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -201,6 +202,10 @@ export function Workspace({
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteSelection, setNoteSelection] = useState<ReaderSelection | null>(
+    null,
+  );
+  const readingPane = useRef<HTMLDivElement>(null);
   const [provider, setProvider] = useState("codex");
   const [prompt, setPrompt] = useState("");
   const [quotes, setQuotes] = useState<ReaderSelection[]>([]);
@@ -254,19 +259,21 @@ export function Workspace({
     );
   };
   const annotate = async (kind: Annotation["kind"], noteText = "") => {
-    const target = kind === "bookmark" ? location : selection?.location;
+    const source = kind === "note" ? noteSelection : selection;
+    const target = kind === "bookmark" ? location : source?.location;
     if (!target) return;
     try {
       const a = await api.annotate(doc.id, {
         kind,
         location: target,
-        quote: kind === "bookmark" ? "" : selection?.text || "",
+        quote: kind === "bookmark" ? "" : source?.text || "",
         note: noteText,
         color: "#e6b94c",
       });
       setAnnotations((items) => [...items, a]);
       toast.success(kind === "bookmark" ? "已添加书签" : "批注已保存");
       setNoteOpen(false);
+      setNoteSelection(null);
       setNote("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -290,6 +297,7 @@ export function Workspace({
       setQuotes((items) => [...items, selection].slice(-6));
       setRight(true);
       setRightTab("ai");
+      adapter?.clearSelection();
       setSelection(null);
     }
   };
@@ -331,7 +339,7 @@ export function Workspace({
         context.slice(0, 21000),
         controller.signal,
         (text) => setStream((s) => s + text),
-        selected,
+        selected.map(({ text, location }) => ({ text, location })),
       );
       setMessages(await api.messages(doc.id));
       setStream("");
@@ -656,7 +664,7 @@ export function Workspace({
           </>
         )}
         <ResizablePanel id="reading" minSize="30%">
-          <div className="reading-pane">
+          <div className="reading-pane" ref={readingPane}>
             <ReaderView
               document={doc}
               theme={theme}
@@ -668,8 +676,8 @@ export function Workspace({
               }}
               events={{ location: saveLocation, selection: setSelection }}
             />
-            {selection && (
-              <div className="selection-bar">
+            {selection?.anchor && (
+              <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
                 <Badge variant="secondary">
                   已选 {selection.text.length} 字
                 </Badge>
@@ -685,7 +693,15 @@ export function Workspace({
                 >
                   <Underline />
                 </IconButton>
-                <IconButton label="记笔记" onClick={() => setNoteOpen(true)}>
+                <IconButton
+                  label="记笔记"
+                  onClick={() => {
+                    setNoteSelection(selection);
+                    setNote("");
+                    setNoteOpen(true);
+                    adapter?.clearSelection();
+                  }}
+                >
                   <StickyNote />
                 </IconButton>
                 <IconButton
@@ -710,10 +726,16 @@ export function Workspace({
                 <IconButton label="引用到对话" onClick={addQuote}>
                   <Quote />
                 </IconButton>
-                <IconButton label="取消选区" onClick={() => setSelection(null)}>
+                <IconButton
+                  label="取消选区"
+                  onClick={() => {
+                    adapter?.clearSelection();
+                    setSelection(null);
+                  }}
+                >
                   <X />
                 </IconButton>
-              </div>
+              </SelectionToolbar>
             )}
           </div>
         </ResizablePanel>
@@ -994,7 +1016,13 @@ export function Workspace({
         )}
       </ResizablePanelGroup>
 
-      <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+      <Dialog
+        open={noteOpen}
+        onOpenChange={(open) => {
+          setNoteOpen(open);
+          if (!open) setNoteSelection(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>添加笔记</DialogTitle>
@@ -1002,7 +1030,9 @@ export function Workspace({
               为当前选区添加笔记
             </DialogDescription>
           </DialogHeader>
-          <blockquote className="note-preview">{selection?.text}</blockquote>
+          <blockquote className="note-preview">
+            {noteSelection?.text}
+          </blockquote>
           <Textarea
             autoFocus
             placeholder="笔记内容…"

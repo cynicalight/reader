@@ -1,3 +1,4 @@
+import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import { PDFBlockOverlay } from "./pdf-blocks";
 import * as pdfjs from "pdfjs-dist";
 import {
@@ -36,6 +37,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private fitWidth = true;
   private disposed = false;
   private blocks: PDFBlockOverlay;
+  private selecting = false;
+  private pointer?: { x: number; y: number };
   constructor(
     private container: HTMLElement,
     private events: ReaderEvents,
@@ -67,8 +70,15 @@ export class PDFReaderAdapter implements ReaderAdapter {
       );
     });
     this.bus.on("pagerendered", () => this.paintHighlights());
-    container.addEventListener("mouseup", this.onSelection);
+    document.addEventListener("mouseup", this.onMouseUp);
+    document.addEventListener("pointerdown", this.onPointerDown);
+    document.addEventListener("selectionchange", this.onSelectionChange);
+    document.addEventListener("keydown", this.onKeyDown);
+    container.addEventListener("scroll", this.clearSelection, {
+      passive: true,
+    });
     this.resize = new ResizeObserver(() => {
+      this.clearSelection();
       if (this.pdf && this.fitWidth)
         this.viewer.currentScaleValue = "page-width";
     });
@@ -144,6 +154,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async goTo(location: DocumentLocation) {
     if (location.type !== "pdf" || !this.pdf) return;
+    this.clearSelection();
     const page = Math.max(1, Math.min(this.pdf.numPages, location.page));
     this.viewer.currentPageNumber = page;
     this.viewer.scrollPageIntoView({ pageNumber: page });
@@ -185,10 +196,44 @@ export class PDFReaderAdapter implements ReaderAdapter {
     }
     return results;
   }
+  private clearState = () => {
+    if (!this.selection) return;
+    this.selection = null;
+    this.events.selection(null);
+  };
+  clearSelection = () => {
+    const sel = window.getSelection();
+    if (sel?.anchorNode && this.container.contains(sel.anchorNode))
+      sel.removeAllRanges();
+    this.clearState();
+  };
+  private onPointerDown = (event: PointerEvent) => {
+    if (isSelectionToolbar(event.target)) return;
+    this.pointer = undefined;
+    this.selecting =
+      event.target instanceof Node && this.container.contains(event.target);
+    if (this.selecting) this.clearState();
+    else this.clearSelection();
+  };
+  private onKeyDown = (event: KeyboardEvent) => {
+    this.selecting = false;
+    this.pointer = undefined;
+    if (event.key === "Escape") this.clearSelection();
+  };
+  private onMouseUp = (event: MouseEvent) => {
+    this.selecting = false;
+    if (!isSelectionToolbar(event.target)) {
+      this.pointer = { x: event.clientX, y: event.clientY };
+      this.onSelection();
+    }
+  };
+  private onSelectionChange = () => {
+    if (!this.selecting) this.onSelection();
+  };
   private onSelection = () => {
     const sel = window.getSelection();
     const text = sel?.toString().trim();
-    if (!sel?.rangeCount || !text) return;
+    if (!sel?.rangeCount || sel.isCollapsed || !text) return this.clearState();
     const range = sel.getRangeAt(0);
     const start =
       range.startContainer instanceof Element
@@ -204,7 +249,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       !this.container.contains(page) ||
       end?.closest(".page") !== page
     )
-      return;
+      return this.clearState();
     const bounds = page.getBoundingClientRect();
     const rects = Array.from(range.getClientRects())
       .filter((r) => r.width > 0 && r.height > 0)
@@ -216,6 +261,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       }));
     this.selection = {
       text,
+      anchor: selectionAnchor(sel, this.pointer),
       location: {
         type: "pdf",
         page: Number(page.dataset.pageNumber),
@@ -268,6 +314,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
         ? "page-width"
         : String(theme.zoom);
     this.container.dataset.theme = theme.mode;
+    this.clearSelection();
   }
   async getContext() {
     return this.pageText(this.location.page);
@@ -279,7 +326,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blocks.destroy();
     this.disposed = true;
     this.resize.disconnect();
-    this.container.removeEventListener("mouseup", this.onSelection);
+    document.removeEventListener("mouseup", this.onMouseUp);
+    document.removeEventListener("pointerdown", this.onPointerDown);
+    document.removeEventListener("selectionchange", this.onSelectionChange);
+    document.removeEventListener("keydown", this.onKeyDown);
+    this.container.removeEventListener("scroll", this.clearSelection);
+    this.clearSelection();
     this.viewer.setDocument(null as unknown as pdfjs.PDFDocumentProxy);
     await this.task?.destroy();
     this.container.replaceChildren();

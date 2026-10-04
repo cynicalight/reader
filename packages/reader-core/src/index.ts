@@ -47,7 +47,14 @@ export interface SearchResult {
   excerpt: string;
   location: DocumentLocation;
 }
+export interface SelectionAnchor {
+  x: number;
+  top: number;
+  bottom: number;
+}
 export interface ReaderSelection {
+  /** Transient renderer viewport position; never persist as a document anchor. */
+  anchor?: SelectionAnchor;
   text: string;
   location: DocumentLocation;
 }
@@ -85,6 +92,7 @@ export interface ReaderAdapter {
   previous(): Promise<void>;
   search(query: string): Promise<SearchResult[]>;
   getSelection(): ReaderSelection | null;
+  clearSelection(): void;
   highlight(annotations: Annotation[]): Promise<void>;
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;

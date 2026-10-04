@@ -612,9 +612,8 @@ kbd {
 }
 .selection-bar {
   position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  flex-wrap: wrap;
   background: var(--popover);
   padding: 7px 9px;
   display: flex;
