@@ -12,6 +12,9 @@ Local-first EPUB/PDF reader. Use Chinese for user-facing communication. Keep cha
 
 PDF rendering belongs in PDF.js, EPUB navigation in Readium. Never reduce EPUB positions to PDF page numbers. Readium navigator 2.11.1 uses shared 2.6.0; update these together after checking compatibility.
 
+## UI
+Keep the interface restrained, following Claude/Apple app simplicity and shadcn primitives. No decorative slogans, local-first badges, sidebar branding or explanatory filler. Library titles must truncate within their cards. Keep background learning/consolidation on document covers, one stage at a time; fade completed stages upward and then hide them. Respect reduced motion. Support light/dark/system appearance consistently across renderer, scrollbars and native window chrome. Use subtle surface and sidebar-boundary shadows.
+
 ## Validation
 `pnpm typecheck`, `pnpm test`, `pnpm build`. Do not use browser automation for visual acceptance. Give the user an accessible preview and manual verification steps. Prefer tests for data loss, lifecycle, parser boundaries, and provider protocols.
 

@@ -1,4 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  session,
+  nativeTheme,
+} from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -124,13 +131,26 @@ app
     session.defaultSession.setPermissionRequestHandler(
       (_contents, _permission, callback) => callback(false),
     );
+    const preferences: unknown = await fetch(`${url}/api/settings`, {
+      headers: { Authorization: `Bearer ${serverToken}` },
+    })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}));
+    const appearance =
+      typeof preferences === "object" &&
+      preferences !== null &&
+      "appearance" in preferences
+        ? preferences.appearance
+        : undefined;
+    nativeTheme.themeSource =
+      appearance === "light" || appearance === "dark" ? appearance : "system";
     window = new BrowserWindow({
       width: 1440,
       height: 940,
       minWidth: 1000,
       minHeight: 660,
       title: "Reader",
-      backgroundColor: "#ffffff",
+      backgroundColor: nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
       webPreferences: {
         preload: join(__dirname, "preload.cjs"),
         contextIsolation: true,
@@ -184,6 +204,23 @@ app
     window.webContents.on("will-attach-webview", (event) =>
       event.preventDefault(),
     );
+    ipcMain.handle("reader:appearance", (event, appearance: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (
+        appearance !== "light" &&
+        appearance !== "dark" &&
+        appearance !== "system"
+      )
+        throw new Error("Invalid appearance");
+      nativeTheme.themeSource = appearance;
+      window.setBackgroundColor(
+        nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
+      );
+    });
     ipcMain.handle("reader:import", async (event) => {
       if (
         event.sender !== window?.webContents ||

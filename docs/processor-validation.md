@@ -61,3 +61,9 @@ Validation passed: `pnpm typecheck`, `pnpm test` (Go suite and 23 Vitest tests),
 - The worker does not perform OCR. Pages without extractable text are explicitly marked incomplete.
 - Resume, per-asset vision jobs, atomic transcript publication, two-stage UI, hover and desktop worker lifecycle are integrated. Whole-document retrieval, citation navigation and conversation-driven revisions remain work under the wider plan.
 - Native Electron inspection confirmed separate progress bars and Figure 1 hover alignment on the supplied paper. No browser automation was used. This is a scoped check, not cross-platform or comprehensive visual acceptance.
+
+## Library presentation update
+
+The library now truncates long titles inside a shrinkable grid cell, removes decorative branding/copy, and uses a subtly raised main surface. Light/dark/system appearance is persisted with reading preferences and synchronized to Electron native chrome; live system changes are covered by a renderer hook test. PDF processing appears on covers one stage at a time, with a completion transition and no persistent reading-toolbar progress strip. Waiting/retry actions remain accessible on the cover.
+
+`pnpm typecheck`, `pnpm test` (27 Vitest tests plus Go), and `pnpm build` passed for this update. Native screenshot capture returned a macOS ScreenCaptureKit error, so the updated appearance and title layout require manual visual verification in the relaunched Electron app. Check the long Oze title, all three appearance choices, and cover-stage transitions during an import.

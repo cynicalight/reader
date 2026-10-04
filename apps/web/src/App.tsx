@@ -13,14 +13,12 @@ import {
   Loader2,
   PanelLeft,
   Command,
-  HardDrive,
   X,
 } from "lucide-react";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
-import { Badge } from "@reader/ui/components/badge";
 import { TooltipProvider } from "@reader/ui/components/tooltip";
 import {
   Dialog,
@@ -33,10 +31,12 @@ import { Toaster, toast } from "sonner";
 import { useReaderStore, refreshLibrary } from "./store";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
-import { ProcessingStatus, useProcessing } from "./ProcessingStatus";
+import { CoverProcessing, useProcessing } from "./ProcessingStatus";
+import { useResolvedTheme } from "./appearance";
 import { flushProgress } from "./progress";
 export function App() {
   const { documents, active, theme, setTheme, open } = useReaderStore();
+  const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -60,14 +60,21 @@ export function App() {
       });
   }, [setTheme]);
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme.mode === "dark");
-    document.documentElement.dataset.theme = theme.mode;
     if (!hydrated.current) return;
     const timer = setTimeout(() => {
       void api.saveSettings(theme).catch((e) => toast.error(e.message));
     }, 350);
     return () => clearTimeout(timer);
   }, [theme]);
+  useEffect(() => {
+    const dark = resolvedTheme.mode === "dark";
+    document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.dataset.theme = resolvedTheme.mode;
+    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    void window.readerDesktop
+      ?.setAppearance(theme.appearance ?? "system")
+      .catch((e) => toast.error(e.message));
+  }, [resolvedTheme.mode, theme.appearance]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -188,6 +195,7 @@ export function App() {
           <Workspace
             key={active.id}
             document={active}
+            theme={resolvedTheme}
             processing={jobs.find((job) => job.documentId === active.id)}
             onBack={() => {
               open(null);
@@ -198,14 +206,6 @@ export function App() {
         ) : (
           <>
             <aside className={`library-sidebar ${nav ? "" : "collapsed"}`}>
-              <div className="brand">
-                <span className="brand-icon">
-                  <BookOpen size={19} />
-                </span>
-                <span>
-                  Reader<span className="brand-dot">.</span>
-                </span>
-              </div>
               <Button
                 className="w-full justify-between"
                 variant="outline"
@@ -217,7 +217,6 @@ export function App() {
                 </span>
                 <kbd>⌘ K</kbd>
               </Button>
-              <div className="nav-label">我的阅读空间</div>
               <nav className="space-y-1">
                 {[
                   {
@@ -252,14 +251,6 @@ export function App() {
                 ))}
               </nav>
               <div className="sidebar-bottom">
-                <div className="local-note">
-                  <HardDrive size={16} />
-                  <div>
-                    <strong>保存在本地</strong>
-                    <p>文档与笔记，由你掌握</p>
-                  </div>
-                  <span className="status-dot" />
-                </div>
                 <Button
                   variant="ghost"
                   className="w-full justify-start"
@@ -281,46 +272,21 @@ export function App() {
                   >
                     <PanelLeft />
                   </Button>
-                  <span className="text-muted-foreground">阅读空间</span>
-                  <span className="text-border">/</span>
-                  <span>
+                  <h1 className="library-title">
                     {filter === "favorites"
                       ? "收藏"
                       : filter === "recent"
                         ? "最近阅读"
-                        : "书库"}
-                  </span>
+                        : "我的文档"}
+                  </h1>
                 </div>
-                <Badge variant="outline" className="gap-2">
-                  <span className="status-dot" />
-                  Local first
-                </Badge>
+                <Button onClick={chooseFiles} disabled={busy}>
+                  {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+                  {busy ? "导入中…" : "导入文档"}
+                </Button>
               </header>
               <div className="library-content">
-                <div className="library-heading">
-                  <div>
-                    <div className="eyebrow">YOUR PERSONAL LIBRARY</div>
-                    <h1>
-                      {filter === "favorites"
-                        ? "值得再读"
-                        : filter === "recent"
-                          ? "继续上次的阅读"
-                          : "留一点时间，给阅读。"}
-                    </h1>
-                    <p>一本书，一篇论文。让理解多一点，让干扰少一点。</p>
-                  </div>
-                  <Button onClick={() => chooseFiles()} disabled={busy}>
-                    <Plus />
-                    {busy ? "正在导入…" : "导入文档"}
-                  </Button>
-                </div>
                 <div className="library-controls">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">
-                      {filter === "favorites" ? "收藏文档" : "我的文档"}
-                    </span>
-                    <Badge variant="secondary">{filtered.length}</Badge>
-                  </div>
                   <div className="search-field">
                     <Search className="size-4" />
                     <Input
@@ -355,33 +321,61 @@ export function App() {
                       .filter((d) => filter !== "recent" || d.percentage > 0)
                       .map((doc, i) => (
                         <article className="book-card" key={doc.id}>
-                          <Button
-                            variant="ghost"
-                            className={`book-cover cover-${i % 4}`}
-                            onClick={() => openDocument(doc)}
-                          >
-                            <div className="cover-top">
-                              <span>READER / {doc.type.toUpperCase()}</span>
-                              {doc.type === "epub" ? (
-                                <BookOpen size={18} />
+                          <div className="book-cover-frame">
+                            <Button
+                              variant="ghost"
+                              title={doc.title}
+                              aria-label={`打开 ${doc.title}`}
+                              className={`book-cover cover-${i % 4}`}
+                              onClick={() => openDocument(doc)}
+                            >
+                              <div className="cover-top">
+                                <span>{doc.type.toUpperCase()}</span>
+                                {doc.type === "epub" ? (
+                                  <BookOpen size={18} />
+                                ) : (
+                                  <FileText size={18} />
+                                )}
+                              </div>
+                              <div className="cover-title">{doc.title}</div>
+                              <div className="cover-bottom">
+                                <span>{doc.author}</span>
+                                <ArrowUpRight size={18} />
+                              </div>
+                              <div className="cover-decoration" />
+                            </Button>
+                            {doc.type === "pdf" &&
+                              (jobs.find((job) => job.documentId === doc.id) ? (
+                                <CoverProcessing
+                                  job={jobs.find(
+                                    (job) => job.documentId === doc.id,
+                                  )!}
+                                  onSettings={() => setSettings(true)}
+                                  unavailable={!!processingError}
+                                />
                               ) : (
-                                <FileText size={18} />
-                              )}
-                            </div>
-                            <div className="cover-title">{doc.title}</div>
-                            <div className="cover-bottom">
-                              <span>{doc.author || "本地文档"}</span>
-                              <ArrowUpRight size={18} />
-                            </div>
-                            <div className="cover-decoration" />
-                          </Button>
+                                <Button
+                                  className="cover-analyze"
+                                  size="xs"
+                                  variant="secondary"
+                                  onClick={() =>
+                                    void api
+                                      .process(doc.id)
+                                      .catch((e) => toast.error(e.message))
+                                  }
+                                >
+                                  分析文档
+                                </Button>
+                              ))}
+                          </div>
                           <div className="book-meta">
                             <Button
+                              title={doc.title}
                               className="book-title"
                               variant="ghost"
                               onClick={() => openDocument(doc)}
                             >
-                              {doc.title}
+                              <span>{doc.title}</span>
                             </Button>
                             <Button
                               size="icon-xs"
@@ -401,32 +395,9 @@ export function App() {
                             </Button>
                           </div>
                           <p className="book-author">
-                            {doc.author || "作者未提供"}
+                            {doc.author}
                             <span>{doc.type.toUpperCase()}</span>
                           </p>
-                          {doc.type === "pdf" &&
-                            (jobs.find((job) => job.documentId === doc.id) ? (
-                              <ProcessingStatus
-                                job={jobs.find(
-                                  (job) => job.documentId === doc.id,
-                                )!}
-                                onSettings={() => setSettings(true)}
-                                compact
-                              />
-                            ) : (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                className="my-2"
-                                onClick={() =>
-                                  void api
-                                    .process(doc.id)
-                                    .catch((e) => toast.error(e.message))
-                                }
-                              >
-                                分析文档
-                              </Button>
-                            ))}
                           <div className="book-progress">
                             <div
                               style={{
@@ -444,17 +415,6 @@ export function App() {
                           </p>
                         </article>
                       ))}
-                    <Button
-                      variant="ghost"
-                      className="add-card"
-                      onClick={() => chooseFiles()}
-                    >
-                      <span className="add-circle">
-                        <Plus />
-                      </span>
-                      <span>添加下一本书</span>
-                      <small>EPUB 或 PDF</small>
-                    </Button>
                   </div>
                 ) : (
                   <div className="empty-state">
@@ -470,14 +430,9 @@ export function App() {
                       {query
                         ? "没有找到匹配的文档"
                         : filter === "favorites"
-                          ? "把喜欢的文档收藏在这里"
-                          : "从你想读的内容开始"}
+                          ? "暂无收藏"
+                          : "暂无文档"}
                     </h2>
-                    <p>
-                      将 EPUB 电子书或 PDF 论文拖到这里，
-                      <br />
-                      目录、阅读进度与笔记会陪你一起保存。
-                    </p>
                     <Button onClick={() => chooseFiles()} disabled={busy}>
                       <ArrowDownToLine className="size-4" />
                       选择本地文件
@@ -491,39 +446,11 @@ export function App() {
                         先体验示例文档 <ArrowUpRight className="size-3" />
                       </Button>
                     )}
-                    <div className="empty-features">
-                      <span>EPUB + PDF</span>
-                      <span>自动保存进度</span>
-                      <span>AI 辅助理解</span>
-                    </div>
                   </div>
                 )}
-                <footer className="library-footer">
-                  <BookOpen size={14} />
-                  <span>阅读是你的节奏，Reader 记得你停下的位置。</span>
-                  <span className="ml-auto">⌘ O 导入文档</span>
-                </footer>
               </div>
             </main>
           </>
-        )}
-        {busy && (
-          <div className="import-progress-toast">
-            <ProcessingStatus
-              job={{
-                documentId: "import",
-                phase: "learning",
-                status: "running",
-                pagesDone: 0,
-                pagesTotal: 0,
-                assetsDone: 0,
-                assetsTotal: 0,
-                detail: "正在导入文件，随后自动学习正文与版面",
-                updatedAt: "",
-              }}
-              onSettings={() => setSettings(true)}
-            />
-          </div>
         )}
         <Settings open={settings} onOpenChange={setSettings} />
         <Dialog open={command} onOpenChange={setCommand}>
@@ -584,7 +511,7 @@ export function App() {
         <Toaster
           richColors
           position="bottom-right"
-          theme={theme.mode === "dark" ? "dark" : "light"}
+          theme={resolvedTheme.mode === "dark" ? "dark" : "light"}
         />
       </div>
     </TooltipProvider>

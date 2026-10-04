@@ -28,11 +28,13 @@ Each format retains reading controls suited to its layout:
 
 In an empty library, click “先体验示例文档” (try sample documents) to load an original three-chapter EPUB and a two-page PDF included with the project.
 
-PDF imports now show separate **Learning** and **Consolidating** progress bars. Learning extracts page text and layout; consolidating generates an individual transcript for each detected image with the selected, vision-tested primary agent. Hovering a detected figure or formula highlights the whole region without blocking text selection. Processing resumes after restart and reuses saved transcripts.
+PDF processing appears as a quiet overlay on each library cover, showing **Learning** then **Consolidating**. Each stage has its own progress bar; completion fades upward, and the overlay disappears when finished. Learning extracts page text and layout; consolidating generates an individual transcript for each detected image with the selected, vision-tested primary agent. Hovering a detected figure or formula highlights the whole region without blocking text selection. Processing resumes after restart and reuses saved transcripts.
 
 The first PDF analysis automatically downloads and verifies approximately 130 MB of layout-model weights, then caches them locally. Python and PaddlePaddle do not need to be installed. Select a primary agent in Settings and run the actual text/image capability test to enable automatic image interpretation. Without a verified vision connection, reading and detected-region hover remain available while consolidation waits. Scanned pages currently require OCR that is not implemented; incomplete text is explicitly labeled.
 
 **Automatic image interpretation sends the cropped PDF figures/formulas to the selected agent.** Capability testing uses a synthetic image. Current chat still uses selected text or the current page/chapter; whole-document retrieval over transcripts and image-click conversations are not implemented yet.
+
+Appearance supports light, dark, and system modes, including the desktop window.
 
 ## Quick start
 

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("readerDesktop", {
     ipcRenderer.on("reader:flush", listener);
     return () => ipcRenderer.removeListener("reader:flush", listener);
   },
+  setAppearance: (appearance: "light" | "dark" | "system") =>
+    ipcRenderer.invoke("reader:appearance", appearance),
   importFiles: () => ipcRenderer.invoke("reader:import"),
   onLibraryChanged: (callback: () => void) => {
     const listener = () => callback();

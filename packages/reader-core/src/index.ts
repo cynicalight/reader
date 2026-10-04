@@ -51,7 +51,9 @@ export interface ReaderSelection {
   text: string;
   location: DocumentLocation;
 }
+export type Appearance = "light" | "dark" | "system";
 export interface ReaderTheme {
+  appearance?: Appearance;
   mode: "light" | "sepia" | "dark";
   fontSize: number;
   fontFamily: string;
@@ -61,6 +63,7 @@ export interface ReaderTheme {
   zoom: number | "width";
 }
 export const defaultTheme: ReaderTheme = {
+  appearance: "system",
   mode: "light",
   fontSize: 1.15,
   fontFamily: "serif",

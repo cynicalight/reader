@@ -56,23 +56,35 @@ export function Settings({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>让 Reader 适合你</DialogTitle>
-          <DialogDescription>
-            阅读偏好和 AI 连接，保存在这台电脑上。
+          <DialogTitle>设置</DialogTitle>
+          <DialogDescription className="sr-only">
+            外观与 AI 连接
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-3">
           <section>
             <h3 className="mb-3 text-sm font-medium">界面主题</h3>
             <div className="flex gap-2">
-              {(["light", "sepia", "dark"] as const).map((mode, i) => (
+              {(["light", "dark", "system"] as const).map((mode, i) => (
                 <Button
                   key={mode}
-                  variant={theme.mode === mode ? "default" : "outline"}
-                  onClick={() => setTheme({ mode })}
+                  aria-pressed={(theme.appearance ?? "system") === mode}
+                  variant={
+                    (theme.appearance ?? "system") === mode
+                      ? "default"
+                      : "outline"
+                  }
+                  onClick={() =>
+                    setTheme({
+                      appearance: mode,
+                      mode: mode === "dark" ? "dark" : "light",
+                    })
+                  }
                 >
-                  {["浅色", "纸张", "深色"][i]}
-                  {theme.mode === mode && <Check className="size-3" />}
+                  {["浅色", "深色", "跟随系统"][i]}
+                  {(theme.appearance ?? "system") === mode && (
+                    <Check className="size-3" />
+                  )}
                 </Button>
               ))}
             </div>

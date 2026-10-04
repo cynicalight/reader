@@ -40,6 +40,7 @@ import {
   type ReaderSelection,
   type TOCItem,
   type SearchResult,
+  type ReaderTheme,
   type Processing,
   type PDFBlock,
 } from "@reader/core";
@@ -84,7 +85,6 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
-import { ProcessingStatus } from "./ProcessingStatus";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -171,16 +171,18 @@ function TOCTree({
 }
 export function Workspace({
   document: doc,
+  theme,
   processing,
   onBack,
   onSettings,
 }: {
   document: ReaderDocument;
+  theme: ReaderTheme;
   processing?: Processing;
   onBack: () => void;
   onSettings: () => void;
 }) {
-  const { theme, setTheme } = useReaderStore();
+  const { setTheme } = useReaderStore();
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
   const [toc, setTOC] = useState<TOCItem[]>([]);
@@ -412,7 +414,12 @@ export function Workspace({
                       key={mode}
                       size="sm"
                       variant={theme.mode === mode ? "default" : "outline"}
-                      onClick={() => setTheme({ mode })}
+                      onClick={() =>
+                        setTheme({
+                          mode,
+                          appearance: mode === "sepia" ? "light" : mode,
+                        })
+                      }
                     >
                       {["浅色", "纸张", "深色"][i]}
                     </Button>
@@ -532,28 +539,6 @@ export function Workspace({
           </IconButton>
         </div>
       </header>
-      {doc.type === "pdf" && (
-        <div className="reader-processing">
-          {processing ? (
-            <ProcessingStatus
-              job={processing}
-              onSettings={onSettings}
-              compact
-            />
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                void api.process(doc.id).catch((e) => toast.error(e.message))
-              }
-            >
-              <Sparkles />
-              分析图表与公式
-            </Button>
-          )}
-        </div>
-      )}
       <ResizablePanelGroup orientation="horizontal" className="reader-panels">
         {left && (
           <>
@@ -580,10 +565,7 @@ export function Workspace({
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="toc" className="min-h-0 flex-1">
-                    <div className="panel-label">
-                      {doc.type === "epub" ? "CONTENTS" : "DOCUMENT OUTLINE"}
-                    </div>
-                    <ScrollArea className="h-[calc(100%-44px)]">
+                    <ScrollArea className="h-full">
                       <TOCTree items={toc} go={move} location={location} />
                       {!toc.length && (
                         <p className="p-4 text-xs text-muted-foreground">
@@ -924,7 +906,7 @@ export function Workspace({
                         {!annotations.length && (
                           <div className="notes-empty">
                             <StickyNote />
-                            <p>把值得记住的内容留下来。</p>
+                            <p>暂无笔记</p>
                             <small>选中文字添加高亮、下划线或笔记。</small>
                           </div>
                         )}
@@ -1030,15 +1012,15 @@ export function Workspace({
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>记下你的想法</DialogTitle>
-            <DialogDescription>
-              笔记会和当前选区一起保存在本地。
+            <DialogTitle>添加笔记</DialogTitle>
+            <DialogDescription className="sr-only">
+              为当前选区添加笔记
             </DialogDescription>
           </DialogHeader>
           <blockquote className="note-preview">{selection?.text}</blockquote>
           <Textarea
             autoFocus
-            placeholder="这段内容让你想到什么？"
+            placeholder="笔记内容…"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
