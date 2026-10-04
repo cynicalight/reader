@@ -1611,3 +1611,70 @@ kbd {
 .reader-block-hover[data-compact] .block-preview {
   bottom: -31px;
 }
+
+.library-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.document-organization {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 6px 0;
+  min-width: 0;
+}
+.document-organization > .document-badges {
+  flex: 1;
+}
+.document-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.classification-status {
+  margin: 5px 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.book-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.book-list .book-card {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  column-gap: 20px;
+  align-content: start;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+.book-list .book-cover-frame {
+  grid-column: 1;
+  grid-row: 1 / span 5;
+}
+.book-list .book-cover {
+  height: 150px;
+  padding: 12px;
+}
+.book-list .cover-title {
+  font-size: 14px;
+  -webkit-line-clamp: 3;
+}
+.book-list .cover-author,
+.book-list .cover-decoration {
+  display: none;
+}
+.book-list
+  :is(
+    .book-meta,
+    .document-organization,
+    .classification-status,
+    .book-progress,
+    .book-status
+  ) {
+  grid-column: 2;
+}
