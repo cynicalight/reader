@@ -719,6 +719,13 @@ kbd {
   flex: 1;
   min-height: 0;
 }
+.chat-scroll [data-slot="scroll-area-viewport"][data-overflow-y-end] {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - min(32px, var(--scroll-area-overflow-y-end, 32px))),
+    transparent 100%
+  );
+}
 .chat-messages {
   padding: 0 18px;
 }
