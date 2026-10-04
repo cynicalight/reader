@@ -1146,6 +1146,48 @@ kbd {
   gap: 8px;
   white-space: nowrap;
 }
+.agent-check-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.agent-check-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  animation: agent-check-enter 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.agent-check-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.agent-check-icon[data-state="passed"] {
+  color: #16a34a;
+}
+.dark .agent-check-icon[data-state="passed"] {
+  color: #4ade80;
+}
+.agent-check-icon[data-state="failed"] {
+  color: #b7791f;
+}
+@keyframes agent-check-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-check-icon,
+  .agent-check-icon svg {
+    animation: none;
+  }
+}
 .provider-icon {
   display: inline-block;
   width: 18px;

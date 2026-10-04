@@ -1,5 +1,12 @@
-import { useEffect, useState } from "react";
-import { Check, CircleHelp, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Check,
+  CircleCheck,
+  CircleHelp,
+  LoaderCircle,
+  RefreshCw,
+  TriangleAlert,
+} from "lucide-react";
 import { ProviderIdentity } from "./ProviderIdentity";
 import { api } from "@reader/api";
 import type { Provider, AIConfig } from "@reader/core";
@@ -31,11 +38,16 @@ export function Settings({
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [config, setConfig] = useState<AIConfig>();
-  const [testing, setTesting] = useState<string>();
+  const [testing, setTesting] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const checked = useRef(new Set<string>());
+  const refreshing = useRef(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useReaderStore();
-  const refresh = async () => {
+  const refresh = async (force = false) => {
+    if (refreshing.current) return;
+    refreshing.current = true;
     setLoading(true);
     try {
       const [providers, config] = await Promise.all([
@@ -44,9 +56,55 @@ export function Settings({
       ]);
       setProviders(providers);
       setConfig(config);
+      const pending = providers.filter((provider) => {
+        if (!provider.installed) return false;
+        const key = JSON.stringify([
+          provider.id,
+          provider.authenticated,
+          config.models[provider.id],
+        ]);
+        if (!force && checked.current.has(key)) return false;
+        checked.current.add(key);
+        return true;
+      });
+      setTesting(new Set(pending.map((provider) => provider.id)));
+      setErrors((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([id]) => !pending.some((provider) => provider.id === id),
+          ),
+        ),
+      );
+      setLoading(false);
+      await Promise.all(
+        pending.map(async ({ id }) => {
+          try {
+            const capability = await api.testAI(id);
+            setConfig(
+              (current) =>
+                current && {
+                  ...current,
+                  capabilities: { ...current.capabilities, [id]: capability },
+                },
+            );
+          } catch (error) {
+            setErrors((current) => ({
+              ...current,
+              [id]: (error as Error).message,
+            }));
+          } finally {
+            setTesting((current) => {
+              const next = new Set(current);
+              next.delete(id);
+              return next;
+            });
+          }
+        }),
+      );
     } catch (e) {
       toast.error(String(e));
     } finally {
+      refreshing.current = false;
       setLoading(false);
     }
   };
@@ -96,12 +154,13 @@ export function Settings({
               <h3 className="text-sm font-medium">订阅账号连接</h3>
               <Button
                 variant="ghost"
-                size="sm"
-                disabled={loading}
-                onClick={() => void refresh()}
+                size="icon-sm"
+                aria-label="重新检测 Agent"
+                title="重新检测 Agent"
+                disabled={loading || testing.size > 0}
+                onClick={() => void refresh(true)}
               >
                 <RefreshCw className={loading ? "animate-spin" : ""} />
-                检测
               </Button>
             </div>
             {config && (
@@ -111,7 +170,7 @@ export function Settings({
                 </label>
                 <Select
                   value={config.primary || null}
-                  disabled={saving || !!testing}
+                  disabled={saving || testing.size > 0}
                   onValueChange={async (value) => {
                     if (!value) return;
                     setSaving(true);
@@ -149,7 +208,7 @@ export function Settings({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  通过图片测试后，导入的 PDF
+                  图片能力检测通过后，导入的 PDF
                   将自动生成图表解析稿；图片会发送给此 Agent。
                 </p>
               </div>
@@ -157,71 +216,72 @@ export function Settings({
             <div className="space-y-3">
               {(["codex", "claude", "kimi"] as const).map((name) => {
                 const p = providers.find((p) => p.id === name);
+                const capability = config?.capabilities[name];
+                const pending = loading || testing.has(name);
+                const error = errors[name] || capability?.error;
+                const passed = !error && capability?.text && capability?.vision;
+                const state = pending
+                  ? "pending"
+                  : passed
+                    ? "passed"
+                    : "failed";
                 return (
                   <div key={name} className="rounded-xl border p-4">
                     <div className="flex items-center gap-3">
                       <span className="flex-1 text-sm font-medium">
                         <ProviderIdentity provider={name} />
                       </span>
-                      <Badge
-                        variant={p?.authenticated ? "secondary" : "outline"}
-                      >
-                        {loading ? "检测中" : p?.status || "尚未检测"}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {config?.capabilities[name]?.text && (
-                        <Badge variant="outline" className="text-emerald-600">
-                          <Check className="size-3" />
-                          可用
-                        </Badge>
+                      {!loading && !p?.installed && (
+                        <Badge variant="outline">未安装</Badge>
                       )}
-                      {config?.capabilities[name]?.vision && (
-                        <Badge variant="outline" className="text-emerald-600">
-                          <Check className="size-3" />
-                          支持图片
-                        </Badge>
-                      )}
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        disabled={!!testing || saving || !p?.installed}
-                        onClick={async () => {
-                          setTesting(name);
-                          try {
-                            const capability = await api.testAI(name);
-                            setConfig(await api.aiConfig());
-                            if (capability.error)
-                              toast.warning(capability.error);
-                            else toast.success("文字与图片测试通过");
-                          } catch (e) {
-                            toast.error((e as Error).message);
-                          } finally {
-                            setTesting(undefined);
-                          }
-                        }}
-                      >
-                        {testing === name
-                          ? "正在测试文字与图片…"
-                          : "测试可用性与识图"}
-                      </Button>
                     </div>
-                    {config?.capabilities[name]?.error && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {config.capabilities[name].error}
+                    {(pending || p?.installed) && (
+                      <div
+                        className="agent-check-status"
+                        role="status"
+                        aria-live="polite"
+                        aria-label={`文本图片推理检测：${pending ? "检测中" : passed ? "已通过" : "未通过"}`}
+                      >
+                        <span
+                          className="agent-check-icon"
+                          key={state}
+                          data-state={state}
+                        >
+                          {pending ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : passed ? (
+                            <CircleCheck />
+                          ) : (
+                            <TriangleAlert />
+                          )}
+                        </span>
+                        <span>文本图片推理检测</span>
+                      </div>
+                    )}
+                    {!pending && p?.installed && !passed && (
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground break-words">
+                        {error ||
+                          (capability?.text
+                            ? "文本可用，图片能力未通过检测。"
+                            : "检测未通过，请确认 Agent 已完成登录。")}
                       </p>
                     )}
-                    <p className="mt-3 text-xs leading-6 text-muted-foreground">
-                      在终端运行{" "}
-                      <code>
-                        {name === "codex"
-                          ? "codex login"
-                          : name === "claude"
-                            ? "claude auth login"
-                            : "kimi login"}
-                      </code>{" "}
-                      完成官方登录，然后重新检测。
-                    </p>
+                    {!pending &&
+                      p?.installed &&
+                      !p.authenticated &&
+                      !capability?.text && (
+                        <p className="mt-3 text-xs leading-6 text-muted-foreground">
+                          在终端运行{" "}
+                          <code>
+                            {name === "codex"
+                              ? "codex login"
+                              : name === "claude"
+                                ? "claude auth login"
+                                : "kimi login"}
+                          </code>{" "}
+                          完成官方登录，然后重新检测。
+                        </p>
+                      )}
                   </div>
                 );
               })}
