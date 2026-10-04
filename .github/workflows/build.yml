@@ -1,0 +1,72 @@
+name: Build desktop
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      installers:
+        default: false
+        type: boolean
+      release-tag:
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: mac-arm64
+          - os: macos-15-intel
+            target: mac-x64
+          - os: windows-2022
+            target: win-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.release-tag }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # Ad-hoc only: no signing credentials, including on pull requests.
+      CSC_FOR_PULL_REQUEST: "true"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.sum
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Build installers and verify packaged runtimes
+        if: inputs.installers
+        run: pnpm package
+      - name: Build unpacked app and verify packaged runtimes
+        if: ${{ !inputs.installers }}
+        run: pnpm package:dir
+      - name: Store verified installers
+        if: inputs.installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reader-${{ matrix.target }}
+          path: |
+            release/Reader-*-${{ matrix.target }}.dmg
+            release/Reader-*-${{ matrix.target }}.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

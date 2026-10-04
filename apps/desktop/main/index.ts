@@ -30,7 +30,12 @@ async function startServer() {
         "bin",
         process.platform === "win32" ? "reader-server.exe" : "reader-server",
       )
-    : join(root, "desktop", "bin", "reader-server");
+    : join(
+        root,
+        "desktop",
+        "bin",
+        process.platform === "win32" ? "reader-server.exe" : "reader-server",
+      );
   const web = app.isPackaged
     ? join(process.resourcesPath, "web")
     : join(root, "web", "dist");

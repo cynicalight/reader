@@ -37,24 +37,7 @@ func TestDiscoverModelsProtocol(t *testing.T) {
 	for _, provider := range []string{"codex", "claude", "kimi"} {
 		t.Run(provider, func(t *testing.T) {
 			s := testServer(t)
-			bin := t.TempDir()
-			script := `#!/bin/sh
-case "$PWD" in */ai-work/models-*) ;; *) exit 9;; esac
-while IFS= read -r line; do
- case "$line" in
-  *'"subtype":"initialize"'*) echo '{"type":"control_response","response":{"request_id":"1","subtype":"success","response":{"models":[{"value":"default","resolvedModel":"model-a"},{"value":"alias","resolvedModel":"model-a","displayName":"Model A"}]}}}' ;;
-  *'"method":"initialize"'*) echo '{"id":1,"result":{}}' ;;
-  *'"method":"initialized"'*) ;;
-  *'"method":"model/list"'*) echo '{"id":2,"result":{"data":[{"model":"model-a","displayName":"Model A","isDefault":true}]}}' ;;
-  *'"method":"session/new"'*) echo '{"id":2,"result":{"configOptions":[{"id":"model","currentValue":"model-a","options":[{"value":"model-a","name":"Model A"}]}]}}' ;;
-  *) exit 8 ;;
- esac
-done
-`
-			if err := os.WriteFile(filepath.Join(bin, provider), []byte(script), 0700); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			fakeAgent(t, provider, "models")
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			models, err := discoverModels(ctx, s.Store.Root, provider)
@@ -78,11 +61,7 @@ func TestModelDiscoveryRejectsUnknownProviderAndCancels(t *testing.T) {
 	if r := request(t, s, "GET", "/api/ai/models?provider=invalid", nil); r.Code != 400 {
 		t.Fatal(r.Code)
 	}
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "codex"), []byte("#!/bin/sh\nexec /bin/sleep 60\n"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	fakeAgent(t, "codex", "models-wait")
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	started := time.Now()

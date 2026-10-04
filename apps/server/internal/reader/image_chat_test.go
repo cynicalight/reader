@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,6 +44,9 @@ func TestBlockImageAuthorizationAndBoundaries(t *testing.T) {
 	asset := filepath.Join(s.analysisDir("doc"), "assets", "p1-b1.png")
 	os.Remove(asset)
 	if err := os.Symlink(external, asset); err != nil {
+		if runtime.GOOS == "windows" && os.IsPermission(err) {
+			t.Skip("symlink creation requires Windows privilege")
+		}
 		t.Fatal(err)
 	}
 	if _, _, err := s.readBlockImage("doc", "p1-b1"); err == nil {

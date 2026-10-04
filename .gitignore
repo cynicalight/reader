@@ -7,3 +7,6 @@ bin/
 coverage/
 .env
 apps/web/public/pdf-assets/
+
+apps/desktop/staging/
+release/

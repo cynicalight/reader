@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 const data = await mkdtemp(join(tmpdir(), "reader-smoke-"));
 const token = randomBytes(32).toString("hex");
 const child = spawn(
-  "./apps/desktop/bin/reader-server",
+  `./apps/desktop/bin/reader-server${process.platform === "win32" ? ".exe" : ""}`,
   ["--port", "0", "--data", data, "--web", "apps/web/dist"],
   {
     env: { ...process.env, READER_TOKEN: token },
