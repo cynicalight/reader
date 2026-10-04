@@ -214,21 +214,17 @@ func TestLocationValidation(t *testing.T) {
 		t.Fatal("zero page")
 	}
 }
-func TestProviderEventParsing(t *testing.T) {
-	text, bad := eventText("codex", []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"answer"}}`))
-	if text != "answer" || bad {
-		t.Fatal(text, bad)
+func TestClaudeEventParsing(t *testing.T) {
+	part, done, bad := claudeEvent([]byte(`{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"你好"}}}`))
+	if part != "你好" || done || bad {
+		t.Fatal(part, done, bad)
 	}
-	text, bad = eventText("claude", []byte(`{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"你好"}}}`))
-	if text != "你好" || bad {
-		t.Fatal(text, bad)
+	part, _, _ = claudeEvent([]byte(`{"type":"stream_event","parent_tool_use_id":"child","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"private"}}}`))
+	if part != "" {
+		t.Fatal("child message leaked")
 	}
-	text, _ = eventText("codex", []byte(`{"type":"item.completed","item":{"type":"command_execution","text":"secret"}}`))
-	if text != "" {
-		t.Fatal("tool output leaked")
-	}
-	_, bad = eventText("claude", []byte(`{"type":"result","subtype":"error_max_turns","is_error":true}`))
-	if !bad {
+	_, done, bad = claudeEvent([]byte(`{"type":"result","subtype":"error_max_turns","is_error":true}`))
+	if !bad || done {
 		t.Fatal("failure ignored")
 	}
 }
@@ -261,23 +257,14 @@ func TestProviderMissing(t *testing.T) {
 }
 func TestChatWithFakeCLI(t *testing.T) {
 	s := testServer(t)
-	dir := t.TempDir()
-	script := `#!/bin/sh
-if [ "$1" = login ]; then exit 0; fi
-cat > "$READER_TEST_CAPTURE"
-printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Test answer"}}' '{"type":"turn.completed"}'
-`
-	if e := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0700); e != nil {
-		t.Fatal(e)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	capture := filepath.Join(dir, "prompt.txt")
-	t.Setenv("READER_TEST_CAPTURE", capture)
+	fakeAgent(t, "codex", "success")
+	capture := filepath.Join(t.TempDir(), "prompt.json")
+	t.Setenv("READER_AGENT_CAPTURE", capture)
 	w := upload(t, s, "paper.pdf", sample(t, "reading-notes.pdf"))
 	var d Document
 	json.Unmarshal(w.Body.Bytes(), &d)
 	w = request(t, s, "POST", "/api/documents/"+d.ID+"/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain","context":"Some text"}`))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "event: done") || !strings.Contains(w.Body.String(), "Test answer") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "event: done") || !strings.Contains(w.Body.String(), "你好") || !strings.Contains(w.Body.String(), "，世界") {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	w = request(t, s, "GET", "/api/documents/"+d.ID+"/messages", nil)

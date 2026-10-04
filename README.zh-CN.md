@@ -70,7 +70,7 @@ claude auth login
 
 **调用 AI 时，相关内容会离开本机。** 图片能力测试使用合成图片；启用主 Agent 后，导入 PDF 的图表和公式会自动发送给该 Agent 生成文字稿。触发翻译、解释、总结或发送问题后，Reader 会将选区或当前章节 / 页面上下文及最近对话交给 CLI，再由 CLI 请求对应 AI 服务。章节和上下文有长度限制；当前页总结不等于整篇论文总结。
 
-CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex 使用只读沙箱并禁用 shell 工具。CLI 的原始日志不会作为回答显示。Codex 的回答按完整消息事件返回，Claude 支持增量文字事件。
+CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex 使用只读沙箱并禁用 shell 工具。CLI 的原始日志不会作为回答显示。Codex 通过 App Server 接收增量文字，Claude 使用 stream-json，Kimi 使用 ACP 消息片段；纯文字和图片对话均逐段传输。前端对接约定见 [Agent 流式输出文档](docs/agent-streaming-contract.md)。
 
 ## 本地数据
 

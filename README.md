@@ -75,7 +75,7 @@ The first PDF analysis downloads and verifies a roughly 130 MB layout model. The
 
 **Using AI sends relevant content off your machine.** Capability tests use a synthetic image. With a verified primary Agent configured, imported PDF figures and formulas are automatically sent for transcription. When you request a translation, explanation, summary, or send a question, Reader passes the selected excerpts or current chapter / page context, along with recent conversation history, to the CLI. The CLI then contacts its AI service. Chapter and context lengths are limited; a summary of the current page is not a summary of the entire paper.
 
-CLIs run in temporary empty directories. Claude is configured with tools and MCP disabled. Codex runs in a read-only sandbox with shell tools disabled. Raw CLI logs are not shown as answers. Codex responses arrive as complete message events; Claude supports incremental text events.
+CLIs run in temporary empty directories. Claude is configured with tools and MCP disabled. Codex runs in a read-only sandbox with shell tools disabled. Raw CLI logs are not shown as answers. Codex streams text through App Server, Claude uses stream-json, and Kimi uses ACP message chunks. Text and image conversations both forward incremental output. See the [frontend integration contract (Chinese)](docs/agent-streaming-contract.md).
 
 ## Local data
 

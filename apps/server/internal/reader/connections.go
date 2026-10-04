@@ -283,19 +283,31 @@ func (s *Server) generateWithConfig(ctx context.Context, c AIConfig, in AIInput,
 	p := c.Primary
 	var text string
 	var err error
+	streamed := false
+	var emit func(string)
+	if delta != nil {
+		emit = func(part string) {
+			if part != "" {
+				streamed = true
+				delta(part)
+			}
+		}
+	}
 	if capable(c, p, len(in.images()) > 0) {
-		text, err = s.invoke(ctx, c, p, in, nil)
+		text, err = s.invoke(ctx, c, p, in, emit)
 	} else {
 		err = errors.New("主 Agent 尚未通过所需能力测试")
 	}
 	if err == nil {
-		if delta != nil {
-			delta(text)
-		}
 		return AIResult{text, p, false}, nil
 	}
 	if ctx.Err() != nil {
 		return AIResult{}, ctx.Err()
+	}
+	// Once text is visible, fallback would append a second answer to the first.
+	// Background jobs (nil delta) can still retry through the configured API.
+	if streamed {
+		return AIResult{}, fmt.Errorf("%s 流式回答中断，请重试：%w", p, err)
 	}
 	target := "text-api"
 	if len(in.images()) > 0 {
