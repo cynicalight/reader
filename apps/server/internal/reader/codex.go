@@ -15,7 +15,7 @@ import (
 // assistant messages. Use one private stdio connection and ephemeral thread per
 // invocation, retaining the CLI's own login without reading its credentials.
 func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func(string)) (string, error) {
-	child, cancel := context.WithCancel(ctx)
+	child, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	args := []string{"app-server", "--listen", "stdio://"}
 	for _, setting := range []string{
@@ -43,12 +43,10 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	if err = cmd.Start(); err != nil {
 		return "", errors.New("无法启动 Codex App Server，请检查 CLI 安装及版本")
 	}
-	defer func() { cancel(); _ = cmd.Wait() }()
-	stop := context.AfterFunc(child, func() { _ = stdin.Close(); _ = stdout.Close() })
-	defer stop()
-	enc := json.NewEncoder(stdin)
+	lifecycle := newRPCLifecycle(ctx, cmd, stdin, stdout)
+	defer func() { lifecycle.close(); cancel(); _ = cmd.Wait() }()
 	scan := bufio.NewScanner(stdout)
-	scan.Buffer(make([]byte, 4096), 2<<20)
+	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 
 	var answer strings.Builder
 	items := map[string]*strings.Builder{}
@@ -56,6 +54,9 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	completed := false
 	providerError := errors.New("Codex 未完成回答，请检查登录、网络、模型或额度")
 	appendText := func(itemID, part string) error {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if itemID == "" {
 			return errors.New("Codex 消息编号无效")
 		}
@@ -84,9 +85,12 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	}
 	// Notifications can interleave with RPC responses, including turn/start.
 	handle := func(msg message) error {
+		if completed {
+			return nil
+		}
 		if len(msg.ID) > 0 && msg.Method != "" {
 			// No client-side tools, permission grants, or credential exchange.
-			return enc.Encode(map[string]any{"id": msg.ID, "error": map[string]any{"code": -32601, "message": "Reader does not expose this operation"}})
+			return lifecycle.send(map[string]any{"id": msg.ID, "error": map[string]any{"code": -32601, "message": "Reader does not expose this operation"}})
 		}
 		var p struct {
 			ThreadID  string `json:"threadId"`
@@ -114,6 +118,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		if id == "" || (turnID != "" && id != turnID) {
 			return nil
 		}
+		lifecycle.setCancel(map[string]any{"id": 99, "method": "turn/interrupt", "params": map[string]string{"threadId": threadID, "turnId": id}})
 		switch msg.Method {
 		case "item/agentMessage/delta":
 			turnID = id
@@ -148,17 +153,11 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	}
 	read := func() (message, error) {
 		var msg message
-		if ctx.Err() != nil {
-			return msg, ctx.Err()
-		}
 		if !scan.Scan() {
 			if ctx.Err() != nil {
 				return msg, ctx.Err()
 			}
 			return msg, errors.New("Codex 输出连接中断或事件过大")
-		}
-		if ctx.Err() != nil {
-			return msg, ctx.Err()
 		}
 		if json.Unmarshal(scan.Bytes(), &msg) != nil {
 			return msg, errors.New("Codex 输出协议无效")
@@ -166,7 +165,10 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		return msg, nil
 	}
 	call := func(id int, method string, params any) (json.RawMessage, error) {
-		if err := enc.Encode(map[string]any{"id": id, "method": method, "params": params}); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err := lifecycle.send(map[string]any{"id": id, "method": method, "params": params}); err != nil {
 			return nil, err
 		}
 		for {
@@ -189,7 +191,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	if _, err = call(1, "initialize", map[string]any{"clientInfo": map[string]string{"name": "reader", "title": "Reader", "version": "0.1.0"}}); err != nil {
 		return "", err
 	}
-	if err = enc.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+	if err = lifecycle.send(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
 		return "", err
 	}
 	params := map[string]any{"cwd": work, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never",
@@ -227,6 +229,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		return "", errors.New("Codex 回答编号无效")
 	}
 	turnID = turn.Turn.ID
+	lifecycle.setCancel(map[string]any{"id": 99, "method": "turn/interrupt", "params": map[string]string{"threadId": threadID, "turnId": turnID}})
 	for !completed {
 		msg, err := read()
 		if err != nil {

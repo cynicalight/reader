@@ -229,7 +229,7 @@ func TestAgentPartialFailureDoesNotFallback(t *testing.T) {
 			fakeAgent(t, provider, "fail-after")
 			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				t.Error("fallback called after visible text")
-				fmt.Fprint(w, `{ "choices":[{"message":{"content":"fallback"}}]}`)
+				writeAPIReply(w, "fallback")
 			}))
 			defer api.Close()
 			s := testServer(t)
@@ -299,7 +299,7 @@ func TestAgentFailureBeforeTextCanFallback(t *testing.T) {
 		t.Run(provider, func(t *testing.T) {
 			fakeAgent(t, provider, "fail-before")
 			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, `{"choices":[{"message":{"content":"fallback"}}]}`)
+				writeAPIReply(w, "fallback")
 			}))
 			defer api.Close()
 			s := testServer(t)

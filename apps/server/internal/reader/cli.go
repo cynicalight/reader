@@ -57,7 +57,8 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	cmd.Dir = work
 	cmd.Stdin = input
 	cmd.Stderr = io.Discard
-	cmd.WaitDelay = 3 * time.Second
+	cmd.WaitDelay = 400 * time.Millisecond
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	stdout, e := cmd.StdoutPipe()
 	if e != nil {
 		return "", e
@@ -65,16 +66,19 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	if e = cmd.Start(); e != nil {
 		return "", errors.New("无法启动 Agent，请检查安装路径")
 	}
-	stop := context.AfterFunc(child, func() { _ = stdout.Close() })
+	stop := context.AfterFunc(child, func() { time.AfterFunc(450*time.Millisecond, func() { _ = stdout.Close() }) })
 	defer stop()
 	scan := bufio.NewScanner(stdout)
-	scan.Buffer(make([]byte, 4096), 2<<20)
+	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 	var text strings.Builder
 	failed := false
 	completed := false
 	for scan.Scan() {
 		if ctx.Err() != nil {
 			break
+		}
+		if completed {
+			continue
 		}
 		part, done, bad := claudeEvent(scan.Bytes())
 		completed = completed || done
@@ -117,7 +121,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		args = append(args, "--model", model)
 	}
 	args = append(args, "acp")
-	child, cancel := context.WithCancel(ctx)
+	child, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	cmd := exec.CommandContext(child, "kimi", args...)
 	cmd.Dir = work
@@ -134,21 +138,20 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	if e = cmd.Start(); e != nil {
 		return "", errors.New("无法启动 Kimi Code")
 	}
-	defer func() { stdin.Close(); cancel(); _ = cmd.Wait() }()
-	stop := context.AfterFunc(child, func() { _ = stdout.Close(); _ = stdin.Close() })
-	defer stop()
-	enc := json.NewEncoder(stdin)
+	lifecycle := newRPCLifecycle(ctx, cmd, stdin, stdout)
+	defer func() { lifecycle.close(); cancel(); _ = cmd.Wait() }()
 	scan := bufio.NewScanner(stdout)
-	scan.Buffer(make([]byte, 4096), 2<<20)
+	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 	var text strings.Builder
+	sessionID := ""
 	request := func(id int, method string, params any) (json.RawMessage, error) {
-		if err := enc.Encode(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err := lifecycle.send(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
 			return nil, err
 		}
 		for scan.Scan() {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
 			var msg struct {
 				ID     json.RawMessage `json:"id"`
 				Method string          `json:"method"`
@@ -157,7 +160,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 				Error  json.RawMessage `json:"error"`
 			}
 			if json.Unmarshal(scan.Bytes(), &msg) != nil {
-				continue
+				return nil, generationError(ErrorProtocol, "Kimi ACP 输出协议无效")
 			}
 			if msg.Method != "" && len(msg.ID) > 0 { // Deny permission and every unsolicited client-side operation.
 				response := map[string]any{"jsonrpc": "2.0", "id": msg.ID, "error": map[string]any{"code": -32601, "message": "Reader does not expose this operation"}}
@@ -165,12 +168,13 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 					delete(response, "error")
 					response["result"] = map[string]any{"outcome": map[string]string{"outcome": "cancelled"}}
 				}
-				_ = enc.Encode(response)
+				_ = lifecycle.send(response)
 				continue
 			}
 			if msg.Method == "session/update" {
 				var p struct {
-					Update struct {
+					SessionID string `json:"sessionId"`
+					Update    struct {
 						Type    string `json:"sessionUpdate"`
 						Content struct {
 							Type string `json:"type"`
@@ -179,7 +183,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 					} `json:"update"`
 				}
 				_ = json.Unmarshal(msg.Params, &p)
-				if p.Update.Type == "agent_message_chunk" && p.Update.Content.Type == "text" {
+				if ctx.Err() == nil && id == 3 && sessionID != "" && p.SessionID == sessionID && p.Update.Type == "agent_message_chunk" && p.Update.Content.Type == "text" {
 					if text.Len()+len(p.Update.Content.Text) > 1<<20 {
 						return nil, errors.New("Kimi 回答过长")
 					}
@@ -205,6 +209,12 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	if e != nil {
 		return "", e
 	}
+	var version struct {
+		ProtocolVersion int `json:"protocolVersion"`
+	}
+	if json.Unmarshal(init, &version) != nil || version.ProtocolVersion != 1 {
+		return "", generationError(ErrorProtocol, "Kimi ACP 协商版本不支持")
+	}
 	if len(in.images()) > 0 {
 		var c struct {
 			Capabilities struct {
@@ -229,6 +239,8 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	if session.ID == "" {
 		return "", errors.New("Kimi 会话无效")
 	}
+	sessionID = session.ID
+	lifecycle.setCancel(map[string]any{"jsonrpc": "2.0", "method": "session/cancel", "params": map[string]string{"sessionId": sessionID}})
 	parts := []any{map[string]string{"type": "text", "text": in.Prompt}}
 	if len(in.images()) > 0 {
 		for _, image := range in.images() {
@@ -247,7 +259,14 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		return "", ctx.Err()
 	}
 	if stopped.Reason != "end_turn" || text.Len() == 0 {
-		return "", errors.New("Kimi 未完成回答")
+		kind := ErrorUpstream
+		if stopped.Reason == "max_tokens" || stopped.Reason == "max_turn_requests" {
+			kind = ErrorLimit
+		}
+		if stopped.Reason == "cancelled" {
+			kind = ErrorCanceled
+		}
+		return "", generationError(kind, "Kimi 未完成回答")
 	}
 	return text.String(), nil
 }

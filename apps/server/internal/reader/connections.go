@@ -8,11 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -277,112 +275,16 @@ func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), f
 	return s.generateWithConfig(ctx, s.aiConfig(), in, delta, fallback)
 }
 func (s *Server) generateWithConfig(ctx context.Context, c AIConfig, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
-	if !validAgent(c.Primary) {
-		return AIResult{}, errors.New("请在设置中指定主 Agent 并测试")
-	}
-	p := c.Primary
-	var text string
-	var err error
-	streamed := false
-	var emit func(string)
-	if delta != nil {
-		emit = func(part string) {
-			if part != "" {
-				streamed = true
-				delta(part)
-			}
-		}
-	}
-	if capable(c, p, len(in.images()) > 0) {
-		text, err = s.invoke(ctx, c, p, in, emit)
-	} else {
-		err = errors.New("主 Agent 尚未通过所需能力测试")
-	}
-	if err == nil {
-		return AIResult{text, p, false}, nil
-	}
-	if ctx.Err() != nil {
-		return AIResult{}, ctx.Err()
-	}
-	// Once text is visible, fallback would append a second answer to the first.
-	// Background jobs (nil delta) can still retry through the configured API.
-	if streamed {
-		return AIResult{}, fmt.Errorf("%s 流式回答中断，请重试：%w", p, err)
-	}
-	target := "text-api"
-	if len(in.images()) > 0 {
-		target = "image-api"
-	}
-	if !capable(c, target, len(in.images()) > 0) {
-		return AIResult{}, fmt.Errorf("%s：%s；没有经过验证的备用 %s", p, err, target)
-	}
-	if fallback != nil {
-		fallback(fmt.Sprintf("%s 调用失败，已切换到 %s", p, target))
-	}
-	text, err = s.invoke(ctx, c, target, in, delta)
-	return AIResult{text, target, true}, err
+	return newGenerationService(s.Store.Root, c).Generate(ctx, in, false, legacyEmitter(delta, fallback))
 }
 func (s *Server) invoke(ctx context.Context, c AIConfig, p string, in AIInput, delta func(string)) (string, error) {
-	if p == "text-api" {
-		return invokeAPI(ctx, c.TextAPI, in, delta)
+	service := newGenerationService(s.Store.Root, c)
+	conn, ok := service.connections[p]
+	if !ok {
+		return "", generationError(ErrorConfiguration, "未知连接")
 	}
-	if p == "image-api" {
-		return invokeAPI(ctx, c.ImageAPI, in, delta)
-	}
-	return invokeCLI(ctx, s.Store.Root, p, c.Models[p], in, delta)
-}
-func invokeAPI(ctx context.Context, c APIConnection, in AIInput, delta func(string)) (string, error) {
-	if e := validateAPI(c); e != nil {
-		return "", e
-	}
-	if c.URL == "" {
-		return "", errors.New("未配置 API")
-	}
-	var content any = in.Prompt
-	if len(in.images()) > 0 {
-		parts := []any{map[string]any{"type": "text", "text": in.Prompt}}
-		for _, image := range in.images() {
-			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageData(image)}})
-		}
-		content = parts
-	}
-	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{map[string]any{"role": "user", "content": content}}, "stream": false})
-	req, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.URL, "/")+"/chat/completions", bytes.NewReader(body))
-	if e != nil {
-		return "", errors.New("API 地址无效")
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Key)
-	}
-	client := &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("API 重定向已拒绝") }}
-	res, e := client.Do(req)
-	if e != nil {
-		return "", errors.New("API 网络请求失败或超时")
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return "", fmt.Errorf("API 返回 HTTP %d", res.StatusCode)
-	}
-	b, e := io.ReadAll(io.LimitReader(res.Body, (2<<20)+1))
-	if e != nil || len(b) > 2<<20 {
-		return "", errors.New("API 响应无效或过大")
-	}
-	var out struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if json.Unmarshal(b, &out) != nil || len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", errors.New("API 没有返回文字回答")
-	}
-	text := out.Choices[0].Message.Content
-	if delta != nil {
-		delta(text)
-	}
-	return text, nil
+	result, err := conn.Adapter.Stream(ctx, GenerateRequest{Input: in}, legacyEmitter(delta, nil))
+	return result.Text, err
 }
 
 const visionPrompt = "Inspect the attached image. It contains one horizontal row of 8 colored squares. Reply with exactly 8 uppercase color names in left-to-right order, separated by single spaces. Allowed names: RED BLUE GREEN YELLOW. No punctuation or tools."

@@ -71,7 +71,7 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 			t.Error("original image pixels missing")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"choices":[{"message":{"content":"Image explanation"}}]}`))
+		writeAPIReply(w, "Image explanation")
 	}))
 	defer api.Close()
 	config := AIConfig{Primary: "codex", Models: map[string]string{}, ImageAPI: APIConnection{URL: api.URL, Model: "vision"}, Capabilities: map[string]Capability{}}
@@ -133,7 +133,7 @@ func TestImageAPIKeepsMultipleAttachments(t *testing.T) {
 		} else if body.Messages[0].Content[1].ImageURL.URL != imageData(data) || body.Messages[0].Content[2].ImageURL.URL != imageData(second) {
 			t.Error("image ordering changed")
 		}
-		w.Write([]byte(`{"choices":[{"message":{"content":"Both images received"}}]}`))
+		writeAPIReply(w, "Both images received")
 	}))
 	defer api.Close()
 	_, err = invokeAPI(t.Context(), APIConnection{URL: api.URL, Model: "vision"}, AIInput{Prompt: "Compare", Images: [][]byte{data, second}}, nil)
