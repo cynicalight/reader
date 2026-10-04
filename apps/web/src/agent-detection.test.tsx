@@ -74,10 +74,9 @@ afterEach(async () => {
 it("automatically checks installed agents once, even when settings reopen during a check", async () => {
   await render();
   expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex");
-  expect(
-    host.querySelector('[aria-label="文本图片推理检测：检测中"]'),
-  ).not.toBeNull();
+  expect(host.querySelector('[aria-label="文本推理：检测中"]')).not.toBeNull();
   expect(host.textContent).not.toContain("测试可用性与识图");
+  expect(host.querySelector('[aria-label="图片理解：检测中"]')).not.toBeNull();
   await render(false);
   await render();
   expect(api.testAI).toHaveBeenCalledTimes(1);
@@ -88,13 +87,17 @@ it("automatically checks installed agents once, even when settings reopen during
   expect(api.testAI).toHaveBeenCalledTimes(1);
   expect(host.querySelector('[data-state="passed"]')).not.toBeNull();
 });
-it("does not show a green check for text-only capability and allows an explicit retry", async () => {
+it("shows independent text and image results and allows an explicit retry", async () => {
   await render();
   await act(async () =>
     complete({ ...passed, vision: false, error: "图片能力未通过检测" }),
   );
-  expect(host.querySelector('[data-state="passed"]')).toBeNull();
-  expect(host.querySelector('[data-state="failed"]')).not.toBeNull();
+  expect(
+    host.querySelector('[aria-label="文本推理：已通过"] [data-state="passed"]'),
+  ).not.toBeNull();
+  expect(
+    host.querySelector('[aria-label="图片理解：未通过"] [data-state="failed"]'),
+  ).not.toBeNull();
   await act(async () =>
     (
       host.querySelector('[aria-label="重新检测 Agent"]') as HTMLButtonElement

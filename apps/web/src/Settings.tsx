@@ -208,7 +208,7 @@ export function Settings({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  图片能力检测通过后，导入的 PDF
+                  图片理解检测通过后，导入的 PDF
                   将自动生成图表解析稿；图片会发送给此 Agent。
                 </p>
               </div>
@@ -220,11 +220,6 @@ export function Settings({
                 const pending = loading || testing.has(name);
                 const error = errors[name] || capability?.error;
                 const passed = !error && capability?.text && capability?.vision;
-                const state = pending
-                  ? "pending"
-                  : passed
-                    ? "passed"
-                    : "failed";
                 return (
                   <div key={name} className="rounded-xl border p-4">
                     <div className="flex items-center gap-3">
@@ -236,33 +231,51 @@ export function Settings({
                       )}
                     </div>
                     {(pending || p?.installed) && (
-                      <div
-                        className="agent-check-status"
-                        role="status"
-                        aria-live="polite"
-                        aria-label={`文本图片推理检测：${pending ? "检测中" : passed ? "已通过" : "未通过"}`}
-                      >
-                        <span
-                          className="agent-check-icon"
-                          key={state}
-                          data-state={state}
-                        >
-                          {pending ? (
-                            <LoaderCircle className="animate-spin" />
-                          ) : passed ? (
-                            <CircleCheck />
-                          ) : (
-                            <TriangleAlert />
-                          )}
-                        </span>
-                        <span>文本图片推理检测</span>
+                      <div className="flex flex-wrap gap-x-5">
+                        {(
+                          [
+                            ["text", "文本推理"],
+                            ["vision", "图片理解"],
+                          ] as const
+                        ).map(([kind, label]) => {
+                          const ready = !errors[name] && !!capability?.[kind];
+                          const state = pending
+                            ? "pending"
+                            : ready
+                              ? "passed"
+                              : "failed";
+                          return (
+                            <div
+                              key={kind}
+                              className="agent-check-status"
+                              role="status"
+                              aria-live="polite"
+                              aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
+                            >
+                              <span
+                                className="agent-check-icon"
+                                key={state}
+                                data-state={state}
+                              >
+                                {pending ? (
+                                  <LoaderCircle className="animate-spin" />
+                                ) : ready ? (
+                                  <CircleCheck />
+                                ) : (
+                                  <TriangleAlert />
+                                )}
+                              </span>
+                              <span>{label}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {!pending && p?.installed && !passed && (
                       <p className="mt-2 text-xs leading-5 text-muted-foreground break-words">
                         {error ||
                           (capability?.text
-                            ? "文本可用，图片能力未通过检测。"
+                            ? "文本推理可用，图片理解未通过检测。"
                             : "检测未通过，请确认 Agent 已完成登录。")}
                       </p>
                     )}
