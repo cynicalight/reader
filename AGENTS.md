@@ -10,6 +10,8 @@ Local-first EPUB/PDF reader. Use Chinese for user-facing communication. Keep cha
 - `packages/reader-core`: Document/Location/Annotation interfaces.
 - `packages/api-client`: generated OpenAPI types and transport.
 
+Agent chat streams through the existing SSE endpoint: Codex App Server `item/agentMessage/delta`, Claude Code partial stream-json events, and Kimi ACP chunks. Keep text/image paths incremental, require provider completion before saving, and never append a fallback answer after visible partial output. Frontend contract: `docs/agent-streaming-contract.md`.
+
 PDF rendering belongs in PDF.js, EPUB navigation in Readium. Never reduce EPUB positions to PDF page numbers. Readium navigator 2.11.1 uses shared 2.6.0; update these together after checking compatibility.
 
 ## UI

@@ -19,6 +19,9 @@ func imageData(b []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
 }
 func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, delta func(string)) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	if !validAgent(provider) {
 		return "", errors.New("未知 Agent")
 	}
@@ -30,30 +33,23 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	if provider == "kimi" {
 		return invokeKimi(ctx, work, model, in, delta)
 	}
-	args := providerArgs(provider)
+	if provider == "codex" {
+		return invokeCodex(ctx, work, model, in, delta)
+	}
+	args := claudeArgs()
 	if model != "" {
 		args = append(args, "--model", model)
 	}
 	var input io.Reader = strings.NewReader(in.Prompt)
 	if len(in.images()) > 0 {
-		if provider == "codex" {
-			for i, image := range in.images() {
-				file := filepath.Join(work, fmt.Sprintf("region-%d.png", i+1))
-				if e = os.WriteFile(file, image, 0600); e != nil {
-					return "", e
-				}
-				args = append(args, "--image", file)
-			}
-		} else {
-			args = append(args, "--input-format", "stream-json")
-			parts := []any{}
-			for _, image := range in.images() {
-				parts = append(parts, map[string]any{"type": "image", "source": map[string]string{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(image)}})
-			}
-			parts = append(parts, map[string]string{"type": "text", "text": in.Prompt})
-			b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": parts}})
-			input = strings.NewReader(string(b) + "\n")
+		args = append(args, "--input-format", "stream-json")
+		parts := []any{}
+		for _, image := range in.images() {
+			parts = append(parts, map[string]any{"type": "image", "source": map[string]string{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(image)}})
 		}
+		parts = append(parts, map[string]string{"type": "text", "text": in.Prompt})
+		b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": parts}})
+		input = strings.NewReader(string(b) + "\n")
 	}
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -69,23 +65,30 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	if e = cmd.Start(); e != nil {
 		return "", errors.New("无法启动 Agent，请检查安装路径")
 	}
+	stop := context.AfterFunc(child, func() { _ = stdout.Close() })
+	defer stop()
 	scan := bufio.NewScanner(stdout)
 	scan.Buffer(make([]byte, 4096), 2<<20)
 	var text strings.Builder
 	failed := false
+	completed := false
 	for scan.Scan() {
-		part, bad := eventText(provider, scan.Bytes())
+		if ctx.Err() != nil {
+			break
+		}
+		part, done, bad := claudeEvent(scan.Bytes())
+		completed = completed || done
 		failed = failed || bad
+		if bad || text.Len()+len(part) > 1<<20 {
+			failed = true
+			cancel()
+			break
+		}
 		if part != "" {
 			text.WriteString(part)
 			if delta != nil {
 				delta(part)
 			}
-		}
-		if text.Len() > 1<<20 {
-			failed = true
-			cancel()
-			break
 		}
 	}
 	if scan.Err() != nil {
@@ -96,7 +99,7 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	if e != nil || failed || text.Len() == 0 {
+	if e != nil || failed || !completed || text.Len() == 0 {
 		return "", errors.New("Agent 未完成请求，请检查登录、网络、模型或额度")
 	}
 	return text.String(), nil
@@ -132,6 +135,8 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		return "", errors.New("无法启动 Kimi Code")
 	}
 	defer func() { stdin.Close(); cancel(); _ = cmd.Wait() }()
+	stop := context.AfterFunc(child, func() { _ = stdout.Close(); _ = stdin.Close() })
+	defer stop()
 	enc := json.NewEncoder(stdin)
 	scan := bufio.NewScanner(stdout)
 	scan.Buffer(make([]byte, 4096), 2<<20)
@@ -141,6 +146,9 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 			return nil, err
 		}
 		for scan.Scan() {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			var msg struct {
 				ID     json.RawMessage `json:"id"`
 				Method string          `json:"method"`
@@ -172,12 +180,12 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 				}
 				_ = json.Unmarshal(msg.Params, &p)
 				if p.Update.Type == "agent_message_chunk" && p.Update.Content.Type == "text" {
+					if text.Len()+len(p.Update.Content.Text) > 1<<20 {
+						return nil, errors.New("Kimi 回答过长")
+					}
 					text.WriteString(p.Update.Content.Text)
 					if delta != nil {
 						delta(p.Update.Content.Text)
-					}
-					if text.Len() > 1<<20 {
-						return nil, errors.New("Kimi 回答过长")
 					}
 				}
 			}
@@ -235,6 +243,9 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		Reason string `json:"stopReason"`
 	}
 	_ = json.Unmarshal(raw, &stopped)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	if stopped.Reason != "end_turn" || text.Len() == 0 {
 		return "", errors.New("Kimi 未完成回答")
 	}
