@@ -65,6 +65,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
+	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
 	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +186,10 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename)), Size: size, CreatedAt: now(), LastOpenedAt: now()}
+	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "pending", []string{}
+	if kind == "epub" {
+		d.Category = "book"
+	}
 	var texts map[string]string
 	cache := filepath.Join(s.Store.Root, "cache", docID)
 	success := false
@@ -243,7 +248,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at) VALUES(?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt)
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category) VALUES(?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)
@@ -291,12 +296,32 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v struct {
+		Category   json.RawMessage `json:"category"`
+		Tags       json.RawMessage `json:"tags"`
 		Favorite   *bool           `json:"favorite"`
 		Progress   json.RawMessage `json:"progress"`
 		Percentage *float64        `json:"percentage"`
 	}
 	if !decode(w, r, &v) {
 		return
+	}
+	var category, tags any
+	if v.Category != nil {
+		var c string
+		if json.Unmarshal(v.Category, &c) != nil || !validCategory(c) {
+			fail(w, 400, "类型必须为书籍、文章或论文")
+			return
+		}
+		category = c
+	}
+	if v.Tags != nil {
+		normalized, e := normalizeTags(v.Tags)
+		if e != nil {
+			fail(w, 400, e.Error())
+			return
+		}
+		b, _ := json.Marshal(normalized)
+		tags = string(b)
 	}
 	if v.Progress != nil {
 		if !validLocation(v.Progress, d.Type) {
@@ -315,14 +340,23 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	if v.Favorite != nil {
 		d.Favorite = *v.Favorite
 	}
-	d.LastOpenedAt = now()
+	var openedAt any
+	// Organization and favorites must not move a document into recent reading.
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil) {
+		openedAt = now()
+	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=? WHERE id=?", v.Favorite, progress, v.Percentage, d.LastOpenedAt, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", v.Favorite, progress, v.Percentage, openedAt, category, tags, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
+		return
+	}
+	d, err = s.Store.Document(d.ID)
+	if err != nil {
+		fail(w, 500, "无法读取文档")
 		return
 	}
 	respond(w, 200, d)

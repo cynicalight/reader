@@ -10,16 +10,21 @@ import (
 )
 
 type Document struct {
-	ID           string          `json:"id"`
-	Type         string          `json:"type"`
-	Title        string          `json:"title"`
-	Author       string          `json:"author"`
-	Size         int64           `json:"size"`
-	CreatedAt    string          `json:"createdAt"`
-	LastOpenedAt string          `json:"lastOpenedAt"`
-	Favorite     bool            `json:"favorite"`
-	Progress     json.RawMessage `json:"progress,omitempty"`
-	Percentage   float64         `json:"percentage"`
+	Category             string          `json:"category"`
+	CategorySource       string          `json:"categorySource"`
+	ClassificationStatus string          `json:"classificationStatus"`
+	ClassificationError  string          `json:"classificationError"`
+	Tags                 []string        `json:"tags"`
+	ID                   string          `json:"id"`
+	Type                 string          `json:"type"`
+	Title                string          `json:"title"`
+	Author               string          `json:"author"`
+	Size                 int64           `json:"size"`
+	CreatedAt            string          `json:"createdAt"`
+	LastOpenedAt         string          `json:"lastOpenedAt"`
+	Favorite             bool            `json:"favorite"`
+	Progress             json.RawMessage `json:"progress,omitempty"`
+	Percentage           float64         `json:"percentage"`
 }
 type Annotation struct {
 	ID         string          `json:"id"`
@@ -68,11 +73,16 @@ func OpenStore(root string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db, root}, nil
+	store := &Store{db, root}
+	if err = store.migrateOrganization(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return store, nil
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 func (s *Store) Documents() ([]Document, error) {
-	rows, err := s.DB.Query(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
+	rows, err := s.DB.Query(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -80,12 +90,18 @@ func (s *Store) Documents() ([]Document, error) {
 	docs := []Document{}
 	for rows.Next() {
 		var d Document
-		var progress string
-		if err = rows.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage); err != nil {
+		var progress, tags string
+		if err = rows.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags); err != nil {
 			return nil, err
+		}
+		if err == nil {
+			err = json.Unmarshal([]byte(tags), &d.Tags)
 		}
 		if progress != "" {
 			d.Progress = json.RawMessage(progress)
+		}
+		if err != nil {
+			return nil, err
 		}
 		docs = append(docs, d)
 	}
@@ -93,8 +109,11 @@ func (s *Store) Documents() ([]Document, error) {
 }
 func (s *Store) Document(id string) (Document, error) {
 	var d Document
-	var progress string
-	err := s.DB.QueryRow(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage FROM documents WHERE id=?`, id).Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage)
+	var progress, tags string
+	err := s.DB.QueryRow(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents WHERE id=?`, id).Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags)
+	if err == nil {
+		err = json.Unmarshal([]byte(tags), &d.Tags)
+	}
 	if progress != "" {
 		d.Progress = json.RawMessage(progress)
 	}
