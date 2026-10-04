@@ -85,6 +85,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
+import { ProviderIdentity } from "./ProviderIdentity";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -189,7 +190,6 @@ export function Workspace({
   const [location, setLocation] = useState<DocumentLocation | undefined>(
     doc.progress,
   );
-  const [percentage, setPercentage] = useState(doc.percentage);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [left, setLeft] = useState(true);
@@ -248,7 +248,6 @@ export function Workspace({
   };
   const saveLocation = (next: DocumentLocation, percent: number) => {
     setLocation(next);
-    setPercentage(percent);
     if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
       toast.error(e.message),
@@ -384,6 +383,42 @@ export function Workspace({
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
         </div>
         <div className="toolbar-actions">
+          <div className="page-navigation">
+            <IconButton
+              label="上一页"
+              onClick={() =>
+                void adapter?.previous().catch((e) => toast.error(e.message))
+              }
+            >
+              <ChevronLeft />
+            </IconButton>
+            {doc.type === "pdf" ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const page = Number(pageInput);
+                  if (Number.isInteger(page) && page > 0)
+                    move({ type: "pdf", page });
+                }}
+              >
+                <Input
+                  aria-label="跳转 PDF 页码"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  className="h-7 w-14 text-center"
+                />
+              </form>
+            ) : null}
+            <IconButton
+              label="下一页"
+              onClick={() =>
+                void adapter?.next().catch((e) => toast.error(e.message))
+              }
+            >
+              <ChevronRight />
+            </IconButton>
+          </div>
+          <span className="toolbar-divider" />
           <IconButton
             label="目录与搜索"
             active={left}
@@ -708,15 +743,6 @@ export function Workspace({
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="ai" className="ai-panel">
-                    <div className="assistant-heading">
-                      <span className="assistant-avatar">
-                        <Sparkles size={17} />
-                      </span>
-                      <div>
-                        <h3>一起读懂这一页</h3>
-                        <p>从一个问题开始</p>
-                      </div>
-                    </div>
                     <ScrollArea className="chat-scroll">
                       <div className="chat-messages">
                         {!messages.length && !sending ? (
@@ -857,13 +883,20 @@ export function Workspace({
                         >
                           <SelectTrigger
                             size="sm"
-                            className="w-32 border-0 shadow-none"
+                            className="min-w-36 w-auto border-0 shadow-none"
+                            aria-label="选择 AI 助手"
                           >
-                            <SelectValue />
+                            <SelectValue>
+                              <ProviderIdentity provider={provider} />
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="codex">Codex</SelectItem>
-                            <SelectItem value="claude">Claude Code</SelectItem>
+                            <SelectItem value="codex">
+                              <ProviderIdentity provider="codex" />
+                            </SelectItem>
+                            <SelectItem value="claude">
+                              <ProviderIdentity provider="claude" />
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         {sending ? (
@@ -960,55 +993,7 @@ export function Workspace({
           </>
         )}
       </ResizablePanelGroup>
-      <footer className="reader-status">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="status-dot" />
-          <span>{locationLabel(location)}</span>
-        </div>
-        <div className="page-navigation">
-          <IconButton
-            label="上一页"
-            onClick={() =>
-              void adapter?.previous().catch((e) => toast.error(e.message))
-            }
-          >
-            <ChevronLeft />
-          </IconButton>
-          {doc.type === "pdf" ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const page = Number(pageInput);
-                if (Number.isInteger(page) && page > 0)
-                  move({ type: "pdf", page });
-              }}
-            >
-              <Input
-                aria-label="跳转 PDF 页码"
-                value={pageInput}
-                onChange={(e) => setPageInput(e.target.value)}
-                className="h-7 w-14 text-center"
-              />
-            </form>
-          ) : (
-            <span>阅读进度</span>
-          )}
-          <IconButton
-            label="下一页"
-            onClick={() =>
-              void adapter?.next().catch((e) => toast.error(e.message))
-            }
-          >
-            <ChevronRight />
-          </IconButton>
-        </div>
-        <div className="reading-progress">
-          <div>
-            <span style={{ width: `${percentage * 100}%` }} />
-          </div>
-          <span>{Math.round(percentage * 100)}%</span>
-        </div>
-      </footer>
+
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
         <DialogContent>
           <DialogHeader>

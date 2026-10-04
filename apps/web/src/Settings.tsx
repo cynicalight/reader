@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Check, CircleHelp, RefreshCw, Terminal } from "lucide-react";
+import { Check, CircleHelp, RefreshCw } from "lucide-react";
+import { ProviderIdentity } from "./ProviderIdentity";
 import { api } from "@reader/api";
 import type { Provider, AIConfig } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -129,12 +130,22 @@ export function Settings({
                     aria-labelledby="primary-agent-label"
                     className="w-full"
                   >
-                    <SelectValue placeholder="请选择主 Agent" />
+                    <SelectValue placeholder="请选择主 Agent">
+                      {config.primary ? (
+                        <ProviderIdentity provider={config.primary} />
+                      ) : undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="codex">Codex CLI</SelectItem>
-                    <SelectItem value="claude">Claude Code</SelectItem>
-                    <SelectItem value="kimi">Kimi Code</SelectItem>
+                    <SelectItem value="codex">
+                      <ProviderIdentity provider="codex" />
+                    </SelectItem>
+                    <SelectItem value="claude">
+                      <ProviderIdentity provider="claude" />
+                    </SelectItem>
+                    <SelectItem value="kimi">
+                      <ProviderIdentity provider="kimi" />
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
@@ -149,13 +160,8 @@ export function Settings({
                 return (
                   <div key={name} className="rounded-xl border p-4">
                     <div className="flex items-center gap-3">
-                      <Terminal className="size-4 text-muted-foreground" />
                       <span className="flex-1 text-sm font-medium">
-                        {name === "codex"
-                          ? "Codex CLI"
-                          : name === "claude"
-                            ? "Claude Code"
-                            : "Kimi Code"}
+                        <ProviderIdentity provider={name} />
                       </span>
                       <Badge
                         variant={p?.authenticated ? "secondary" : "outline"}

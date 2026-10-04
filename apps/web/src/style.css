@@ -145,14 +145,6 @@ kbd {
 .sidebar-bottom {
   margin-top: auto;
 }
-.status-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: #69907a;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 .library-main {
   flex: 1;
   min-width: 0;
@@ -466,6 +458,7 @@ kbd {
 }
 .toolbar-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 7px;
 }
@@ -650,30 +643,6 @@ kbd {
   min-height: 0;
   flex: 1;
   gap: 0;
-}
-.assistant-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 23px 19px 19px;
-}
-.assistant-avatar {
-  width: 34px;
-  height: 34px;
-  background: var(--muted);
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  color: #708475;
-}
-.assistant-heading h3 {
-  font-size: 12px;
-  font-weight: 550;
-}
-.assistant-heading p {
-  font-size: 10px;
-  color: var(--muted-foreground);
-  margin-top: 4px;
 }
 .chat-scroll {
   flex: 1;
@@ -861,50 +830,15 @@ kbd {
   line-height: 1.8;
   color: var(--muted-foreground);
 }
-.reader-status {
-  height: 41px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  font-size: 10px;
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-.reader-status > div {
-  flex: 1;
-}
 .page-navigation {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 10px;
 }
 .page-navigation input {
   font-size: 11px;
-}
-.reading-progress {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.reading-progress > div {
-  width: 95px;
-  height: 3px;
-  background: var(--muted);
-  border-radius: 2px;
-}
-.reading-progress > div > span {
-  display: block;
-  height: 100%;
-  background: #819587;
-  border-radius: 2px;
-}
-.reading-progress > span {
-  min-width: 28px;
-  text-align: right;
 }
 @media (max-width: 1000px) {
   .library-content {
@@ -1168,4 +1102,21 @@ kbd {
 [data-slot="popover-content"]::-webkit-scrollbar,
 [data-slot="popover-content"] *::-webkit-scrollbar {
   display: none;
+}
+
+.provider-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.provider-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: currentColor;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
 }
