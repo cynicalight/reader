@@ -1,5 +1,5 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Copy } from "lucide-react";
 import type { Message } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
@@ -15,6 +15,11 @@ const MessageMarkdown = lazy(() =>
   })),
 );
 import { useChatScroll } from "./useChatScroll";
+const messageTimeFormat = new Intl.DateTimeFormat("en", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
 export type ChatRow = {
   key: string;
   message?: Message;
@@ -76,6 +81,9 @@ export function AssistantPanel({
           {chatRows(state).map(({ key, message, pending: answer }) => {
             const assistant = answer || message?.role === "assistant",
               content = answer?.content ?? message?.content ?? "";
+            const timestamp = message?.createdAt
+              ? new Date(message.createdAt)
+              : undefined;
             return (
               <div
                 key={key}
@@ -104,13 +112,25 @@ export function AssistantPanel({
                   </p>
                 )}
                 {assistant && !!content && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void copyText(content)}
-                  >
-                    复制回答
-                  </Button>
+                  <div className="chat-message-actions">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="复制回答"
+                      title="复制回答"
+                      onClick={() => void copyText(content)}
+                    >
+                      <Copy aria-hidden="true" />
+                    </Button>
+                    {timestamp && !Number.isNaN(timestamp.getTime()) && (
+                      <time
+                        dateTime={timestamp.toISOString()}
+                        title={timestamp.toLocaleString()}
+                      >
+                        {messageTimeFormat.format(timestamp)}
+                      </time>
+                    )}
+                  </div>
                 )}
                 {message && extras(message)}
               </div>

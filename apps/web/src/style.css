@@ -753,6 +753,18 @@ kbd {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.chat-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1;
+}
+.chat-message-actions button {
+  color: inherit;
+}
 .chat-message.user {
   background: var(--muted);
   border-radius: 9px;
