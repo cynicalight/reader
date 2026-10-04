@@ -689,6 +689,32 @@ kbd {
   flex: 1;
   gap: 0;
 }
+.chat-thread {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.chat-follow {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0.5px solid var(--border);
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--muted-foreground);
+  box-shadow: 0 2px 8px #0000000a;
+}
+.chat-follow:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
 .chat-scroll {
   flex: 1;
   min-height: 0;

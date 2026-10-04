@@ -1,4 +1,5 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
+import { ArrowDown } from "lucide-react";
 import type { Message } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
@@ -65,7 +66,7 @@ export function AssistantPanel({
   const scroll = useChatScroll(state.pending?.key);
   const pending = state.pending;
   return (
-    <>
+    <div className="chat-thread">
       <ScrollArea className="chat-scroll" viewportRef={scroll.viewportRef}>
         <div className="chat-messages" ref={scroll.contentRef}>
           {!state.loaded && (
@@ -131,13 +132,15 @@ export function AssistantPanel({
       {!scroll.following && (
         <Button
           className="chat-follow"
-          variant="secondary"
-          size="sm"
+          variant="outline"
+          size="icon"
+          aria-label="回到底部"
+          title="回到底部"
           onClick={scroll.bottom}
         >
-          回到底部
+          <ArrowDown aria-hidden="true" />
         </Button>
       )}
-    </>
+    </div>
   );
 }

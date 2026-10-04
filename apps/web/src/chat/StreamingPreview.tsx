@@ -1,4 +1,5 @@
 import { Profiler, useEffect, useRef, useState } from "react";
+import { ArrowDown } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
 import { MessageMarkdown } from "./MessageMarkdown";
@@ -153,7 +154,7 @@ export default function StreamingPreview() {
         </Button>
       </div>
       <section
-        className="ai-panel"
+        className="ai-panel chat-thread"
         style={{
           width: "min(100%, 700px)",
           minWidth: 250,
@@ -190,8 +191,15 @@ export default function StreamingPreview() {
           </div>
         </ScrollArea>
         {!scroll.following && (
-          <Button className="chat-follow" onClick={scroll.bottom}>
-            回到底部
+          <Button
+            className="chat-follow"
+            variant="outline"
+            size="icon"
+            aria-label="回到底部"
+            title="回到底部"
+            onClick={scroll.bottom}
+          >
+            <ArrowDown aria-hidden="true" />
           </Button>
         )}
       </section>
