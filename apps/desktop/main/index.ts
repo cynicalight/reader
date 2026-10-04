@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
+import { writeClipboardText } from "./clipboard";
 let child: ChildProcess | undefined;
 let serverURL = "";
 let serverToken = "";
@@ -224,6 +225,9 @@ app
     });
     window.webContents.on("will-attach-webview", (event) =>
       event.preventDefault(),
+    );
+    ipcMain.handle("reader:clipboard-write", (event, text: unknown) =>
+      writeClipboardText(event, text, window?.webContents, url),
     );
     ipcMain.handle("reader:appearance", (event, appearance: unknown) => {
       if (

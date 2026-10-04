@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("readerDesktop", {
   platform: process.platform,
+  writeClipboardText: (text: string) =>
+    ipcRenderer.invoke("reader:clipboard-write", text),
   onBeforeClose: (callback: () => Promise<void>) => {
     const listener = () => {
       void callback().then(
