@@ -1088,9 +1088,15 @@ export function Workspace({
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      if (
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        !e.altKey &&
+                        !e.nativeEvent.isComposing &&
+                        e.nativeEvent.keyCode !== 229
+                      ) {
                         e.preventDefault();
-                        void send();
+                        if (!e.repeat && adapter && !sending) void send();
                       }
                     }}
                   />
