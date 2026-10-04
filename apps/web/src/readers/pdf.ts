@@ -1,3 +1,4 @@
+import { PDFBlockOverlay } from "./pdf-blocks";
 import * as pdfjs from "pdfjs-dist";
 import {
   EventBus,
@@ -8,6 +9,7 @@ import workerURL from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import type {
   Annotation,
+  PDFBlock,
   Document,
   DocumentLocation,
   PDFLocation,
@@ -33,11 +35,13 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private resize: ResizeObserver;
   private fitWidth = true;
   private disposed = false;
+  private blocks: PDFBlockOverlay;
   constructor(
     private container: HTMLElement,
     private events: ReaderEvents,
   ) {
     container.classList.add("pdf-container");
+    this.blocks = new PDFBlockOverlay(container);
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
     container.append(viewer);
@@ -268,7 +272,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
   async getContext() {
     return this.pageText(this.location.page);
   }
+  setBlocks(blocks: PDFBlock[]) {
+    this.blocks.setBlocks(blocks);
+  }
   async destroy() {
+    this.blocks.destroy();
     this.disposed = true;
     this.resize.disconnect();
     this.container.removeEventListener("mouseup", this.onSelection);

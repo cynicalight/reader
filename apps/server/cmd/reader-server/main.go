@@ -27,6 +27,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	unlock, err := reader.LockLibrary(root)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer unlock()
 	store, err := reader.OpenStore(root)
 	if err != nil {
 		log.Fatal(err)
@@ -45,13 +50,18 @@ func main() {
 		log.Fatal(err)
 	}
 	server := reader.NewServer(store, token, *web)
-	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	runContext, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	stopProcessing := server.StartProcessing(runContext)
+	defer stopProcessing()
+	httpServer := &http.Server{BaseContext: func(net.Listener) context.Context { return runContext }, Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	ready, _ := json.Marshal(map[string]string{"url": "http://" + listener.Addr().String(), "token": token})
 	fmt.Println(string(ready))
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
+		cancelRun()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(ctx)

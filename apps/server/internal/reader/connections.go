@@ -204,6 +204,7 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, 200, publicConfig(c))
+	s.wakeProcessing()
 }
 func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 	p := r.PathValue("provider")
@@ -258,6 +259,7 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, 200, cap)
+	s.wakeProcessing()
 }
 func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
 	c := s.aiConfig()

@@ -9,6 +9,10 @@ import type {
   Message,
   ReaderTheme,
   ReaderSelection,
+  Processing,
+  PDFBlock,
+  AIConfig,
+  AICapability,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -42,6 +46,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  processing: () => request<Processing[]>("/api/processing"),
+  process: (id: string) =>
+    request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
+  blocks: (id: string) => request<PDFBlock[]>(`/api/documents/${id}/blocks`),
+  aiConfig: () => request<AIConfig>("/api/ai/config"),
+  saveAIConfig: (config: AIConfig) =>
+    request<AIConfig>("/api/ai/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
+  testAI: (provider: string) =>
+    request<AICapability>(`/api/ai/test/${provider}`, { method: "POST" }),
   documents: async (): Promise<Document[]> => {
     const { data, error } = await client.GET("/api/documents");
     if (error) throw new Error(error.error);

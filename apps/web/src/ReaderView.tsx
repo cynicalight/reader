@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   Annotation,
+  PDFBlock,
   Document,
   ReaderAdapter,
   ReaderEvents,
@@ -13,19 +14,21 @@ export function ReaderView({
   document: doc,
   theme,
   annotations,
+  blocks = [],
   onReady,
   events,
 }: {
   document: Document;
   theme: ReaderTheme;
   annotations: Annotation[];
+  blocks?: PDFBlock[];
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const adapter = useRef<ReaderAdapter | null>(null);
-  const latest = useRef({ theme, annotations, events, onReady });
-  latest.current = { theme, annotations, events, onReady };
+  const latest = useRef({ theme, annotations, blocks, events, onReady });
+  latest.current = { theme, annotations, blocks, events, onReady };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -57,6 +60,7 @@ export function ReaderView({
       if (disposed) return;
       await engine.setTheme(latest.current.theme);
       await engine.highlight(latest.current.annotations);
+      engine.setBlocks?.(latest.current.blocks);
       const toc = await engine.getTOC();
       if (disposed) return;
       adapter.current = engine;
@@ -88,6 +92,9 @@ export function ReaderView({
       ?.highlight(annotations)
       .catch((e) => toast.error(e.message));
   }, [annotations]);
+  useEffect(() => {
+    adapter.current?.setBlocks?.(blocks);
+  }, [blocks]);
   return (
     <div className="reader-stage" data-theme={theme.mode}>
       <div className="reader-host" ref={host} />

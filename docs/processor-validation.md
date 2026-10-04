@@ -1,12 +1,12 @@
 # Local PDF layout and Codex validation
 
-This is a processing prototype and a provider integration test, not completion of the two-stage import UI. The agreed workflow is in [reading-workflow.md](reading-workflow.md).
+The processor is now connected to the desktop two-stage import UI, with separate progress bars and detected-region hover. Full-document retrieval and image-click conversations remain separate work. The agreed workflow is in [reading-workflow.md](reading-workflow.md).
 
 ## Distribution decision
 
-The proposed default installer includes PDF.js, the native Canvas runtime, ONNX Runtime and the processor code. The PP-DocLayoutV3 weights are downloaded automatically on first use and cached once per local library. Users do not install Python or PaddlePaddle. An installer containing the weights could support offline first use; that packaging variant is not implemented.
+The planned default installer includes PDF.js, the native Canvas runtime, ONNX Runtime and the processor code. The PP-DocLayoutV3 weights are downloaded automatically on first use and cached once per local library. Users do not install Python or PaddlePaddle. An installer containing the weights could support offline first use; that packaging variant is not implemented.
 
-The current CLI worker implements the cache/download/checksum path. The desktop import flow does not invoke it yet. A future UI must expose download progress and retry failures, rather than leave the reader apparently stuck in “学习中”.
+The desktop import flow now starts the worker automatically for PDFs. The UI exposes model download status, per-page learning progress, per-asset consolidation progress, connection waits and retries. Desktop installer distribution is not implemented yet.
 
 Weights: `PaddlePaddle/PP-DocLayoutV3_onnx`, revision `46bbdf188bb0a772c08aed74882ce7e51a8f1ea6`, 130,502,049 bytes (about 130 MB / 124.5 MiB). SHA256: `45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba`. Weights and generated user documents are not committed. The download is checked before inference; partial downloads never become the cached model.
 
@@ -44,12 +44,20 @@ The raw detector returned 85 inline formula regions. Those remain in paragraph t
 
 Codex passed an actual text invocation and an eight-tile randomized visual challenge. An automatically cropped Figure 2 also produced a Chinese Markdown transcript. This verifies the image transport and a real paper-image response; it does not validate every relation or figure in the paper.
 
-## Limits before product integration
+## Desktop processing integration check
+
+The Oze fixture completed the real import → learning → waiting for configuration → consolidation → ready sequence in an isolated library. The worker ran through the Electron executable with `ELECTRON_RUN_AS_NODE=1`. All 13 pages were processed, 17 image blocks were available before vision finished, and all 17 nonempty Markdown transcripts were saved using the locally authenticated Codex CLI.
+
+After the first transcript was saved, the Go service was stopped and restarted. Processing resumed, and hashes confirmed that previously completed transcripts were unchanged. This checks transport, persistence and lifecycle behavior; transcript factual accuracy has not been reviewed exhaustively.
+
+Validation passed: `pnpm typecheck`, `pnpm test` (Go suite and 23 Vitest tests), `pnpm build`, plus targeted Go race tests for queue recovery, capability wake-up, transcript preservation and the library lock. Native Electron inspection observed separate progress bars during learning and Figure 1 region hover. The final rebuild was launched successfully; a subsequent screenshot attempt was blocked by a macOS capture error.
+
+## Remaining limits
 
 - One paper is not enough to establish layout accuracy; this fixture does not establish table detection quality.
 - Some captions and standalone formula boundaries are incomplete. Caption grouping is heuristic and needs a wider fixture set. Do not present model confidence as measured accuracy.
 - Extracted formula text is not reliable mathematical transcription. Use the original image and vision transcript; retain source coordinates.
 - Reading order follows detector output. Heading levels are provisional; paragraphs crossing pages and nested subsections are not fully reconstructed.
 - The worker does not perform OCR. Pages without extractable text are explicitly marked incomplete.
-- Resume, per-asset vision jobs, revised-file protection, retrieval, citations, hover interactions and desktop lifecycle integration remain work under the wider plan.
-- No desktop UI visual acceptance was performed.
+- Resume, per-asset vision jobs, atomic transcript publication, two-stage UI, hover and desktop worker lifecycle are integrated. Whole-document retrieval, citation navigation and conversation-driven revisions remain work under the wider plan.
+- Native Electron inspection confirmed separate progress bars and Figure 1 hover alignment on the supplied paper. No browser automation was used. This is a scoped check, not cross-platform or comprehensive visual acceptance.

@@ -28,6 +28,12 @@ Each format retains reading controls suited to its layout:
 
 In an empty library, click “先体验示例文档” (try sample documents) to load an original three-chapter EPUB and a two-page PDF included with the project.
 
+PDF imports now show separate **Learning** and **Consolidating** progress bars. Learning extracts page text and layout; consolidating generates an individual transcript for each detected image with the selected, vision-tested primary agent. Hovering a detected figure or formula highlights the whole region without blocking text selection. Processing resumes after restart and reuses saved transcripts.
+
+The first PDF analysis automatically downloads and verifies approximately 130 MB of layout-model weights, then caches them locally. Python and PaddlePaddle do not need to be installed. Select a primary agent in Settings and run the actual text/image capability test to enable automatic image interpretation. Without a verified vision connection, reading and detected-region hover remain available while consolidation waits. Scanned pages currently require OCR that is not implemented; incomplete text is explicitly labeled.
+
+**Automatic image interpretation sends the cropped PDF figures/formulas to the selected agent.** Capability testing uses a synthetic image. Current chat still uses selected text or the current page/chapter; whole-document retrieval over transcripts and image-click conversations are not implemented yet.
+
 ## Quick start
 
 Requires **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**.
@@ -61,9 +67,11 @@ codex login
 claude auth login
 ```
 
-Open Reader settings, click “检测” (detect), then select the corresponding provider in the AI panel. Reader does not install CLIs, read their credential files, or implement its own OAuth flow. Account permissions, quotas, model availability, and billing depend on the CLI login and the provider. Reader currently uses the CLI's default model. Older CLI versions may need an upgrade to support the integration's command-line options.
+Open Reader settings, choose a primary Agent, and run “测试可用性与识图” (test availability and vision). Successful real requests produce green capability badges and resume waiting PDF image jobs. Existing text conversations still select Codex or Claude in the AI panel. Reader does not install CLIs, read their credential files, or implement its own OAuth flow. Account permissions, quotas, model availability, and billing depend on the CLI login and the provider. Reader currently uses the CLI's default model. Older CLI versions may need an upgrade to support the integration's command-line options.
 
-**Using AI sends relevant content off your machine.** When you request a translation, explanation, summary, or send a question, Reader passes the selected excerpts or current chapter / page context, along with recent conversation history, to the CLI. The CLI then contacts its AI service. Chapter and context lengths are limited; a summary of the current page is not a summary of the entire paper.
+The first PDF analysis downloads and verifies a roughly 130 MB layout model. The cached model locates image regions locally; Python and PaddlePaddle are not required. Without a verified vision connection, reading and region hover remain available while consolidation waits for configuration. Processing resumes after restart and reuses saved transcripts. Scanned pages are explicitly marked incomplete because OCR is not available.
+
+**Using AI sends relevant content off your machine.** Capability tests use a synthetic image. With a verified primary Agent configured, imported PDF figures and formulas are automatically sent for transcription. When you request a translation, explanation, summary, or send a question, Reader passes the selected excerpts or current chapter / page context, along with recent conversation history, to the CLI. The CLI then contacts its AI service. Chapter and context lengths are limited; a summary of the current page is not a summary of the entire paper.
 
 CLIs run in temporary empty directories. Claude is configured with tools and MCP disabled. Codex runs in a read-only sandbox with shell tools disabled. Raw CLI logs are not shown as answers. Codex responses arrive as complete message events; Claude supports incremental text events.
 
@@ -126,7 +134,7 @@ The domain model centers on `Document`. PDF positions use page numbers and coord
 
 ## Current limitations and next steps
 
-The current version primarily targets DRM-free reflowable EPUBs and PDFs with text. OCR, password entry for protected PDFs, PDF thumbnails, background PDF full-text indexing, batch translation, cross-document AI retrieval, independent conversation management, Ollama / API providers, and reading statistics are not yet supported. Highlights are not created for complex PDF selections spanning multiple pages.
+The current version primarily targets DRM-free reflowable EPUBs and PDFs with text. OCR, password entry for protected PDFs, PDF thumbnails, background PDF full-text indexing, batch translation, cross-document AI retrieval, independent conversation management, Ollama, API-provider settings UI, and reading statistics are not yet supported. Backend API fallback configuration is available through the local API. Highlights are not created for complex PDF selections spanning multiple pages.
 
 Fixed-layout EPUBs, vertical text, RTL, complex footnotes, and large files need more testing with real documents. The desktop app handles macOS file-open events, but system file associations are not registered. Installers, signing, notarization, and automatic updates are not available yet.
 

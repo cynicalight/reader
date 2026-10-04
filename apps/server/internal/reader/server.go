@@ -18,12 +18,13 @@ import (
 )
 
 type Server struct {
-	Store    *Store
-	Token    string
-	Web      string
-	aiMu     sync.Mutex
-	importMu sync.Mutex
-	configMu sync.Mutex
+	Store        *Store
+	Token        string
+	Web          string
+	aiMu         sync.Mutex
+	importMu     sync.Mutex
+	configMu     sync.Mutex
+	processingMu sync.Mutex
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -58,6 +59,9 @@ func (s *Server) Handler() http.Handler {
 		respond(w, 200, v)
 	})
 	mux.HandleFunc("POST /api/documents", s.importDocument)
+	mux.HandleFunc("GET /api/processing", s.processingList)
+	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
+	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
@@ -170,6 +174,10 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	docID := hex.EncodeToString(hash.Sum(nil))[:32]
 	if d, e := s.Store.Document(docID); e == nil {
+		if err = s.Store.enqueuePDF(d); err != nil {
+			fail(w, 500, "无法创建解析任务")
+			return
+		}
 		respond(w, 200, d)
 		return
 	}
@@ -240,6 +248,11 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+	}
+	if err == nil && kind == "pdf" {
+		p := initialProcessing(d.ID)
+		b, _ := json.Marshal(p)
+		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}
 	if err == nil {
 		err = tx.Commit()

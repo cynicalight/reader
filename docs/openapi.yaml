@@ -612,6 +612,249 @@
                 },
             },
         },
+      "/api/processing":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/Processing",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/processing":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Processing" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/blocks":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/PDFBlock" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/ai/config":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/AIConfig" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema": { "$ref": "#/components/schemas/AIConfig" },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/AIConfig" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/ai/test/{provider}":
+        {
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "provider",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/AICapability" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -770,7 +1013,8 @@
               "type": "object",
               "properties":
                 {
-                  "id": { "enum": ["codex", "claude"] },
+                  "id":
+                    { "type": "string", "enum": ["codex", "claude", "kimi"] },
                   "installed": { "type": "boolean" },
                   "authenticated": { "type": "boolean" },
                   "status": { "type": "string" },
@@ -783,6 +1027,118 @@
               "type": "object",
               "properties": { "error": { "type": "string" } },
               "required": ["error"],
+            },
+          "Processing":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "documentId": { "type": "string" },
+                  "phase":
+                    {
+                      "type": "string",
+                      "enum": ["learning", "settling", "ready"],
+                    },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum":
+                        ["queued", "running", "waiting", "failed", "complete"],
+                    },
+                  "pagesDone": { "type": "integer" },
+                  "pagesTotal": { "type": "integer" },
+                  "assetsDone": { "type": "integer" },
+                  "assetsTotal": { "type": "integer" },
+                  "detail": { "type": "string" },
+                  "warning": { "type": "string" },
+                  "updatedAt": { "type": "string" },
+                  "incomplete": { "type": "boolean" },
+                },
+              "required":
+                [
+                  "documentId",
+                  "phase",
+                  "status",
+                  "pagesDone",
+                  "pagesTotal",
+                  "assetsDone",
+                  "assetsTotal",
+                  "detail",
+                  "updatedAt",
+                ],
+            },
+          "PDFBlock":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "page": { "type": "integer" },
+                  "label": { "type": "string" },
+                  "bounds":
+                    {
+                      "type": "object",
+                      "properties":
+                        {
+                          "x": { "type": "number" },
+                          "y": { "type": "number" },
+                          "width": { "type": "number" },
+                          "height": { "type": "number" },
+                        },
+                      "required": ["x", "y", "width", "height"],
+                    },
+                  "text": { "type": "string" },
+                  "image": { "type": "string" },
+                  "caption": { "type": "string" },
+                },
+              "required": ["id", "page", "label", "bounds", "text"],
+            },
+          "AICapability":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "text": { "type": "boolean" },
+                  "vision": { "type": "boolean" },
+                  "checkedAt": { "type": "string" },
+                  "error": { "type": "string" },
+                },
+              "required": ["text", "vision", "checkedAt"],
+            },
+          "APIConnection":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "url": { "type": "string" },
+                  "model": { "type": "string" },
+                  "key": { "type": "string", "writeOnly": true },
+                  "hasKey": { "type": "boolean" },
+                },
+              "required": ["url", "model", "hasKey"],
+            },
+          "AIConfig":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "primary": { "type": "string" },
+                  "models":
+                    {
+                      "type": "object",
+                      "additionalProperties": { "type": "string" },
+                    },
+                  "textAPI": { "$ref": "#/components/schemas/APIConnection" },
+                  "imageAPI": { "$ref": "#/components/schemas/APIConnection" },
+                  "capabilities":
+                    {
+                      "type": "object",
+                      "additionalProperties":
+                        { "$ref": "#/components/schemas/AICapability" },
+                    },
+                },
+              "required":
+                ["primary", "models", "textAPI", "imageAPI", "capabilities"],
             },
         },
     },

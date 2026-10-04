@@ -3,6 +3,7 @@ module reader.local/server
 go 1.26.5
 
 require (
+	github.com/gofrs/flock v0.13.0
 	github.com/readium/go-toolkit v0.16.1
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.60.1

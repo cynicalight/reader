@@ -1,6 +1,9 @@
 import { spawn, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
+execFileSync("pnpm", ["--filter", "@reader/processor", "build"], {
+  stdio: "inherit",
+});
 const token = randomBytes(32).toString("hex");
 execFileSync(
   "go",
@@ -12,7 +15,15 @@ const server = spawn(
   ["--data", "../../.reader", "--port", "17840"],
   {
     cwd: new URL("../apps/server/", import.meta.url),
-    env: { ...process.env, READER_TOKEN: token },
+    env: {
+      ...process.env,
+      READER_TOKEN: token,
+      READER_NODE: process.execPath,
+      READER_PROCESSOR: new URL(
+        "../apps/processor/dist/main.mjs",
+        import.meta.url,
+      ).pathname,
+    },
     stdio: ["ignore", "pipe", "inherit"],
   },
 );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, CircleHelp, RefreshCw, Terminal } from "lucide-react";
 import { api } from "@reader/api";
-import type { Provider } from "@reader/core";
+import type { Provider, AIConfig } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -11,6 +11,13 @@ import {
   DialogDescription,
 } from "@reader/ui/components/dialog";
 import { Badge } from "@reader/ui/components/badge";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@reader/ui/components/select";
 import { Separator } from "@reader/ui/components/separator";
 import { useReaderStore } from "./store";
 import { toast } from "sonner";
@@ -22,12 +29,20 @@ export function Settings({
   onOpenChange: (value: boolean) => void;
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [config, setConfig] = useState<AIConfig>();
+  const [testing, setTesting] = useState<string>();
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const { theme, setTheme } = useReaderStore();
   const refresh = async () => {
     setLoading(true);
     try {
-      setProviders(await api.providers());
+      const [providers, config] = await Promise.all([
+        api.providers(),
+        api.aiConfig(),
+      ]);
+      setProviders(providers);
+      setConfig(config);
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -39,7 +54,7 @@ export function Settings({
   }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>让 Reader 适合你</DialogTitle>
           <DialogDescription>
@@ -76,15 +91,59 @@ export function Settings({
                 检测
               </Button>
             </div>
+            {config && (
+              <div className="mb-4 space-y-2">
+                <label className="text-sm" id="primary-agent-label">
+                  主 Agent · 自动图片解析使用此连接
+                </label>
+                <Select
+                  value={config.primary || null}
+                  disabled={saving || !!testing}
+                  onValueChange={async (value) => {
+                    if (!value) return;
+                    setSaving(true);
+                    try {
+                      setConfig(
+                        await api.saveAIConfig({ ...config, primary: value }),
+                      );
+                    } catch (e) {
+                      toast.error((e as Error).message);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    aria-labelledby="primary-agent-label"
+                    className="w-full"
+                  >
+                    <SelectValue placeholder="请选择主 Agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="codex">Codex CLI</SelectItem>
+                    <SelectItem value="claude">Claude Code</SelectItem>
+                    <SelectItem value="kimi">Kimi Code</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  通过图片测试后，导入的 PDF
+                  将自动生成图表解析稿；图片会发送给此 Agent。
+                </p>
+              </div>
+            )}
             <div className="space-y-3">
-              {(["codex", "claude"] as const).map((name) => {
+              {(["codex", "claude", "kimi"] as const).map((name) => {
                 const p = providers.find((p) => p.id === name);
                 return (
                   <div key={name} className="rounded-xl border p-4">
                     <div className="flex items-center gap-3">
                       <Terminal className="size-4 text-muted-foreground" />
                       <span className="flex-1 text-sm font-medium">
-                        {name === "codex" ? "Codex CLI" : "Claude Code"}
+                        {name === "codex"
+                          ? "Codex CLI"
+                          : name === "claude"
+                            ? "Claude Code"
+                            : "Kimi Code"}
                       </span>
                       <Badge
                         variant={p?.authenticated ? "secondary" : "outline"}
@@ -92,10 +151,56 @@ export function Settings({
                         {loading ? "检测中" : p?.status || "尚未检测"}
                       </Badge>
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {config?.capabilities[name]?.text && (
+                        <Badge variant="outline" className="text-emerald-600">
+                          <Check className="size-3" />
+                          可用
+                        </Badge>
+                      )}
+                      {config?.capabilities[name]?.vision && (
+                        <Badge variant="outline" className="text-emerald-600">
+                          <Check className="size-3" />
+                          支持图片
+                        </Badge>
+                      )}
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={!!testing || saving || !p?.installed}
+                        onClick={async () => {
+                          setTesting(name);
+                          try {
+                            const capability = await api.testAI(name);
+                            setConfig(await api.aiConfig());
+                            if (capability.error)
+                              toast.warning(capability.error);
+                            else toast.success("文字与图片测试通过");
+                          } catch (e) {
+                            toast.error((e as Error).message);
+                          } finally {
+                            setTesting(undefined);
+                          }
+                        }}
+                      >
+                        {testing === name
+                          ? "正在测试文字与图片…"
+                          : "测试可用性与识图"}
+                      </Button>
+                    </div>
+                    {config?.capabilities[name]?.error && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {config.capabilities[name].error}
+                      </p>
+                    )}
                     <p className="mt-3 text-xs leading-6 text-muted-foreground">
                       在终端运行{" "}
                       <code>
-                        {name === "codex" ? "codex login" : "claude auth login"}
+                        {name === "codex"
+                          ? "codex login"
+                          : name === "claude"
+                            ? "claude auth login"
+                            : "kimi login"}
                       </code>{" "}
                       完成官方登录，然后重新检测。
                     </p>

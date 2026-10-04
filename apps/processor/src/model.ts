@@ -36,6 +36,7 @@ export async function resolveModel(cache: string, explicit?: string) {
   const part = `${target}.${process.pid}.part`;
   const file = await open(part, "wx", 0o600);
   let bytes = 0;
+  let lastReport = 0;
   const hash = createHash("sha256");
   const reader = response.body.getReader();
   try {
@@ -45,6 +46,16 @@ export async function resolveModel(cache: string, explicit?: string) {
       bytes += chunk.length;
       if (bytes > model.bytes) throw new Error("模型文件过大");
       hash.update(chunk);
+      if (Date.now() - lastReport > 500) {
+        process.stdout.write(
+          JSON.stringify({
+            event: "model-progress",
+            downloaded: bytes,
+            bytes: model.bytes,
+          }) + "\n",
+        );
+        lastReport = Date.now();
+      }
       // FileHandle.write may write fewer bytes than requested.
       let offset = 0;
       while (offset < chunk.length) {

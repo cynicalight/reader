@@ -33,9 +33,11 @@ import { Toaster, toast } from "sonner";
 import { useReaderStore, refreshLibrary } from "./store";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
+import { ProcessingStatus, useProcessing } from "./ProcessingStatus";
 import { flushProgress } from "./progress";
 export function App() {
   const { documents, active, theme, setTheme, open } = useReaderStore();
+  const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -96,11 +98,13 @@ export function App() {
     return () => window.removeEventListener("pagehide", flush);
   }, []);
   const chooseFiles = () => {
-    if (window.readerDesktop)
+    if (window.readerDesktop) {
+      setBusy(true);
       void window.readerDesktop
         .importFiles()
-        .catch((e) => toast.error(e.message));
-    else fileRef.current?.click();
+        .catch((e) => toast.error(e.message))
+        .finally(() => setBusy(false));
+    } else fileRef.current?.click();
   };
   useEffect(
     () =>
@@ -184,6 +188,7 @@ export function App() {
           <Workspace
             key={active.id}
             document={active}
+            processing={jobs.find((job) => job.documentId === active.id)}
             onBack={() => {
               open(null);
               void refreshLibrary();
@@ -326,6 +331,11 @@ export function App() {
                     />
                   </div>
                 </div>
+                {processingError && (
+                  <p className="processing-warning" role="status">
+                    解析进度暂时不可用：{processingError}
+                  </p>
+                )}
                 {error ? (
                   <div className="empty-state">
                     <h2>暂时无法连接本地书库</h2>
@@ -394,6 +404,29 @@ export function App() {
                             {doc.author || "作者未提供"}
                             <span>{doc.type.toUpperCase()}</span>
                           </p>
+                          {doc.type === "pdf" &&
+                            (jobs.find((job) => job.documentId === doc.id) ? (
+                              <ProcessingStatus
+                                job={jobs.find(
+                                  (job) => job.documentId === doc.id,
+                                )!}
+                                onSettings={() => setSettings(true)}
+                                compact
+                              />
+                            ) : (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                className="my-2"
+                                onClick={() =>
+                                  void api
+                                    .process(doc.id)
+                                    .catch((e) => toast.error(e.message))
+                                }
+                              >
+                                分析文档
+                              </Button>
+                            ))}
                           <div className="book-progress">
                             <div
                               style={{
@@ -475,9 +508,21 @@ export function App() {
           </>
         )}
         {busy && (
-          <div className="import-status">
-            <Loader2 className="size-4 animate-spin" />
-            正在整理文档…
+          <div className="import-progress-toast">
+            <ProcessingStatus
+              job={{
+                documentId: "import",
+                phase: "learning",
+                status: "running",
+                pagesDone: 0,
+                pagesTotal: 0,
+                assetsDone: 0,
+                assetsTotal: 0,
+                detail: "正在导入文件，随后自动学习正文与版面",
+                updatedAt: "",
+              }}
+              onSettings={() => setSettings(true)}
+            />
           </div>
         )}
         <Settings open={settings} onOpenChange={setSettings} />

@@ -28,6 +28,10 @@ func providerStatus(ctx context.Context, name string) Provider {
 		return p
 	}
 	p.Installed = true
+	if name == "kimi" {
+		p.Status = "请测试可用性"
+		return p
+	}
 	args := []string{"login", "status"}
 	if name == "claude" {
 		args = []string{"auth", "status"}
@@ -54,7 +58,7 @@ func providerStatus(ctx context.Context, name string) Provider {
 }
 func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
 	out := []Provider{}
-	for _, name := range []string{"codex", "claude"} {
+	for _, name := range []string{"codex", "claude", "kimi"} {
 		out = append(out, providerStatus(r.Context(), name))
 	}
 	respond(w, 200, out)

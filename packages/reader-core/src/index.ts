@@ -85,6 +85,7 @@ export interface ReaderAdapter {
   highlight(annotations: Annotation[]): Promise<void>;
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;
+  setBlocks?(blocks: PDFBlock[]): void;
   destroy(): Promise<void>;
 }
 export function locationLabel(location?: DocumentLocation): string {
@@ -94,7 +95,7 @@ export function locationLabel(location?: DocumentLocation): string {
     : `章节进度 ${Math.round((location.progression ?? 0) * 100)}%`;
 }
 export interface Provider {
-  id: "codex" | "claude";
+  id: "codex" | "claude" | "kimi";
   installed: boolean;
   authenticated: boolean;
   status: string;
@@ -107,4 +108,46 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+}
+
+export interface Processing {
+  incomplete?: boolean;
+  documentId: string;
+  phase: "learning" | "settling" | "ready";
+  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  pagesDone: number;
+  pagesTotal: number;
+  assetsDone: number;
+  assetsTotal: number;
+  detail: string;
+  warning?: string;
+  updatedAt: string;
+}
+export interface PDFBlock {
+  id: string;
+  page: number;
+  label: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  text: string;
+  image?: string;
+  caption?: string;
+}
+export interface AICapability {
+  text: boolean;
+  vision: boolean;
+  checkedAt: string;
+  error?: string;
+}
+export interface APIConnection {
+  url: string;
+  model: string;
+  key?: string;
+  hasKey: boolean;
+}
+export interface AIConfig {
+  primary: string;
+  models: Record<string, string>;
+  textAPI: APIConnection;
+  imageAPI: APIConnection;
+  capabilities: Record<string, AICapability>;
 }

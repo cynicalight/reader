@@ -40,6 +40,8 @@ import {
   type ReaderSelection,
   type TOCItem,
   type SearchResult,
+  type Processing,
+  type PDFBlock,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Badge } from "@reader/ui/components/badge";
@@ -82,6 +84,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
+import { ProcessingStatus } from "./ProcessingStatus";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -168,14 +171,17 @@ function TOCTree({
 }
 export function Workspace({
   document: doc,
+  processing,
   onBack,
   onSettings,
 }: {
   document: ReaderDocument;
+  processing?: Processing;
   onBack: () => void;
   onSettings: () => void;
 }) {
   const { theme, setTheme } = useReaderStore();
+  const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
   const [toc, setTOC] = useState<TOCItem[]>([]);
   const [location, setLocation] = useState<DocumentLocation | undefined>(
@@ -219,6 +225,19 @@ export function Workspace({
       void flushProgress().catch((e) => toast.error(e.message));
     };
   }, [doc.id]);
+  useEffect(() => {
+    if (doc.type !== "pdf" || processing?.phase === "learning") return;
+    let alive = true;
+    void api
+      .blocks(doc.id)
+      .then((value) => {
+        if (alive) setBlocks(value);
+      })
+      .catch((e) => toast.error(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [doc.id, doc.type, processing?.phase]);
   useEffect(() => {
     messageEnd.current?.scrollIntoView({ block: "nearest" });
   }, [messages, stream]);
@@ -513,6 +532,28 @@ export function Workspace({
           </IconButton>
         </div>
       </header>
+      {doc.type === "pdf" && (
+        <div className="reader-processing">
+          {processing ? (
+            <ProcessingStatus
+              job={processing}
+              onSettings={onSettings}
+              compact
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                void api.process(doc.id).catch((e) => toast.error(e.message))
+              }
+            >
+              <Sparkles />
+              分析图表与公式
+            </Button>
+          )}
+        </div>
+      )}
       <ResizablePanelGroup orientation="horizontal" className="reader-panels">
         {left && (
           <>
@@ -603,6 +644,7 @@ export function Workspace({
               document={doc}
               theme={theme}
               annotations={annotations}
+              blocks={blocks}
               onReady={(engine, items) => {
                 setAdapter(engine);
                 setTOC(items);
@@ -737,8 +779,9 @@ export function Workspace({
                               <ArrowLeft className="ml-auto rotate-180" />
                             </Button>
                             <p className="privacy-note">
-                              仅在发送问题时，所选文字或当前
-                              {doc.type === "epub" ? "章节" : "页面"}会交给 AI。
+                              对话发送所选文字或当前
+                              {doc.type === "epub" ? "章节" : "页面"}给 AI。PDF
+                              图表按主 Agent 设置自动预处理。
                             </p>
                           </div>
                         ) : (

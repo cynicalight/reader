@@ -70,6 +70,7 @@ interface Block extends Region {
 }
 const blocks: Block[] = [];
 const warnings: string[] = [];
+const incompletePages: number[] = [];
 const sections: string[] = [];
 const timings: {
   page: number;
@@ -152,6 +153,7 @@ try {
         },
       });
     }
+    if (!spans.length) incompletePages.push(number);
     if (!spans.length)
       warnings.push(`第 ${number} 页无可提取文字；尚未接入 OCR，正文不完整。`);
     const composed = readingRegions(regions, spans);
@@ -255,6 +257,7 @@ try {
     metadata: metadata.info,
     blocks,
     warnings,
+    incompletePages,
     timings,
     elapsedMilliseconds: Math.round(performance.now() - start),
     peakRSSBytes: process.resourceUsage().maxRSS * 1024,

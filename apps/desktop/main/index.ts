@@ -27,6 +27,7 @@ async function startServer() {
     : join(root, "web", "dist");
   const pathValue = [
     join(homedir(), ".local", "bin"),
+    join(homedir(), ".kimi-code", "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     process.env.PATH,
@@ -44,7 +45,15 @@ async function startServer() {
       web,
     ],
     {
-      env: { ...process.env, READER_TOKEN: serverToken, PATH: pathValue },
+      env: {
+        ...process.env,
+        READER_TOKEN: serverToken,
+        PATH: pathValue,
+        READER_NODE: process.execPath,
+        READER_PROCESSOR: app.isPackaged
+          ? join(process.resourcesPath, "processor", "main.mjs")
+          : join(root, "processor", "dist", "main.mjs"),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
