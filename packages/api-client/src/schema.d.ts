@@ -108,6 +108,9 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
+            /** @enum {unknown} */
+            category?: "book" | "article" | "paper";
+            tags?: string[];
             favorite?: boolean;
             progress?: components["schemas"]["DocumentLocation"];
             percentage?: number;
@@ -135,6 +138,53 @@ export interface paths {
         };
       };
     };
+    trace?: never;
+  };
+  "/api/documents/{id}/classification": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Retry AI classification; manual types are protected */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Queued */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   "/api/documents/{id}/annotations": {
@@ -888,6 +938,14 @@ export interface components {
           quote?: string;
         };
     Document: {
+      /** @enum {unknown} */
+      category: "book" | "article" | "paper";
+      /** @enum {unknown} */
+      categorySource: "default" | "ai" | "manual";
+      /** @enum {unknown} */
+      classificationStatus: "pending" | "running" | "failed" | "done";
+      classificationError: string;
+      tags: string[];
       id: string;
       /** @enum {unknown} */
       type: "pdf" | "epub";

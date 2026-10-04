@@ -82,9 +82,15 @@ export const api = {
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
+  classify: (id: string) =>
+    request<Document>(`/api/documents/${id}/classification`, {
+      method: "POST",
+    }),
   update: (
     id: string,
     patch: {
+      category?: Document["category"];
+      tags?: string[];
       favorite?: boolean;
       progress?: DocumentLocation;
       percentage?: number;

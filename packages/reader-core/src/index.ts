@@ -16,7 +16,13 @@ export type EPUBLocation = {
   quote?: string;
 };
 export type DocumentLocation = PDFLocation | EPUBLocation;
+export type DocumentCategory = "book" | "article" | "paper";
 export interface Document {
+  category: DocumentCategory;
+  categorySource: "default" | "ai" | "manual";
+  classificationStatus: "pending" | "running" | "failed" | "done";
+  classificationError: string;
+  tags: string[];
   id: string;
   type: "epub" | "pdf";
   title: string;

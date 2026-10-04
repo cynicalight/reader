@@ -14,6 +14,7 @@ import {
   PanelLeft,
   Command,
   X,
+  Tags,
 } from "lucide-react";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
@@ -34,12 +35,21 @@ import { Workspace } from "./Workspace";
 import { CoverProcessing, useProcessing } from "./ProcessingStatus";
 import { useResolvedTheme } from "./appearance";
 import { flushProgress } from "./progress";
+import {
+  DocumentBadges,
+  DocumentEditor,
+  LibraryFilterBar,
+} from "./DocumentManagement";
+import { filterDocuments, initialFilters } from "./library";
 export function App() {
   const { documents, active, theme, setTheme, open } = useReaderStore();
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [filters, setFilters] = useState(initialFilters);
+  const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -154,12 +164,31 @@ export function App() {
     open(doc);
     void api.update(doc.id, {}).catch((e) => toast.error(e.message));
   };
-  const filtered = documents.filter(
+  const filtered = filterDocuments(documents, filter, query, filters);
+  const editing = documents.find((d) => d.id === editingId);
+  const awaitingClassification = documents.some(
     (d) =>
-      (filter !== "recent" || d.percentage > 0) &&
-      (filter !== "favorites" || d.favorite) &&
-      (d.title + " " + d.author).toLowerCase().includes(query.toLowerCase()),
+      d.classificationStatus === "pending" ||
+      d.classificationStatus === "running",
   );
+  useEffect(() => {
+    if (!awaitingClassification) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        await refreshLibrary();
+      } catch {
+        /* Keep the last available library during a transient disconnect. */
+      }
+      if (!stopped) timer = setTimeout(poll, 2500);
+    };
+    timer = setTimeout(poll, 2500);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [awaitingClassification]);
   const favorite = async (doc: Document) => {
     try {
       await api.update(doc.id, { favorite: !doc.favorite });
@@ -297,12 +326,20 @@ export function App() {
                     <Search className="size-4" />
                     <Input
                       aria-label="搜索书库"
-                      placeholder="搜索标题、作者…"
+                      placeholder="搜索标题、作者、标签…"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                     />
                   </div>
                 </div>
+                <LibraryFilterBar
+                  documents={documents}
+                  filters={filters}
+                  onChange={setFilters}
+                  view={libraryView}
+                  onViewChange={setLibraryView}
+                  count={filtered.length}
+                />
                 {processingError && (
                   <p className="processing-warning" role="status">
                     解析进度暂时不可用：{processingError}
@@ -322,110 +359,128 @@ export function App() {
                     <p>正在打开本地书库</p>
                   </div>
                 ) : filtered.length ? (
-                  <div className="book-grid">
-                    {filtered
-                      .filter((d) => filter !== "recent" || d.percentage > 0)
-                      .map((doc, i) => (
-                        <article className="book-card" key={doc.id}>
-                          <div className="book-cover-frame">
-                            <Button
-                              variant="ghost"
-                              title={doc.title}
-                              aria-label={`打开 ${doc.title}`}
-                              className={`book-cover cover-${i % 4}`}
-                              onClick={() => openDocument(doc)}
-                            >
-                              <div className="cover-top">
-                                <span>{doc.type.toUpperCase()}</span>
-                                {doc.type === "epub" ? (
-                                  <BookOpen size={18} />
-                                ) : (
-                                  <FileText size={18} />
-                                )}
-                              </div>
-                              <div className="cover-text">
-                                <div className="cover-title">{doc.title}</div>
-                                {doc.author && (
-                                  <div
-                                    className="cover-author"
-                                    title={doc.author}
-                                  >
-                                    {doc.author}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="cover-bottom">
-                                <ArrowUpRight size={18} />
-                              </div>
-                              <div className="cover-decoration" />
-                            </Button>
-                            {doc.type === "pdf" &&
-                              (jobs.find((job) => job.documentId === doc.id) ? (
-                                <CoverProcessing
-                                  job={jobs.find(
-                                    (job) => job.documentId === doc.id,
-                                  )!}
-                                  onSettings={() => setSettings(true)}
-                                  unavailable={!!processingError}
-                                />
+                  <div
+                    className={`book-grid ${libraryView === "list" ? "book-list" : ""}`}
+                  >
+                    {filtered.map((doc, i) => (
+                      <article className="book-card" key={doc.id}>
+                        <div className="book-cover-frame">
+                          <Button
+                            variant="ghost"
+                            title={doc.title}
+                            aria-label={`打开 ${doc.title}`}
+                            className={`book-cover cover-${i % 4}`}
+                            onClick={() => openDocument(doc)}
+                          >
+                            <div className="cover-top">
+                              <span>{doc.type.toUpperCase()}</span>
+                              {doc.type === "epub" ? (
+                                <BookOpen size={18} />
                               ) : (
-                                <Button
-                                  className="cover-analyze"
-                                  size="xs"
-                                  variant="secondary"
-                                  onClick={() =>
-                                    void api
-                                      .process(doc.id)
-                                      .catch((e) => toast.error(e.message))
-                                  }
+                                <FileText size={18} />
+                              )}
+                            </div>
+                            <div className="cover-text">
+                              <div className="cover-title">{doc.title}</div>
+                              {doc.author && (
+                                <div
+                                  className="cover-author"
+                                  title={doc.author}
                                 >
-                                  分析文档
-                                </Button>
-                              ))}
-                          </div>
-                          <div className="book-meta">
-                            <Button
-                              title={doc.title}
-                              className="book-title"
-                              variant="ghost"
-                              onClick={() => openDocument(doc)}
-                            >
-                              <span>{doc.title}</span>
-                            </Button>
-                            <Button
-                              size="icon-xs"
-                              variant="ghost"
-                              aria-label={
-                                doc.favorite ? "取消收藏" : "收藏文档"
-                              }
-                              onClick={() => void favorite(doc)}
-                            >
-                              <Star
-                                className={
-                                  doc.favorite
-                                    ? "fill-current text-amber-500"
-                                    : ""
-                                }
+                                  {doc.author}
+                                </div>
+                              )}
+                            </div>
+                            <div className="cover-bottom">
+                              <ArrowUpRight size={18} />
+                            </div>
+                            <div className="cover-decoration" />
+                          </Button>
+                          {doc.type === "pdf" &&
+                            (jobs.find((job) => job.documentId === doc.id) ? (
+                              <CoverProcessing
+                                job={jobs.find(
+                                  (job) => job.documentId === doc.id,
+                                )!}
+                                onSettings={() => setSettings(true)}
+                                unavailable={!!processingError}
                               />
-                            </Button>
-                          </div>
-                          <div className="book-progress">
-                            <div
-                              style={{
-                                width: `${Math.round(doc.percentage * 100)}%`,
-                              }}
+                            ) : (
+                              <Button
+                                className="cover-analyze"
+                                size="xs"
+                                variant="secondary"
+                                onClick={() =>
+                                  void api
+                                    .process(doc.id)
+                                    .catch((e) => toast.error(e.message))
+                                }
+                              >
+                                分析文档
+                              </Button>
+                            ))}
+                        </div>
+                        <div className="book-meta">
+                          <Button
+                            title={doc.title}
+                            className="book-title"
+                            variant="ghost"
+                            onClick={() => openDocument(doc)}
+                          >
+                            <span>{doc.title}</span>
+                          </Button>
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label={doc.favorite ? "取消收藏" : "收藏文档"}
+                            onClick={() => void favorite(doc)}
+                          >
+                            <Star
+                              className={
+                                doc.favorite
+                                  ? "fill-current text-amber-500"
+                                  : ""
+                              }
                             />
-                          </div>
-                          <p className="book-status">
-                            {doc.percentage > 0
-                              ? `已读 ${Math.round(doc.percentage * 100)}%`
-                              : "还未开始阅读"}
-                            <span>
-                              {(doc.size / 1024 / 1024).toFixed(1)} MB
-                            </span>
-                          </p>
-                        </article>
-                      ))}
+                          </Button>
+                        </div>
+                        <div className="document-organization">
+                          <DocumentBadges document={doc} />
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label={`管理 ${doc.title} 的类型和标签`}
+                            title="管理类型和标签"
+                            onClick={() => setEditingId(doc.id)}
+                          >
+                            <Tags />
+                          </Button>
+                        </div>
+                        {doc.categorySource !== "manual" &&
+                          doc.classificationStatus !== "done" && (
+                            <p className="classification-status">
+                              {doc.classificationStatus === "failed"
+                                ? "AI 分类失败 · 可手动修改或重试"
+                                : doc.classificationStatus === "running"
+                                  ? "AI 分类中"
+                                  : "暂定类型 · 待 AI 分类"}
+                            </p>
+                          )}
+                        <div className="book-progress">
+                          <div
+                            style={{
+                              width: `${Math.round(doc.percentage * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <p className="book-status">
+                          {doc.percentage > 0
+                            ? `已读 ${Math.round(doc.percentage * 100)}%`
+                            : "还未开始阅读"}
+                          <span>{(doc.size / 1024 / 1024).toFixed(1)} MB</span>
+                        </p>
+                      </article>
+                    ))}
                   </div>
                 ) : (
                   <div className="empty-state">
@@ -438,12 +493,24 @@ export function App() {
                       </span>
                     </div>
                     <h2>
-                      {query
-                        ? "没有找到匹配的文档"
+                      {documents.length
+                        ? "没有符合筛选条件的文档"
                         : filter === "favorites"
                           ? "暂无收藏"
                           : "暂无文档"}
                     </h2>
+                    {!!documents.length && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setFilters(initialFilters);
+                          setQuery("");
+                          setFilter("all");
+                        }}
+                      >
+                        显示全部文档
+                      </Button>
+                    )}
                     <Button onClick={() => chooseFiles()} disabled={busy}>
                       <ArrowDownToLine className="size-4" />
                       选择本地文件
@@ -462,6 +529,14 @@ export function App() {
               </div>
             </main>
           </>
+        )}
+        {editing && (
+          <DocumentEditor
+            key={editing.id}
+            document={editing}
+            documents={documents}
+            onClose={() => setEditingId(null)}
+          />
         )}
         <Settings open={settings} onOpenChange={setSettings} />
         <Dialog open={command} onOpenChange={setCommand}>

@@ -246,6 +246,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 			}
 		}(phase)
 	}
+	workers.Add(1)
+	go func() { defer workers.Done(); s.classificationWorker(ctx) }()
 	return func() { cancel(); workers.Wait() }
 }
 func (s *Server) wakeProcessing() {

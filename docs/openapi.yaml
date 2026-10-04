@@ -143,6 +143,19 @@
                               "type": "object",
                               "properties":
                                 {
+                                  "category":
+                                    { "enum": ["book", "article", "paper"] },
+                                  "tags":
+                                    {
+                                      "type": "array",
+                                      "maxItems": 30,
+                                      "items":
+                                        {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 40,
+                                        },
+                                    },
                                   "favorite": { "type": "boolean" },
                                   "progress":
                                     {
@@ -151,6 +164,49 @@
                                   "percentage": { "type": "number" },
                                 },
                               "required": [],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/classification":
+        {
+          "post":
+            {
+              "summary": "Retry AI classification; manual types are protected",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Queued",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
                             },
                         },
                     },
@@ -985,6 +1041,18 @@
               "type": "object",
               "properties":
                 {
+                  "category": { "enum": ["book", "article", "paper"] },
+                  "categorySource": { "enum": ["default", "ai", "manual"] },
+                  "classificationStatus":
+                    { "enum": ["pending", "running", "failed", "done"] },
+                  "classificationError": { "type": "string" },
+                  "tags":
+                    {
+                      "type": "array",
+                      "maxItems": 30,
+                      "items":
+                        { "type": "string", "minLength": 1, "maxLength": 40 },
+                    },
                   "id": { "type": "string" },
                   "type": { "enum": ["pdf", "epub"] },
                   "title": { "type": "string" },
@@ -999,6 +1067,11 @@
                 },
               "required":
                 [
+                  "category",
+                  "categorySource",
+                  "classificationStatus",
+                  "classificationError",
+                  "tags",
                   "id",
                   "type",
                   "title",
