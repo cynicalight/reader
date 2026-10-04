@@ -783,7 +783,7 @@ kbd {
   white-space: nowrap;
 }
 .model-select-menu {
-  width: 256px;
+  width: 220px;
   min-width: 0;
   max-width: calc(100vw - 24px);
   padding: 6px;
@@ -794,8 +794,8 @@ kbd {
     0 2px 8px #00000012;
 }
 .model-select-menu .model-select-option {
-  min-height: 34px;
-  padding: 7px 34px 7px 10px;
+  min-height: 28px;
+  padding: 4px 34px 4px 10px;
   border-radius: 10px;
   font-size: 12px;
   line-height: 20px;
