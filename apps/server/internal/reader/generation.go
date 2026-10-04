@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -65,12 +66,18 @@ type generationConnection struct {
 	Incremental                  bool
 }
 type GenerationService struct {
-	primary     string
-	connections map[string]generationConnection
+	primary       string
+	connections   map[string]generationConnection
+	attemptFailed func(string, bool, error)
 }
 
 func (s *Server) generationService(config AIConfig) *GenerationService {
 	g := &GenerationService{primary: config.Primary, connections: map[string]generationConnection{}}
+	g.attemptFailed = func(provider string, vision bool, err error) {
+		if saveErr := s.recordCapabilityFailure(config, provider, vision, err); saveErr != nil {
+			log.Printf("cannot persist %s capability failure: %v", provider, saveErr)
+		}
+	}
 	for _, p := range []string{"codex", "claude", "kimi", "text-api", "image-api"} {
 		model := config.Models[p]
 		level := config.Efforts[p][model]
@@ -199,6 +206,14 @@ func runAttempt(ctx context.Context, adapter Adapter, in AIInput, emit func(Prov
 func (g *GenerationService) Generate(ctx context.Context, in AIInput, interactive bool, emit func(ProviderEvent) error) (AIResult, error) {
 	return g.generate(ctx, in, interactive, emit != nil, emit)
 }
+func (g *GenerationService) attempt(ctx context.Context, provider string, in AIInput, emit func(ProviderEvent) error) (GenerateResult, error) {
+	result, err := runAttempt(ctx, g.connections[provider].Adapter, in, emit)
+	// User cancellation and a disconnected consumer do not invalidate the agent.
+	if err != nil && !errors.Is(ctx.Err(), context.Canceled) && errorKind(err) != ErrorCanceled && g.attemptFailed != nil {
+		g.attemptFailed(provider, len(in.images()) > 0, err)
+	}
+	return result, err
+}
 func (g *GenerationService) generate(ctx context.Context, in AIInput, interactive, exposeText bool, emit func(ProviderEvent) error) (AIResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
@@ -227,7 +242,7 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	err := generationError(ErrorCapability, "主 Agent 尚未通过所需能力测试")
 	// Existing Codex/Claude text chat works with CLI login without a saved probe.
 	if primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" {
-		result, err = runAttempt(ctx, primary.Adapter, in, send)
+		result, err = g.attempt(ctx, g.primary, in, send)
 	}
 	if err == nil {
 		return AIResult{result.Text, g.primary, false}, nil
@@ -249,7 +264,7 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	if err = send(ProviderEvent{Fallback: fmt.Sprintf("%s 调用失败，已切换到 %s", g.primary, target)}); err != nil {
 		return AIResult{}, err
 	}
-	result, err = runAttempt(ctx, backup.Adapter, in, send)
+	result, err = g.attempt(ctx, target, in, send)
 	return AIResult{result.Text, target, true}, err
 }
 
