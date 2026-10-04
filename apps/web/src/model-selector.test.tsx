@@ -108,6 +108,34 @@ it("shows concrete models and marks the selected row independently of hover", as
     document.querySelector(".model-select-menu")?.textContent,
   ).not.toContain("Codex");
 });
+it("keeps the GPT display name stable while the catalog loads", async () => {
+  let finish!: (models: AgentModel[]) => void;
+  vi.mocked(api.agentModels).mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  useReaderStore.setState({
+    aiConfig: { ...config, models: { codex: "gpt-6.1-sol" } },
+  });
+  await render();
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "GPT-6.1-Sol",
+  );
+  await act(async () =>
+    finish([
+      {
+        id: "gpt-6.1-sol",
+        name: "GPT-6.1-Sol",
+        description: "",
+        isDefault: true,
+      },
+    ]),
+  );
+  expect(host.querySelector(".model-trigger-name")?.textContent).toBe(
+    "GPT-6.1-Sol",
+  );
+});
 it("saves the selected model while preserving the latest SDK and API configuration", async () => {
   await render();
   config = {

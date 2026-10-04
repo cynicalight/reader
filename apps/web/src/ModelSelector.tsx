@@ -28,6 +28,13 @@ const effortFromSlider = (value: number | readonly number[]) =>
   efforts[typeof value === "number" ? value : value[0]!]!;
 const effortLabel = (value: ReasoningEffort) =>
   value[0]!.toUpperCase() + value.slice(1);
+// Use the same GPT label before and after the SDK catalog arrives.
+const modelDisplayName = (id: string, name = id) =>
+  /^gpt-\d/i.test(id)
+    ? id
+        .replace(/^gpt-/i, "GPT-")
+        .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`)
+    : name;
 
 export function selectedAgentModel(models: AgentModel[], configured: string) {
   return configured
@@ -36,7 +43,7 @@ export function selectedAgentModel(models: AgentModel[], configured: string) {
           model.id === configured || model.aliases?.includes(configured),
       ) ?? {
         id: configured,
-        name: configured,
+        name: modelDisplayName(configured),
         description: "",
         isDefault: false,
       })
@@ -78,7 +85,14 @@ export function ModelSelector({
     void api
       .agentModels(provider, controller.signal)
       .then((models) => {
-        if (!controller.signal.aborted) setCatalog({ provider, models });
+        if (!controller.signal.aborted)
+          setCatalog({
+            provider,
+            models: models.map((model) => ({
+              ...model,
+              name: modelDisplayName(model.id, model.name),
+            })),
+          });
       })
       .catch((error: Error) => {
         if (!controller.signal.aborted) setError(error.message);
