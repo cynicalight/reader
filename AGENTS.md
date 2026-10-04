@@ -20,5 +20,14 @@ Keep the interface restrained, following Claude/Apple app simplicity and shadcn 
 ## Validation
 `pnpm typecheck`, `pnpm test`, `pnpm build`. Do not use browser automation for visual acceptance. Give the user an accessible preview and manual verification steps. Prefer tests for data loss, lifecycle, parser boundaries, and provider protocols.
 
+## Git commits
+- Commit incrementally as each coherent, independently verifiable change is completed, unless the user explicitly asks to leave changes uncommitted. Each commit should have one clear purpose and be independently reviewable and revertible. Do not accumulate unrelated work into one large commit.
+- Keep tightly coupled implementation, tests, API schemas/generated types, and required dependency/lockfile changes together. Split independent features, bug fixes, UI adjustments, refactors, and documentation/research into separate commits. Do not split mechanically by file or create intermediate commits that leave the project broken.
+- Before each commit, inspect the diff and stage only the relevant files or hunks. Review `git diff --cached` and run `git diff --cached --check`; never use `git add -A` by default or sweep in another task's changes. Include PDFs, research materials, and other assets only when they belong to the requested scope, in a separate commit when independent of the code change.
+- Run checks appropriate to each change before committing, and complete the Validation commands before pushing implementation changes. Documentation-only changes require diff and content checks, not an application rebuild.
+- Use concise Conventional Commit messages: `<type>(<scope>): <summary>`; scope is optional. Use a lowercase type such as `feat`, `fix`, `refactor`, `style`, `docs`, `test`, or `chore`, and describe the concrete change.
+- A request to "commit" or "commit push" means organize pending work into logical commits; it does not mean combine everything into one commit. Make one combined commit only when the user explicitly requests that grouping.
+- Push only when the user explicitly requests it. Do not amend or rewrite published history without explicit authorization. Report the commit hashes, scopes, and validation results.
+
 ## Boundaries
 Bind Go to loopback only. Authenticate local API requests. Never read Claude/Codex credential files or implement unofficial OAuth. Document text is untrusted input; remove active content before creating Readium frames. Never run a CLI from a document's original directory. Preserve user data. Do not commit `.reader`, binaries or node_modules.
