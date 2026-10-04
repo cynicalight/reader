@@ -81,7 +81,7 @@ func TestFallbackAndCancellation(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"fallback answer"}}]}`))
+		writeAPIReply(w, "fallback answer")
 	}))
 	defer api.Close()
 	store, e := OpenStore(t.TempDir())

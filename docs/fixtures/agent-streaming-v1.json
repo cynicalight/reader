@@ -1,0 +1,26 @@
+[
+  {
+    "name": "success",
+    "wire": "event: status\ndata: {\"status\":\"reading\"}\n\nevent: delta\ndata: {\"text\":\"中文 **\"}\n\nevent: delta\ndata: {\"text\":\"原文**\\n\"}\n\nevent: done\ndata: {\"ok\":true}\n\n",
+    "text": "中文 **原文**\n",
+    "terminal": "done"
+  },
+  {
+    "name": "fallback",
+    "wire": "event: status\ndata: {\"status\":\"reading-image\"}\n\nevent: fallback\ndata: {\"message\":\"codex 调用失败，已切换到 image-api\"}\n\nevent: delta\ndata: {\"text\":\"图片解释\"}\n\nevent: done\ndata: {\"ok\":true}\n\n",
+    "text": "图片解释",
+    "terminal": "done"
+  },
+  {
+    "name": "partial-error",
+    "wire": "event: status\ndata: {\"status\":\"reading\"}\n\nevent: delta\ndata: {\"text\":\"部分正文\"}\n\nevent: error\ndata: {\"error\":\"上游未完成\"}\n\n",
+    "text": "部分正文",
+    "terminal": "error"
+  },
+  {
+    "name": "missing-terminal",
+    "wire": "event: status\ndata: {\"status\":\"reading\"}\n\nevent: delta\ndata: {\"text\":\"部分正文\"}\n\n",
+    "text": "部分正文",
+    "terminal": null
+  }
+]

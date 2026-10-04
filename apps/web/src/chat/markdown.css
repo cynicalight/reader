@@ -1,0 +1,124 @@
+.message-markdown {
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.message-markdown p {
+  margin: 0.65em 0;
+}
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  line-height: 1.4;
+}
+.message-markdown h1 {
+  font-size: 1.4em;
+}
+.message-markdown h2 {
+  font-size: 1.25em;
+}
+.message-markdown h3 {
+  font-size: 1.1em;
+}
+.message-markdown ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+.message-markdown ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.message-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+}
+.message-markdown pre {
+  white-space: pre;
+  overflow: auto;
+  max-width: 100%;
+  padding: 0.75em;
+  margin: 0;
+}
+.message-markdown code {
+  font-size: 0.95em;
+  font-family: ui-monospace, monospace;
+}
+.markdown-code {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0.75em 0;
+  overflow: hidden;
+}
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.6em;
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+.markdown-table {
+  overflow: auto;
+  max-width: 100%;
+}
+.markdown-table table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+}
+.markdown-table th,
+.markdown-table td {
+  border: 1px solid var(--border);
+  padding: 0.4em 0.65em;
+}
+.markdown-math.display {
+  display: block;
+  overflow: auto;
+  max-width: 100%;
+}
+.markdown-math {
+  max-width: 100%;
+}
+.markdown-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.markdown-link button {
+  font-size: 10px;
+  padding: 0 4px;
+  height: auto;
+}
+.dark .markdown-code span[style] {
+  color: var(--shiki-dark) !important;
+}
+.message-markdown .stream-char:has(code),
+.message-markdown code .stream-char {
+  animation: none !important;
+  opacity: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-markdown .stream-char,
+  .message-markdown .stream-block {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+.chat-status {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  white-space: normal;
+}
+.chat-scroll [data-slot="scroll-area-viewport"] > div {
+  min-width: 0 !important;
+  display: block !important;
+}
+.chat-follow {
+  align-self: center;
+  margin: 4px;
+}

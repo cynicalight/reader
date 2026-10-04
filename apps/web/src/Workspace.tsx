@@ -29,13 +29,12 @@ import {
   AlignJustify,
   Check,
 } from "lucide-react";
-import { api, chat, blockImageURL } from "@reader/api";
+import { api, blockImageURL } from "@reader/api";
 import {
   locationLabel,
   type Annotation,
   type Document as ReaderDocument,
   type DocumentLocation,
-  type Message,
   type SourceReference,
   type ReaderAdapter,
   type ReaderSelection,
@@ -84,6 +83,8 @@ import {
 import { toast } from "sonner";
 import { ModelSelector } from "./ModelSelector";
 import { SourceReferences } from "./SourceReferences";
+import { ChatSession } from "./chat/chat-session";
+import { AssistantPanel } from "./chat/AssistantPanel";
 import { ImagePreview, imageLabel } from "./ImagePreview";
 import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
@@ -290,29 +291,34 @@ export function Workspace({
       alive = false;
     };
   }, [setAIConfig]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [stream, setStream] = useState("");
+  const session = useMemo(() => new ChatSession(doc.id), [doc.id]);
+  const sendSerial = useRef(0);
   const [sending, setSending] = useState(false);
   const [pageInput, setPageInput] = useState("");
   const abort = useRef<AbortController | null>(null);
   const searchSerial = useRef(0);
-  const messageEnd = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
-    Promise.all([api.annotations(doc.id), api.messages(doc.id)])
-      .then(([a, m]) => {
+    session.activate();
+    abort.current = null;
+    void session.load();
+    setSending(false);
+    api
+      .annotations(doc.id)
+      .then((a) => {
         if (alive) {
           setAnnotations(a);
-          setMessages(m);
         }
       })
       .catch((e) => toast.error(e.message));
     return () => {
       alive = false;
+      sendSerial.current++;
       abort.current?.abort();
+      session.dispose();
       void flushProgress().catch((e) => toast.error(e.message));
     };
-  }, [doc.id]);
+  }, [doc.id, session]);
   useEffect(() => {
     if (doc.type !== "pdf" || processing?.phase === "learning") return;
     let alive = true;
@@ -326,9 +332,6 @@ export function Workspace({
       alive = false;
     };
   }, [doc.id, doc.type, processing?.phase]);
-  useEffect(() => {
-    messageEnd.current?.scrollIntoView({ block: "nearest" });
-  }, [messages, stream]);
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
@@ -389,7 +392,7 @@ export function Workspace({
     attachments = images,
     directImage = false,
   ) => {
-    if (sending || aiModelSaving) return;
+    if (abort.current || session.getSnapshot().busy || aiModelSaving) return;
     if (!provider) {
       toast.info("请先在设置中选择 Agent SDK");
       onSettings();
@@ -398,12 +401,16 @@ export function Workspace({
     if (!question.trim() && attachments.length)
       question = "请解释附件中的图表或公式。";
     if (!question.trim()) return;
+    if (!session.getSnapshot().loaded) {
+      toast.error("对话记录尚未加载，请重试同步。");
+      return;
+    }
     setSending(true);
-    setStream("");
     setRight(true);
     setRightTab("ai");
     const controller = new AbortController();
     abort.current = controller;
+    const serial = ++sendSerial.current;
     try {
       let context = selected
         .map(
@@ -425,34 +432,21 @@ export function Workspace({
           : [];
       }
       if (controller.signal.aborted) return;
-      setMessages((items) => [
-        ...items,
-        {
-          id: crypto.randomUUID(),
-          documentId: doc.id,
-          role: "user",
-          content: question,
-          context: context.slice(0, 21000),
-          references,
-          attachments,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
       if (!directImage) setPrompt("");
-      await chat(
-        doc.id,
+      await session.send({
         provider,
-        question,
-        context.slice(0, 21000),
-        controller.signal,
-        (text) => setStream((s) => s + text),
+        prompt: question,
+        context: context.slice(0, 21000),
         references,
-        attachments.map((image) => image.id),
-        (message) => toast.info(message),
-      );
-      setMessages(await api.messages(doc.id));
-      setStream("");
-      if (!directImage) {
+        attachments,
+      });
+      if (serial !== sendSerial.current) return;
+      if (
+        !directImage &&
+        ["saved", "syncing"].includes(
+          session.getSnapshot().pending?.phase || "",
+        )
+      ) {
         setQuotes([]);
         setImages((current) =>
           current.filter(
@@ -461,12 +455,13 @@ export function Workspace({
         );
       }
     } catch (e) {
-      if ((e as Error).name !== "AbortError") toast.error((e as Error).message);
-      setMessages(await api.messages(doc.id).catch(() => messages));
-      setStream("");
+      if (serial === sendSerial.current && (e as Error).name !== "AbortError")
+        toast.error((e as Error).message);
     } finally {
-      setSending(false);
-      abort.current = null;
+      if (serial === sendSerial.current) {
+        setSending(false);
+        abort.current = null;
+      }
     }
   };
   const blockAction = (block: PDFBlock, action: PDFBlockAction) => {
@@ -998,87 +993,70 @@ export function Workspace({
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="ai" className="ai-panel">
-                <ScrollArea className="chat-scroll">
-                  <div className="chat-messages">
-                    {!messages.length && !sending ? (
-                      <div className="chat-empty">
-                        <p>
-                          选中原文，可以翻译、解释，
-                          <br />
-                          或引用多段文字一起讨论。
-                        </p>
-                        <Button
-                          variant="outline"
-                          className="suggestion"
-                          disabled={!adapter}
-                          onClick={() =>
-                            void send(
-                              doc.type === "epub"
-                                ? "请总结当前章节的核心内容，并列出值得思考的问题。"
-                                : "请总结当前 PDF 页的主要内容，保留重要术语。",
-                              [],
-                              true,
-                            )
-                          }
-                        >
-                          <BookOpen />
-                          总结当前{doc.type === "epub" ? "章节" : "页面"}
-                          <ArrowLeft className="ml-auto rotate-180" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="suggestion"
-                          disabled={!adapter}
-                          onClick={() =>
-                            void send(
-                              "请找出当前内容的核心概念，并用简明的语言解释。",
-                              [],
-                              true,
-                            )
-                          }
-                        >
-                          <MessageSquare />
-                          解释核心概念
-                          <ArrowLeft className="ml-auto rotate-180" />
-                        </Button>
-                        <p className="privacy-note">
-                          对话发送所选文字或当前
-                          {doc.type === "epub" ? "章节" : "页面"}给 AI。PDF
-                          图表按主 Agent 设置自动预处理。
-                        </p>
-                      </div>
-                    ) : (
-                      messages.map((message) => (
-                        <div
-                          className={`chat-message ${message.role}`}
-                          key={message.id}
-                        >
-                          <span className="message-author">
-                            {message.role === "user" ? "你" : "Reader AI"}
-                          </span>
-                          <div>{message.content}</div>
-                          {!!message.attachments?.length &&
-                            imageAttachments(message.attachments)}
-                          <SourceReferences
-                            message={message}
-                            toc={toc}
-                            adapter={adapter}
-                            onNavigate={visitReference}
-                          />
-                        </div>
-                      ))
-                    )}
-                    {sending && (
-                      <div className="chat-message assistant">
-                        <span className="message-author">
-                          Reader AI <span className="pulse-dot" />
-                        </span>
-                        <div>{stream || "正在阅读上下文…"}</div>
-                      </div>
-                    )}
-                    <div ref={messageEnd} />
-                  </div>
-                </ScrollArea>
+                <AssistantPanel
+                  key={doc.id}
+                  session={session}
+                  empty={
+                    <div className="chat-empty">
+                      <p>
+                        选中原文，可以翻译、解释，
+                        <br />
+                        或引用多段文字一起讨论。
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="suggestion"
+                        disabled={!adapter}
+                        onClick={() =>
+                          void send(
+                            doc.type === "epub"
+                              ? "请总结当前章节的核心内容，并列出值得思考的问题。"
+                              : "请总结当前 PDF 页的主要内容，保留重要术语。",
+                            [],
+                            true,
+                          )
+                        }
+                      >
+                        <BookOpen />
+                        总结当前{doc.type === "epub" ? "章节" : "页面"}
+                        <ArrowLeft className="ml-auto rotate-180" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="suggestion"
+                        disabled={!adapter}
+                        onClick={() =>
+                          void send(
+                            "请找出当前内容的核心概念，并用简明的语言解释。",
+                            [],
+                            true,
+                          )
+                        }
+                      >
+                        <MessageSquare />
+                        解释核心概念
+                        <ArrowLeft className="ml-auto rotate-180" />
+                      </Button>
+                      <p className="privacy-note">
+                        对话发送所选文字或当前
+                        {doc.type === "epub" ? "章节" : "页面"}给 AI。PDF
+                        图表按主 Agent 设置自动预处理。
+                      </p>
+                    </div>
+                  }
+                  extras={(message) => (
+                    <>
+                      {!!message.attachments?.length &&
+                        imageAttachments(message.attachments)}
+                      <SourceReferences
+                        message={message}
+                        toc={toc}
+                        adapter={adapter}
+                        onNavigate={visitReference}
+                      />
+                    </>
+                  )}
+                />
                 <div className="chat-compose">
                   {quotes.length > 0 && (
                     <div className="quote-chips">
@@ -1123,7 +1101,10 @@ export function Workspace({
                         size="icon-sm"
                         variant="secondary"
                         aria-label="停止回答"
-                        onClick={() => abort.current?.abort()}
+                        onClick={() => {
+                          abort.current?.abort();
+                          session.cancel();
+                        }}
                       >
                         <Square className="size-3" />
                       </Button>

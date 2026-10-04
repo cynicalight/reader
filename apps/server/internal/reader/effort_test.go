@@ -69,38 +69,59 @@ func TestConfiguredEffortReachesProvider(t *testing.T) {
 		{"claude", "high", "high", []string{"low", "medium", "high"}},
 		{"kimi", "medium", "on", []string{"off", "on", "high"}},
 	} {
-		t.Run(tt.provider, func(t *testing.T) {
-			fakeAgent(t, tt.provider, "complete")
-			capture := filepath.Join(t.TempDir(), "request.json")
-			t.Setenv("READER_AGENT_CAPTURE", capture)
-			s := testServer(t)
-			s.modelCache = map[string]modelCatalogEntry{tt.provider: {models: []AgentModel{{ID: "model", SupportedEfforts: tt.supported}}, expires: time.Now().Add(time.Minute)}}
-			c := AIConfig{Models: map[string]string{tt.provider: "model"}, Efforts: map[string]map[string]string{tt.provider: {"model": tt.level}}}
-			answer, err := s.invoke(t.Context(), c, tt.provider, AIInput{Prompt: "test"}, nil)
-			if err != nil || answer != "你好，世界" {
-				t.Fatalf("%s %v", answer, err)
-			}
-			b, err := os.ReadFile(capture)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tt.provider == "claude" {
-				if !strings.Contains(string(b), "--effort "+tt.native) {
+		for _, route := range []string{"invoke", "background", "chat"} {
+			t.Run(tt.provider+"/"+route, func(t *testing.T) {
+				fakeAgent(t, tt.provider, "complete")
+				capture := filepath.Join(t.TempDir(), "request.json")
+				t.Setenv("READER_AGENT_CAPTURE", capture)
+				s, _ := imageFixture(t)
+				s.modelCache = map[string]modelCatalogEntry{tt.provider: {models: []AgentModel{{ID: "model", SupportedEfforts: tt.supported}}, expires: time.Now().Add(time.Minute)}}
+				c := AIConfig{Primary: tt.provider, Capabilities: map[string]Capability{}, Models: map[string]string{tt.provider: "model"}, Efforts: map[string]map[string]string{tt.provider: {"model": tt.level}}}
+				c.Capabilities[tt.provider] = Capability{Text: true, Fingerprint: configPrint(c, tt.provider)}
+				if route == "chat" {
+					if err := s.writeAIConfig(c); err != nil {
+						t.Fatal(err)
+					}
+					body, _ := json.Marshal(map[string]string{"provider": tt.provider, "prompt": "test", "context": ""})
+					res := request(t, s, "POST", "/api/documents/doc/chat", bytes.NewReader(body))
+					if res.Code != 200 || !strings.Contains(res.Body.String(), "event: done") || strings.Contains(res.Body.String(), "event: error") {
+						t.Fatal(res.Body)
+					}
+				} else {
+					var answer string
+					var err error
+					if route == "background" {
+						result, e := s.generateWithConfig(t.Context(), c, AIInput{Prompt: "test"}, nil, nil)
+						answer, err = result.Text, e
+					} else {
+						answer, err = s.invoke(t.Context(), c, tt.provider, AIInput{Prompt: "test"}, nil)
+					}
+					if err != nil || answer != "你好，世界" {
+						t.Fatalf("%s %v", answer, err)
+					}
+				}
+				b, err := os.ReadFile(capture)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tt.provider == "claude" {
+					if !strings.Contains(string(b), "--effort "+tt.native) {
+						t.Fatal(string(b))
+					}
+					return
+				}
+				var params map[string]any
+				if err = json.Unmarshal(b, &params); err != nil {
+					t.Fatal(err)
+				}
+				if tt.provider == "codex" && params["effort"] != tt.native {
 					t.Fatal(string(b))
 				}
-				return
-			}
-			var params map[string]any
-			if err = json.Unmarshal(b, &params); err != nil {
-				t.Fatal(err)
-			}
-			if tt.provider == "codex" && params["effort"] != tt.native {
-				t.Fatal(string(b))
-			}
-			if tt.provider == "kimi" && (params["configId"] != "thinking" || params["value"] != tt.native || params["sessionId"] != "session") {
-				t.Fatal(string(b))
-			}
-		})
+				if tt.provider == "kimi" && (params["configId"] != "thinking" || params["value"] != tt.native || params["sessionId"] != "session") {
+					t.Fatal(string(b))
+				}
+			})
+		}
 	}
 }
 

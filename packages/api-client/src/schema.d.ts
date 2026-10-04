@@ -404,7 +404,7 @@ export interface paths {
         };
       };
       responses: {
-        /** @description SSE: status, delta {text}, fallback {message}, error {error}, done {ok}. Disconnection cancels CLI. */
+        /** @description SSE v1: status, delta, fallback, error, done. See ChatStreamEvent. done is sent once only after confirmed upstream completion and successful assistant persistence. Fallback is allowed only before the first text delta. Disconnect cancels upstream; missing done requires checking messages, never automatic POST replay. */
         200: {
           headers: {
             [name: string]: unknown;
@@ -947,6 +947,45 @@ export interface components {
     Settings: {
       [key: string]: unknown;
     };
+    /** @description Decoded SSE event union for documentation and generated types only. Wire uses event: NAME and data: JSON lines; no envelope is transmitted. Append delta text verbatim. Only done confirms successful persistence. EOF is not completion. After error/done ignore late data. No automatic POST replay. */
+    ChatStreamEvent:
+      | {
+          /** @enum {string} */
+          event: "status";
+          data: {
+            /** @enum {string} */
+            status: "reading" | "reading-image";
+          };
+        }
+      | {
+          /** @enum {string} */
+          event: "delta";
+          data: {
+            text: string;
+          };
+        }
+      | {
+          /** @enum {string} */
+          event: "fallback";
+          data: {
+            message: string;
+          };
+        }
+      | {
+          /** @enum {string} */
+          event: "error";
+          data: {
+            error: string;
+          };
+        }
+      | {
+          /** @enum {string} */
+          event: "done";
+          data: {
+            /** @enum {boolean} */
+            ok: true;
+          };
+        };
     Error: {
       error: string;
     };

@@ -1,3 +1,5 @@
+import { consumeChatStream, type ChatStreamEvent } from "./chat-stream";
+export { ChatStreamError, type ChatStreamEvent } from "./chat-stream";
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
 import type {
@@ -113,7 +115,8 @@ export const api = {
     request<SearchResult[]>(
       `/api/documents/${id}/search?q=${encodeURIComponent(query)}`,
     ),
-  messages: (id: string) => request<Message[]>(`/api/documents/${id}/messages`),
+  messages: (id: string, signal?: AbortSignal) =>
+    request<Message[]>(`/api/documents/${id}/messages`, { signal }),
   providers: () => request<Provider[]>("/api/providers"),
   settings: () => request<Partial<ReaderTheme>>("/api/settings"),
   saveSettings: (theme: ReaderTheme) =>
@@ -132,6 +135,7 @@ export async function chat(
   references: SourceReference[] = [],
   attachments: string[] = [],
   onFallback?: (message: string) => void,
+  onEvent?: (event: ChatStreamEvent) => void,
 ) {
   const response = await fetch(`/api/documents/${id}/chat`, {
     method: "POST",
@@ -149,42 +153,13 @@ export async function chat(
     signal,
   });
   if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "AI 请求失败");
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `AI 请求失败 (${response.status})`);
   }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("没有收到 AI 输出");
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let done = false;
-  try {
-    for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      buffer += decoder.decode(chunk.value, { stream: true });
-      let end: number;
-      while ((end = buffer.indexOf("\n\n")) >= 0) {
-        const frame = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
-        const event = frame
-          .split("\n")
-          .find((l) => l.startsWith("event: "))
-          ?.slice(7);
-        const raw = frame
-          .split("\n")
-          .find((l) => l.startsWith("data: "))
-          ?.slice(6);
-        if (!raw) continue;
-        const data = JSON.parse(raw);
-        if (event === "error") throw new Error(data.error);
-        if (event === "delta") onDelta(data.text);
-        if (event === "fallback") onFallback?.(data.message);
-        if (event === "done") done = true;
-      }
-    }
-    if (!done) throw new Error("AI 连接中断，回答未保存");
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
+  if (!response.body) throw new Error("没有收到 AI 输出");
+  await consumeChatStream(response.body, signal, (event) => {
+    onEvent?.(event);
+    if (event.event === "delta") onDelta(event.data.text);
+    if (event.event === "fallback") onFallback?.(event.data.message);
+  });
 }

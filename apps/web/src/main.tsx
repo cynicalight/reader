@@ -14,4 +14,13 @@ if (token) {
   history.replaceState(null, "", location.pathname + location.search);
 }
 configureAPI(token);
-ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+if (import.meta.env.DEV && location.pathname === "/__streaming-benchmark") {
+  void import("./chat/StreamingBenchmark").then(({ default: Benchmark }) =>
+    root.render(<Benchmark />),
+  );
+} else if (import.meta.env.DEV && location.pathname === "/__streaming") {
+  void import("./chat/StreamingPreview").then(({ default: Preview }) =>
+    root.render(<Preview />),
+  );
+} else root.render(<App />);

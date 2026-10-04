@@ -26,7 +26,7 @@
 
 后端负责调用 Agent、过滤协议事件、及时发送回答片段，并在成功结束后保存完整回答。前端负责接收 SSE、维护临时回答及渲染状态。Markdown、公式、代码块的渲染方式、刷新频率、自动滚动及取消后的展示由前端决定。
 
-本次后端工作位于 `backend/ai-streaming` 分支，开发 worktree 为 `Reader-backend`，通过 merge 合入 `main`。现有 HTTP 接口和事件名称保持兼容；这次没有修改前端渲染代码。
+`2afe113` 的三种 Agent 协议实现已合入 main。本轮统一服务来自 `backend/unified-streaming`，随 `frontend/lobehub-streaming` 联合分支合入 main。阶段实现及证据见 [后端进度](./implementation/backend-streaming-progress.md)。顶部冻结表保持不变。
 
 ## 1. 请求接口
 
@@ -143,7 +143,13 @@ data: {"ok":true}
 
 前端无需解析上述 CLI 协议，也无需为不同 Agent 编写 SSE 分支。纯文字及带图片请求都使用相同事件结构。Codex 的完整消息事件仅用于补齐未发送后缀与一致性校验，不会重复发送已有内容。
 
-备用的 `text-api` / `image-api` 当前仍为非流式调用，会用一次 `delta` 返回完整回答。自动切换仅适用于已配置且通过能力测试的图片聊天 / Kimi 路径；普通 Codex、Claude 纯文字聊天仍直接报告 Agent 错误。前端需要同时兼容很多个片段和单个片段。
+本轮 `backend/unified-streaming` 已将 `text-api` / `image-api` 接到 OpenAI Chat Completions SSE：发送 `stream:true`，只消费 choice 0 的 `delta.content`，要求 `finish_reason:stop` 与 `[DONE]`。不支持 SSE 的上游明确报错，不自动再发非流请求；尚未声明其他 API 协议兼容性。正文及图片输入共用相同适配器与输出。前端仍须兼容单个大 delta。
+
+本轮普通 Codex/Claude 文字、Kimi 和图片均使用统一备用策略：首段前仅切到已配置且通过所需能力验证的对应备用 API；先 fallback 后 delta。首段后失败、客户端取消、总超时均不切换。后台任务的失败 attempt 单独丢弃，不混入备用正文。配置在请求开始时建立快照，不在生成中途读取新 key 或模型。
+
+当前 `/api/ai/config` 仍是无密钥的配置/验证状态读取入口；只返回 hasKey，保留文字和图片验证结果。CLI 登录状态由现有 providers 接口提供，不把安装、登录、文字能力、图片能力混为一个状态。本轮没有新增连接目录或 connectionId。
+
+错误和成功终态由同一 SSE writer 门控。写入/Flush 失败取消上游；Codex 尝试 turn/interrupt，Kimi 发送 session/cancel 并等待原 prompt response，400ms watchdog 强制回收。Claude 先 SIGINT 再有界强制退出。取消开始后拒绝正文；Claude result 后忽略迟到文字且仍要求进程正常退出。Kimi 校验 sessionId 和协商版本。
 
 ## 5. 前端工作范围
 
@@ -182,3 +188,9 @@ READER_TEST_STREAM_PROVIDER=kimi go test ./internal/reader -run '^TestLiveAgentS
 人工联调可在合并后的仓库运行 `pnpm dev`，打开终端输出的带会话 token 的 Reader 地址。使用已登录的 Agent，分别测试长段落、代码块、公式和图片问题，确认首段提前显示、没有最终全文重复、取消后不再追加、失败后能重新发送。不要求用浏览器自动化验收；界面效果由前端同事人工确认。
 
 官方协议参考：[Codex App Server](https://learn.chatgpt.com/docs/app-server)、[Claude Code 流式响应](https://code.claude.com/docs/en/headless#stream-responses)。
+
+## 本轮类型与回放证据
+
+[OpenAPI](./openapi.yaml) 的 `ChatStreamEvent` 描述解码后的五事件联合类型；`text/event-stream` 实际仍是 SSE 文本，没有 JSON envelope。生成类型位于 `packages/api-client/src/schema.d.ts`。可共用 [v1 fixtures](./fixtures/agent-streaming-v1.json)，覆盖成功、备用、部分失败和无终态断流。`TestFrozenStreamFixtures` 通过实际 writer 回放，检查事件形状、正文追加及终态后拒绝事件。
+
+本轮真实 CLI 的版本、文字/合成图片首段与完成时间、取消结果及未验证项，以 [后端进度](./implementation/backend-streaming-progress.md) 为准。上文原有历史实测仅描述先前基线。Claude 未登录、商业备用 API 实测、合并前端后的真实人工验收仍待完成；模拟协议和 HTTP gated 测试不替代这些验收。
