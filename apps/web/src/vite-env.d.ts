@@ -2,6 +2,7 @@
 
 interface Window {
   readerDesktop?: {
+    platform: string;
     setAppearance: (appearance: "light" | "dark" | "system") => Promise<void>;
     importFiles: () => Promise<void>;
     onBeforeClose: (callback: () => Promise<void>) => () => void;

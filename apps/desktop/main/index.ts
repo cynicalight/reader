@@ -150,6 +150,12 @@ app
       minWidth: 1000,
       minHeight: 660,
       title: "Reader",
+      ...(process.platform === "darwin"
+        ? {
+            titleBarStyle: "hidden" as const,
+            trafficLightPosition: { x: 20, y: 20 },
+          }
+        : {}),
       backgroundColor: nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
       webPreferences: {
         preload: join(__dirname, "preload.cjs"),

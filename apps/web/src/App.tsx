@@ -172,6 +172,7 @@ export function App() {
     <TooltipProvider>
       <div
         className="app"
+        data-platform={window.readerDesktop?.platform}
         onDragOver={(e) => {
           e.preventDefault();
         }}
@@ -206,6 +207,7 @@ export function App() {
         ) : (
           <>
             <aside className={`library-sidebar ${nav ? "" : "collapsed"}`}>
+              <div className="window-drag-handle" aria-hidden="true" />
               <Button
                 className="w-full justify-between"
                 variant="outline"

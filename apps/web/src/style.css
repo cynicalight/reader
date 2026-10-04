@@ -1120,3 +1120,30 @@ kbd {
   mask-position: center;
   mask-repeat: no-repeat;
 }
+
+/* Native macOS controls occupy this sidebar space; web/other platforms keep
+   their normal chrome. Interactive header controls must stay outside drag areas. */
+.window-drag-handle {
+  display: none;
+}
+.app[data-platform="darwin"] .window-drag-handle {
+  display: block;
+  height: 20px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+.app[data-platform="darwin"] :is(.library-topbar, .reader-toolbar) {
+  -webkit-app-region: drag;
+}
+.app[data-platform="darwin"]
+  :is(.library-topbar, .reader-toolbar)
+  :is(button, input, a, select, textarea, [role="button"]) {
+  -webkit-app-region: no-drag;
+}
+.app[data-platform="darwin"] .reader-toolbar,
+.app[data-platform="darwin"]
+  .library-sidebar.collapsed
+  + .library-main
+  .library-topbar {
+  padding-left: 104px;
+}

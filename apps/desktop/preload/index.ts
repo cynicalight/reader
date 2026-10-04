@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("readerDesktop", {
+  platform: process.platform,
   onBeforeClose: (callback: () => Promise<void>) => {
     const listener = () => {
       void callback().then(
