@@ -7,7 +7,7 @@
     "dev": "node scripts/prepare-assets.mjs && node scripts/dev.mjs",
     "dev:web": "pnpm --filter @reader/web dev",
     "dev:server": "cd apps/server && go run ./cmd/reader-server",
-    "build": "node scripts/prepare-assets.mjs && pnpm build:server && pnpm --filter @reader/web build && pnpm --filter @reader/desktop build",
+    "build": "node scripts/prepare-assets.mjs && pnpm build:processor && pnpm build:server && pnpm --filter @reader/web build && pnpm --filter @reader/desktop build",
     "build:server": "cd apps/server && go build -o ../../apps/desktop/bin/reader-server ./cmd/reader-server",
     "desktop": "pnpm build && pnpm --filter @reader/desktop start",
     "typecheck": "tsc --noEmit",
@@ -15,7 +15,8 @@
     "test:go": "cd apps/server && go test ./...",
     "api:generate": "openapi-typescript docs/openapi.yaml -o packages/api-client/src/schema.d.ts",
     "format": "prettier --write apps/web/src apps/desktop packages docs scripts",
-    "postinstall": "node scripts/prepare-assets.mjs"
+    "postinstall": "node scripts/prepare-assets.mjs",
+    "build:processor": "pnpm --filter @reader/processor build"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

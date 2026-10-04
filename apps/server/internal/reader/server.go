@@ -23,6 +23,7 @@ type Server struct {
 	Web      string
 	aiMu     sync.Mutex
 	importMu sync.Mutex
+	configMu sync.Mutex
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -72,6 +73,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/documents/{id}/messages", s.messages)
 	mux.HandleFunc("POST /api/documents/{id}/chat", s.chat)
 	mux.HandleFunc("GET /api/providers", s.providers)
+	mux.HandleFunc("GET /api/ai/config", s.getAIConfig)
+	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
+	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {
 		var value string
 		err := s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
