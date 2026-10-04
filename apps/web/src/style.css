@@ -1089,20 +1089,6 @@ kbd {
   font-weight: 550;
 }
 
-/* Compact overlays remain scrollable without persistent scrollbar chrome. */
-[data-slot="dialog-content"],
-[data-slot="dialog-content"] *,
-[data-slot="popover-content"],
-[data-slot="popover-content"] * {
-  scrollbar-width: none;
-}
-[data-slot="dialog-content"]::-webkit-scrollbar,
-[data-slot="dialog-content"] *::-webkit-scrollbar,
-[data-slot="popover-content"]::-webkit-scrollbar,
-[data-slot="popover-content"] *::-webkit-scrollbar {
-  display: none;
-}
-
 .provider-identity {
   display: inline-flex;
   align-items: center;

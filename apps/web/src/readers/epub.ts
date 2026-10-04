@@ -1,5 +1,6 @@
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import { selectionLocator } from "./selection-locator";
+import { installScrollbars } from "../scrollbars";
 import {
   EpubNavigator,
   EpubPreferences,
@@ -66,6 +67,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private bindFrame = (wnd: Window) => {
     this.frameCleanups.get(wnd)?.();
     const doc = wnd.document;
+    const removeScrollbars = installScrollbars(doc);
     const changed = () => {
       const selected = wnd.getSelection();
       if (
@@ -94,6 +96,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.frameCleanups.delete(wnd);
     };
     const cleanup = () => {
+      removeScrollbars();
       doc.removeEventListener("selectionchange", changed);
       doc.removeEventListener("pointerdown", start);
       doc.removeEventListener("mouseup", released);

@@ -1,0 +1,41 @@
+/* Keep the gutter stable: only the thumb changes when scrolling starts. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+[data-reader-scrolling] {
+  scrollbar-color: rgb(128 128 128 / 55%) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+}
+[data-reader-scrolling]::-webkit-scrollbar-thumb {
+  background-color: rgb(128 128 128 / 55%);
+}
+[data-slot="scroll-area-scrollbar"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+[data-slot="scroll-area"]:has(> [data-reader-scrolling])
+  > [data-slot="scroll-area-scrollbar"],
+[data-slot="scroll-area-scrollbar"]:active {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="scroll-area-scrollbar"] {
+    transition: none;
+  }
+}
