@@ -803,7 +803,7 @@ kbd {
 .chat-compose {
   border: 1px solid var(--border);
   border-radius: 11px;
-  margin: 12px;
+  margin: 0 6px 6px;
   padding: 7px;
   background: var(--background);
 }
