@@ -4,6 +4,7 @@ import { ScrollArea } from "@reader/ui/components/scroll-area";
 import { MessageMarkdown } from "./MessageMarkdown";
 import { copyText } from "./clipboard";
 import {
+  markdownDemo,
   markdownFixture,
   sizedFixture,
   splitFixture,
@@ -13,7 +14,8 @@ import { useChatScroll } from "./useChatScroll";
 export default function StreamingPreview() {
   const [raw, setRaw] = useState("");
   const [running, setRunning] = useState(false);
-  const [animated, setAnimated] = useState(false);
+  const [animated, setAnimated] = useState(true);
+  const [references, setReferences] = useState(false);
   const [dark, setDark] = useState(false);
   const [mode, setMode] = useState<SplitMode>("random");
   const [size, setSize] = useState(0);
@@ -60,7 +62,11 @@ export default function StreamingPreview() {
       terminalAt: 0,
       terminalCommitMs: 0,
     };
-    const source = size ? sizedFixture(size) : markdownFixture;
+    const source = size
+      ? sizedFixture(size)
+      : references
+        ? markdownFixture
+        : markdownDemo;
     // Sized runs use 4KiB code-unit chunks, 20ms apart for a bounded, repeatable benchmark.
     const chunks =
       size && mode !== "whole"
@@ -104,10 +110,16 @@ export default function StreamingPreview() {
         <label>
           样本{" "}
           <select
-            value={size}
-            onChange={(e) => setSize(Number(e.target.value))}
+            value={references ? "references" : size}
+            onChange={(e) => {
+              setReferences(e.target.value === "references");
+              setSize(
+                e.target.value === "references" ? 0 : Number(e.target.value),
+              );
+            }}
           >
-            <option value={0}>Markdown</option>
+            <option value={0}>Markdown 综合示例</option>
+            <option value="references">脚注与引用边界</option>
             <option value={10240}>10KB</option>
             <option value={102400}>100KB</option>
             <option value={1048500}>接近 1MiB</option>
