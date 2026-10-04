@@ -341,7 +341,7 @@ export function App() {
                               </div>
                               <div className="cover-title">{doc.title}</div>
                               <div className="cover-bottom">
-                                <span>{doc.author}</span>
+                                <span title={doc.author}>{doc.author}</span>
                                 <ArrowUpRight size={18} />
                               </div>
                               <div className="cover-decoration" />
@@ -397,8 +397,15 @@ export function App() {
                             </Button>
                           </div>
                           <p className="book-author">
-                            {doc.author}
-                            <span>{doc.type.toUpperCase()}</span>
+                            <span
+                              className="book-author-name"
+                              title={doc.author}
+                            >
+                              {doc.author}
+                            </span>
+                            <span className="book-format">
+                              {doc.type.toUpperCase()}
+                            </span>
                           </p>
                           <div className="book-progress">
                             <div
@@ -470,19 +477,22 @@ export function App() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            <div className="max-h-72 space-y-1 overflow-auto">
+            <div className="min-w-0 max-h-72 space-y-1 overflow-auto">
               {filtered.map((d) => (
                 <Button
                   key={d.id}
                   variant="ghost"
-                  className="w-full justify-start"
+                  className="min-w-0 w-full justify-start"
+                  title={d.title}
                   onClick={() => {
                     openDocument(d);
                     setCommand(false);
                   }}
                 >
                   <BookOpen />
-                  {d.title}
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {d.title}
+                  </span>
                 </Button>
               ))}
               <Button

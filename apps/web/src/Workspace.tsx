@@ -151,7 +151,8 @@ function TOCTree({
             <Button
               variant="ghost"
               className={`toc-item ${selected ? "selected" : ""}`}
-              style={{ paddingLeft: 12 + depth * 14 }}
+              style={{ paddingLeft: Math.min(12 + depth * 14, 96) }}
+              title={item.label}
               onClick={() => go(item.location)}
             >
               {item.children.length > 0 ? (
@@ -540,7 +541,9 @@ export function Workspace({
           </IconButton>
           <span className="toolbar-divider" />
           <BookOpen className="size-4 text-muted-foreground" />
-          <span className="reader-title">{doc.title}</span>
+          <span className="reader-title" title={doc.title}>
+            {doc.title}
+          </span>
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
         </div>
         <div className="toolbar-actions">

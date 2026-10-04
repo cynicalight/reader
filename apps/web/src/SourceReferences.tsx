@@ -106,7 +106,7 @@ export function SourceReferences({
                 onClick={() => void choose(card)}
               >
                 <span className="reference-card-heading">
-                  <span>{card.label}</span>
+                  <span title={card.label}>{card.label}</span>
                   {pending === card.id ? (
                     <Loader2 className="size-3 animate-spin" />
                   ) : (
