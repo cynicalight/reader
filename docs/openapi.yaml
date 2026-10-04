@@ -432,11 +432,28 @@
                 {
                   "200":
                     {
-                      "description": "SSE: status, delta {text}, fallback {message}, error {error}, done {ok}. Disconnection cancels CLI.",
+                      "description": "SSE v1: status, delta, fallback, error, done. See ChatStreamEvent. done is sent once only after confirmed upstream completion and successful assistant persistence. Fallback is allowed only before the first text delta. Disconnect cancels upstream; missing done requires checking messages, never automatic POST replay.",
                       "content":
                         {
                           "text/event-stream":
-                            { "schema": { "type": "string" } },
+                            {
+                              "schema":
+                                {
+                                  "type": "string",
+                                  "description": "SSE frames separated by blank lines. See ChatStreamEvent for each event data shape.",
+                                },
+                              "x-event-schema":
+                                {
+                                  "$ref": "#/components/schemas/ChatStreamEvent",
+                                },
+                              "examples":
+                                {
+                                  "success":
+                                    {
+                                      "value": "event: status\ndata: {\"status\":\"reading\"}\n\nevent: delta\ndata: {\"text\":\"回答\"}\n\nevent: done\ndata: {\"ok\":true}\n\n",
+                                    },
+                                },
+                            },
                         },
                     },
                   "default":
@@ -1055,6 +1072,101 @@
               "required": ["id", "installed", "authenticated", "status"],
             },
           "Settings": { "type": "object", "additionalProperties": true },
+          "ChatStreamEvent":
+            {
+              "description": "Decoded SSE event union for documentation and generated types only. Wire uses event: NAME and data: JSON lines; no envelope is transmitted. Append delta text verbatim. Only done confirms successful persistence. EOF is not completion. After error/done ignore late data. No automatic POST replay.",
+              "oneOf":
+                [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["event", "data"],
+                    "properties":
+                      {
+                        "event": { "type": "string", "enum": ["status"] },
+                        "data":
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["status"],
+                            "properties":
+                              {
+                                "status":
+                                  {
+                                    "type": "string",
+                                    "enum": ["reading", "reading-image"],
+                                  },
+                              },
+                          },
+                      },
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["event", "data"],
+                    "properties":
+                      {
+                        "event": { "type": "string", "enum": ["delta"] },
+                        "data":
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["text"],
+                            "properties": { "text": { "type": "string" } },
+                          },
+                      },
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["event", "data"],
+                    "properties":
+                      {
+                        "event": { "type": "string", "enum": ["fallback"] },
+                        "data":
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["message"],
+                            "properties": { "message": { "type": "string" } },
+                          },
+                      },
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["event", "data"],
+                    "properties":
+                      {
+                        "event": { "type": "string", "enum": ["error"] },
+                        "data":
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["error"],
+                            "properties": { "error": { "type": "string" } },
+                          },
+                      },
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["event", "data"],
+                    "properties":
+                      {
+                        "event": { "type": "string", "enum": ["done"] },
+                        "data":
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["ok"],
+                            "properties":
+                              { "ok": { "type": "boolean", "enum": [true] } },
+                          },
+                      },
+                  },
+                ],
+            },
           "Error":
             {
               "type": "object",

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func imageData(b []byte) string {
@@ -23,11 +24,11 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 		return "", ctx.Err()
 	}
 	if !validAgent(provider) {
-		return "", errors.New("未知 Agent")
+		return "", generationError(ErrorConfiguration, "未知 Agent")
 	}
 	work, e := os.MkdirTemp(filepath.Join(root, "ai-work"), "request-")
 	if e != nil {
-		return "", e
+		return "", generationError(ErrorConfiguration, "无法创建隔离的 Agent 工作目录")
 	}
 	defer os.RemoveAll(work)
 	if provider == "kimi" {
@@ -64,7 +65,7 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 		return "", e
 	}
 	if e = cmd.Start(); e != nil {
-		return "", errors.New("无法启动 Agent，请检查安装路径")
+		return "", generationError(ErrorConfiguration, "无法启动 Agent，请检查安装路径")
 	}
 	stop := context.AfterFunc(child, func() { time.AfterFunc(450*time.Millisecond, func() { _ = stdout.Close() }) })
 	defer stop()
@@ -81,6 +82,18 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 			continue
 		}
 		part, done, bad := claudeEvent(scan.Bytes())
+		if !utf8.Valid(scan.Bytes()) {
+			bad = true
+		}
+		if done {
+			var result struct {
+				Text *string `json:"result"`
+			}
+			_ = json.Unmarshal(scan.Bytes(), &result)
+			if result.Text != nil && *result.Text != text.String() {
+				bad = true
+			}
+		}
 		completed = completed || done
 		failed = failed || bad
 		if bad || text.Len()+len(part) > 1<<20 {
@@ -136,7 +149,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		return "", e
 	}
 	if e = cmd.Start(); e != nil {
-		return "", errors.New("无法启动 Kimi Code")
+		return "", generationError(ErrorConfiguration, "无法启动 Kimi Code")
 	}
 	lifecycle := newRPCLifecycle(ctx, cmd, stdin, stdout)
 	defer func() { lifecycle.close(); cancel(); _ = cmd.Wait() }()
@@ -159,7 +172,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 				Result json.RawMessage `json:"result"`
 				Error  json.RawMessage `json:"error"`
 			}
-			if json.Unmarshal(scan.Bytes(), &msg) != nil {
+			if !utf8.Valid(scan.Bytes()) || json.Unmarshal(scan.Bytes(), &msg) != nil {
 				return nil, generationError(ErrorProtocol, "Kimi ACP 输出协议无效")
 			}
 			if msg.Method != "" && len(msg.ID) > 0 { // Deny permission and every unsolicited client-side operation.
@@ -185,7 +198,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 				_ = json.Unmarshal(msg.Params, &p)
 				if ctx.Err() == nil && id == 3 && sessionID != "" && p.SessionID == sessionID && p.Update.Type == "agent_message_chunk" && p.Update.Content.Type == "text" {
 					if text.Len()+len(p.Update.Content.Text) > 1<<20 {
-						return nil, errors.New("Kimi 回答过长")
+						return nil, generationError(ErrorLimit, "Kimi 回答过长")
 					}
 					text.WriteString(p.Update.Content.Text)
 					if delta != nil {
@@ -203,7 +216,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, errors.New("Kimi ACP 连接中断")
+		return nil, generationError(ErrorNetwork, "Kimi ACP 连接中断")
 	}
 	init, e := request(1, "initialize", map[string]any{"protocolVersion": 1, "clientCapabilities": map[string]any{}, "clientInfo": map[string]string{"name": "reader", "version": "1"}})
 	if e != nil {
@@ -225,7 +238,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		}
 		_ = json.Unmarshal(init, &c)
 		if !c.Capabilities.Prompt.Image {
-			return "", errors.New("当前 Kimi ACP 不支持图片输入")
+			return "", generationError(ErrorCapability, "当前 Kimi ACP 不支持图片输入")
 		}
 	}
 	raw, e := request(2, "session/new", map[string]any{"cwd": work, "mcpServers": []any{}})
@@ -237,7 +250,7 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	}
 	_ = json.Unmarshal(raw, &session)
 	if session.ID == "" {
-		return "", errors.New("Kimi 会话无效")
+		return "", generationError(ErrorProtocol, "Kimi 会话无效")
 	}
 	sessionID = session.ID
 	lifecycle.setCancel(map[string]any{"jsonrpc": "2.0", "method": "session/cancel", "params": map[string]string{"sessionId": sessionID}})

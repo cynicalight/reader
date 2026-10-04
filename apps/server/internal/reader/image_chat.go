@@ -65,7 +65,7 @@ func (s *Server) blockImage(w http.ResponseWriter, r *http.Request, documentID, 
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	http.ServeContent(w, r, blockID+".png", time.Time{}, bytes.NewReader(data))
 }
-func (s *Server) imageChat(w http.ResponseWriter, r *http.Request, documentID, title, provider, question, textContext string, references json.RawMessage, ids []string) {
+func (s *Server) chatDocument(w http.ResponseWriter, r *http.Request, documentID, title, provider, question, textContext string, references json.RawMessage, ids []string) {
 	if len(ids) > 4 {
 		fail(w, 400, "每次最多附加 4 张图片")
 		return

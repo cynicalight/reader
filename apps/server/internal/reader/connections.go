@@ -275,7 +275,7 @@ func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), f
 	return s.generateWithConfig(ctx, s.aiConfig(), in, delta, fallback)
 }
 func (s *Server) generateWithConfig(ctx context.Context, c AIConfig, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
-	return newGenerationService(s.Store.Root, c).Generate(ctx, in, false, legacyEmitter(delta, fallback))
+	return newGenerationService(s.Store.Root, c).generate(ctx, in, false, delta != nil, legacyEmitter(delta, fallback))
 }
 func (s *Server) invoke(ctx context.Context, c AIConfig, p string, in AIInput, delta func(string)) (string, error) {
 	service := newGenerationService(s.Store.Root, c)

@@ -40,6 +40,20 @@ func (s *chatStreamWriter) send(event string, value any) error {
 	return err
 }
 func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w http.ResponseWriter, documentID string, config AIConfig, in AIInput) {
+	// Bound a blocked network write by the request deadline and interrupt it on
+	// cancellation. Reset the deadline before this keep-alive connection is reused.
+	controller := http.NewResponseController(w)
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = controller.SetWriteDeadline(deadline)
+	}
+	writeCanceled := make(chan struct{})
+	stopWrite := context.AfterFunc(ctx, func() { _ = controller.SetWriteDeadline(time.Now()); close(writeCanceled) })
+	defer func() {
+		if !stopWrite() {
+			<-writeCanceled
+		}
+		_ = controller.SetWriteDeadline(time.Time{})
+	}()
 	started := time.Now()
 	requestID := id()
 	var firstText time.Time

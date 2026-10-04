@@ -62,18 +62,22 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Provider    string          `json:"provider"`
 		Prompt      string          `json:"prompt"`
-		Context     string          `json:"context"`
+		Context     *string         `json:"context"`
 		References  json.RawMessage `json:"references"`
 		Attachments []string        `json:"attachments"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
+	if req.Context == nil {
+		fail(w, 400, "缺少 context 字段")
+		return
+	}
 	if !validAgent(req.Provider) {
 		fail(w, 400, "未知 AI 服务")
 		return
 	}
-	if strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 16000 || len(req.Context) > 64000 {
+	if strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > 16000 || len(*req.Context) > 64000 {
 		fail(w, 400, "问题或上下文长度无效")
 		return
 	}
@@ -82,5 +86,5 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档不存在")
 		return
 	}
-	s.imageChat(w, r, d.ID, d.Title, req.Provider, req.Prompt, req.Context, req.References, req.Attachments)
+	s.chatDocument(w, r, d.ID, d.Title, req.Provider, req.Prompt, *req.Context, req.References, req.Attachments)
 }

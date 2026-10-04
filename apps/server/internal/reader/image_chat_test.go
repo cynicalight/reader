@@ -95,7 +95,7 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 func TestImageChatRejectsInvalidOrUnverifiedInput(t *testing.T) {
 	s, _ := imageFixture(t)
 	for _, ids := range []string{`["p1-b1"]`, `["../secret"]`, `["p1-b2"]`, `["p1-b1","p1-b1","p1-b1","p1-b1","p1-b1"]`} {
-		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain","attachments":`+ids+`}`))
+		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(`{"provider":"codex","prompt":"Explain","context":"","attachments":`+ids+`}`))
 		if res.Code != 400 {
 			t.Fatalf("expected rejection: %d %s", res.Code, res.Body.String())
 		}

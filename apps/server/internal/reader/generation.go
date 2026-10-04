@@ -175,6 +175,9 @@ func runAttempt(ctx context.Context, adapter Adapter, in AIInput, emit func(Prov
 	return result, nil
 }
 func (g *GenerationService) Generate(ctx context.Context, in AIInput, interactive bool, emit func(ProviderEvent) error) (AIResult, error) {
+	return g.generate(ctx, in, interactive, emit != nil, emit)
+}
+func (g *GenerationService) generate(ctx context.Context, in AIInput, interactive, exposeText bool, emit func(ProviderEvent) error) (AIResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	if !validAgent(g.primary) {
@@ -188,7 +191,7 @@ func (g *GenerationService) Generate(ctx context.Context, in AIInput, interactiv
 			return ctx.Err()
 		}
 		if emit != nil {
-			if e.Text != "" {
+			if e.Text != "" && exposeText {
 				visible = true
 			}
 			if err := emit(e); err != nil {

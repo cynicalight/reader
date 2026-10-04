@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,6 +91,13 @@ func TestAgentProcess(t *testing.T) {
 		part("，世界")
 		emit(map[string]any{"type": "assistant", "message": map[string]any{"content": []any{map[string]string{"type": "text", "text": "你好，世界"}}}})
 		emit(map[string]any{"type": "result", "subtype": "success", "result": "你好，世界"})
+		if mode == "late" {
+			part("late")
+			emit(map[string]any{"type": "result", "subtype": "success"})
+		}
+		if mode == "exit-error" {
+			os.Exit(1)
+		}
 		return
 	}
 	decoder := json.NewDecoder(os.Stdin)
@@ -155,6 +163,24 @@ func TestAgentProcess(t *testing.T) {
 				if mode == "interleaved" {
 					respond(map[string]any{"turn": map[string]string{"id": "turn", "status": "inProgress"}})
 				}
+				if mode == "protocol-cancel" || mode == "ignore-cancel" {
+					var interrupt struct {
+						ID     json.RawMessage `json:"id"`
+						Method string          `json:"method"`
+					}
+					if decoder.Decode(&interrupt) != nil || interrupt.Method != "turn/interrupt" {
+						os.Exit(20)
+					}
+					_ = os.WriteFile(os.Getenv("READER_AGENT_ACK"), []byte("interrupt"), 0600)
+					if mode == "ignore-cancel" {
+						time.Sleep(10 * time.Second)
+						return
+					}
+					notify("item/agentMessage/delta", map[string]any{"itemId": "answer", "delta": "late"})
+					emit(map[string]any{"id": interrupt.ID, "result": map[string]any{}})
+					notify("turn/completed", map[string]any{"turn": map[string]string{"id": "turn", "status": "interrupted"}})
+					continue
+				}
 				gate()
 				if mode == "truncated" {
 					return
@@ -176,15 +202,43 @@ func TestAgentProcess(t *testing.T) {
 		} else {
 			switch req.Method {
 			case "initialize":
-				respond(map[string]any{"protocolVersion": 1, "agentCapabilities": map[string]any{"promptCapabilities": map[string]bool{"image": true}}})
+				version := 1
+				if mode == "version" {
+					version = 2
+				}
+				respond(map[string]any{"protocolVersion": version, "agentCapabilities": map[string]any{"promptCapabilities": map[string]bool{"image": true}}})
 			case "session/new":
 				respond(map[string]string{"sessionId": "session"})
 			case "session/prompt":
+				if mode == "fail-before" {
+					emit(map[string]any{"id": req.ID, "error": map[string]any{"code": -1, "message": "test failure"}})
+					continue
+				}
 				part := func(kind, text string) {
 					emit(map[string]any{"method": "session/update", "params": map[string]any{"sessionId": "session", "update": map[string]any{"sessionUpdate": kind, "content": map[string]string{"type": "text", "text": text}}}})
 				}
+				if mode == "identity" {
+					emit(map[string]any{"method": "session/update", "params": map[string]any{"sessionId": "other", "update": map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]string{"type": "text", "text": "private"}}}})
+				}
 				part("agent_thought_chunk", "private")
 				part("agent_message_chunk", "你好")
+				if mode == "protocol-cancel" || mode == "ignore-cancel" {
+					var interrupt struct {
+						ID     json.RawMessage `json:"id"`
+						Method string          `json:"method"`
+					}
+					if decoder.Decode(&interrupt) != nil || interrupt.Method != "session/cancel" || len(interrupt.ID) > 0 {
+						os.Exit(21)
+					}
+					_ = os.WriteFile(os.Getenv("READER_AGENT_ACK"), []byte("cancel"), 0600)
+					if mode == "ignore-cancel" {
+						time.Sleep(10 * time.Second)
+						return
+					}
+					part("agent_message_chunk", "late")
+					respond(map[string]string{"stopReason": "cancelled"})
+					continue
+				}
 				gate()
 				if mode == "truncated" {
 					return
@@ -439,7 +493,7 @@ func TestChatPartialFailureIsNotSaved(t *testing.T) {
 			if err := s.writeAIConfig(config); err != nil {
 				t.Fatal(err)
 			}
-			res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(fmt.Sprintf(`{"provider":%q,"prompt":"test","attachments":["p1-b1"]}`, provider)))
+			res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(fmt.Sprintf(`{"provider":%q,"prompt":"test","context":"","attachments":["p1-b1"]}`, provider)))
 			if !strings.Contains(res.Body.String(), "event: delta") || !strings.Contains(res.Body.String(), "event: error") || strings.Contains(res.Body.String(), "event: done") {
 				t.Fatal(res.Body.String())
 			}
@@ -474,4 +528,55 @@ func TestLiveAgentStreaming(t *testing.T) {
 		t.Fatalf("chunks=%d error=%v", len(parts), err)
 	}
 	t.Logf("provider=%s chunks=%d bytes=%d first=%s last=%s completed=%s", provider, len(parts), len(answer), first, last, time.Since(start))
+}
+
+// Uses only original prompts and generated pixels, never library content.
+func TestLiveGenerationAdapter(t *testing.T) {
+	provider := os.Getenv("READER_TEST_STREAM_PROVIDER")
+	if !validAgent(provider) {
+		t.Skip("set READER_TEST_STREAM_PROVIDER")
+	}
+	for _, vision := range []bool{false, true} {
+		t.Run(fmt.Sprintf("image=%t", vision), func(t *testing.T) {
+			s := testServer(t)
+			in := AIInput{Prompt: "Explain HTTP streaming in roughly 100 words. Do not use tools."}
+			if vision {
+				im, _, err := visionProbe()
+				if err != nil {
+					t.Fatal(err)
+				}
+				in = AIInput{Prompt: "Describe the colors and layout of the attached synthetic image in roughly 100 words. Do not use tools.", Image: im}
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+			defer cancel()
+			start := time.Now()
+			var first time.Duration
+			count := 0
+			var text string
+			result, err := runAttempt(ctx, cliAdapter{s.Store.Root, provider, ""}, in, func(e ProviderEvent) error {
+				if count == 0 {
+					first = time.Since(start)
+				}
+				count++
+				text += e.Text
+				return nil
+			})
+			if err != nil || result.Text != text || count < 2 {
+				t.Fatalf("chunks=%d err=%v", count, err)
+			}
+			t.Logf("provider=%s image=%t chunks=%d bytes=%d first=%s complete=%s", provider, vision, count, len(text), first, time.Since(start))
+		})
+	}
+	t.Run("cancel", func(t *testing.T) {
+		s := testServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+		defer cancel()
+		count := 0
+		var canceled time.Time
+		_, err := runAttempt(ctx, cliAdapter{s.Store.Root, provider, ""}, AIInput{Prompt: "Write a detailed 1000 word explanation of HTTP streaming. Do not use tools."}, func(e ProviderEvent) error { count++; canceled = time.Now(); cancel(); return nil })
+		if !errors.Is(err, context.Canceled) || count != 1 {
+			t.Fatalf("chunks=%d err=%v", count, err)
+		}
+		t.Logf("provider=%s cancel_return=%s", provider, time.Since(canceled))
+	})
 }

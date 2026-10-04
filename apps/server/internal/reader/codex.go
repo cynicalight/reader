@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // App Server exposes agentMessage deltas; exec --json only exposes completed
@@ -41,7 +42,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	}
 	defer stdout.Close()
 	if err = cmd.Start(); err != nil {
-		return "", errors.New("无法启动 Codex App Server，请检查 CLI 安装及版本")
+		return "", generationError(ErrorConfiguration, "无法启动 Codex App Server，请检查 CLI 安装及版本")
 	}
 	lifecycle := newRPCLifecycle(ctx, cmd, stdin, stdout)
 	defer func() { lifecycle.close(); cancel(); _ = cmd.Wait() }()
@@ -58,10 +59,10 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 			return nil
 		}
 		if itemID == "" {
-			return errors.New("Codex 消息编号无效")
+			return generationError(ErrorProtocol, "Codex 消息编号无效")
 		}
 		if answer.Len()+len(part) > 1<<20 {
-			return errors.New("Codex 回答过长")
+			return generationError(ErrorLimit, "Codex 回答过长")
 		}
 		if part == "" {
 			return nil
@@ -135,7 +136,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 				previous = item.String()
 			}
 			if !strings.HasPrefix(p.Item.Text, previous) {
-				return errors.New("Codex 完整回答与流式片段不一致，请重试")
+				return generationError(ErrorProtocol, "Codex 完整回答与流式片段不一致，请重试")
 			}
 			return appendText(p.Item.ID, strings.TrimPrefix(p.Item.Text, previous))
 		case "error":
@@ -143,6 +144,9 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 				return providerError
 			}
 		case "turn/completed":
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			turnID = id
 			if p.Turn.Status != "completed" {
 				return providerError
@@ -157,10 +161,10 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 			if ctx.Err() != nil {
 				return msg, ctx.Err()
 			}
-			return msg, errors.New("Codex 输出连接中断或事件过大")
+			return msg, generationError(ErrorNetwork, "Codex 输出连接中断或事件过大")
 		}
-		if json.Unmarshal(scan.Bytes(), &msg) != nil {
-			return msg, errors.New("Codex 输出协议无效")
+		if !utf8.Valid(scan.Bytes()) || json.Unmarshal(scan.Bytes(), &msg) != nil {
+			return msg, generationError(ErrorProtocol, "Codex 输出协议无效")
 		}
 		return msg, nil
 	}
@@ -209,7 +213,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		} `json:"thread"`
 	}
 	if json.Unmarshal(raw, &thread) != nil || thread.Thread.ID == "" {
-		return "", errors.New("Codex 会话无效")
+		return "", generationError(ErrorProtocol, "Codex 会话无效")
 	}
 	threadID = thread.Thread.ID
 	input := []any{map[string]string{"type": "text", "text": in.Prompt}}
@@ -226,7 +230,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		} `json:"turn"`
 	}
 	if json.Unmarshal(raw, &turn) != nil || turn.Turn.ID == "" || (turnID != "" && turnID != turn.Turn.ID) {
-		return "", errors.New("Codex 回答编号无效")
+		return "", generationError(ErrorProtocol, "Codex 回答编号无效")
 	}
 	turnID = turn.Turn.ID
 	lifecycle.setCancel(map[string]any{"id": 99, "method": "turn/interrupt", "params": map[string]string{"threadId": threadID, "turnId": turnID}})
