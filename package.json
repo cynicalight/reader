@@ -16,7 +16,9 @@
     "api:generate": "openapi-typescript docs/openapi.yaml -o packages/api-client/src/schema.d.ts",
     "format": "prettier --write apps/web/src apps/desktop packages docs scripts",
     "postinstall": "node scripts/prepare-assets.mjs",
-    "build:processor": "pnpm --filter @reader/processor build"
+    "build:processor": "pnpm --filter @reader/processor build",
+    "package": "node scripts/package.mjs",
+    "package:dir": "node scripts/package.mjs --dir"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
