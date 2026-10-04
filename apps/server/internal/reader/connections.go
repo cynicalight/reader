@@ -36,17 +36,19 @@ type Capability struct {
 	Fingerprint string `json:"-"`
 }
 type AIConfig struct {
-	Primary      string                `json:"primary"`
-	Models       map[string]string     `json:"models"`
-	TextAPI      APIConnection         `json:"textAPI"`
-	ImageAPI     APIConnection         `json:"imageAPI"`
-	Capabilities map[string]Capability `json:"capabilities"`
+	Primary      string                       `json:"primary"`
+	Models       map[string]string            `json:"models"`
+	Efforts      map[string]map[string]string `json:"efforts,omitempty"`
+	TextAPI      APIConnection                `json:"textAPI"`
+	ImageAPI     APIConnection                `json:"imageAPI"`
+	Capabilities map[string]Capability        `json:"capabilities"`
 }
 type savedConfig struct {
 	Config       AIConfig          `json:"config"`
 	Fingerprints map[string]string `json:"fingerprints"`
 }
 type AIInput struct {
+	Effort string
 	Prompt string
 	Image  []byte
 	Images [][]byte
@@ -184,9 +186,20 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请选择主 Agent")
 		return
 	}
+	for provider, models := range c.Efforts {
+		for _, effort := range models {
+			if !validEffort(provider, effort) {
+				fail(w, 400, "无效的 Effort 档位")
+				return
+			}
+		}
+	}
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
 	old := s.readAIConfig()
+	if c.Efforts == nil {
+		c.Efforts = old.Efforts
+	}
 	// Omitted keys preserve secrets; hasKey=false plus empty key explicitly clears one.
 	if c.TextAPI.Key == "" && c.TextAPI.HasKey {
 		c.TextAPI.Key = old.TextAPI.Key
@@ -329,8 +342,22 @@ func (s *Server) invoke(ctx context.Context, c AIConfig, p string, in AIInput, d
 	if p == "image-api" {
 		return invokeAPI(ctx, c.ImageAPI, in, delta)
 	}
+	level := c.Efforts[p][c.Models[p]]
+	if level == "" {
+		level = "medium"
+	}
+	models, err := s.modelCatalog(ctx, p)
+	if err != nil {
+		return "", errors.New("无法获取模型的 Effort 配置，请重试")
+	}
+	in.Effort = nativeEffort(p, level, c.Models[p], models)
 	return invokeCLI(ctx, s.Store.Root, p, c.Models[p], in, delta)
 }
+
+func validEffort(provider, effort string) bool {
+	return validAgent(provider) && (effort == "low" || effort == "medium" || effort == "high" || effort == "max")
+}
+
 func invokeAPI(ctx context.Context, c APIConnection, in AIInput, delta func(string)) (string, error) {
 	if e := validateAPI(c); e != nil {
 		return "", e

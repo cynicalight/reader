@@ -214,7 +214,11 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	for _, image := range in.images() {
 		input = append(input, map[string]string{"type": "image", "url": imageData(image)})
 	}
-	raw, err = call(3, "turn/start", map[string]any{"threadId": threadID, "input": input})
+	turnParams := map[string]any{"threadId": threadID, "input": input}
+	if in.Effort != "" {
+		turnParams["effort"] = in.Effort
+	}
+	raw, err = call(3, "turn/start", turnParams)
 	if err != nil {
 		return "", err
 	}

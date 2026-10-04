@@ -13,6 +13,7 @@ import type {
   PDFBlock,
   AIConfig,
   AICapability,
+  AgentModel,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -57,6 +58,11 @@ export const api = {
     request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
   blocks: (id: string) => request<PDFBlock[]>(`/api/documents/${id}/blocks`),
   aiConfig: () => request<AIConfig>("/api/ai/config"),
+  agentModels: (provider: string, signal?: AbortSignal) =>
+    request<AgentModel[]>(
+      `/api/ai/models?provider=${encodeURIComponent(provider)}`,
+      { signal },
+    ),
   saveAIConfig: (config: AIConfig) =>
     request<AIConfig>("/api/ai/config", {
       method: "PUT",

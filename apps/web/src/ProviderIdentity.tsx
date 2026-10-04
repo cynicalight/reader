@@ -1,26 +1,39 @@
-import codex from "@lobehub/icons-static-svg/icons/codex.svg";
-import claude from "@lobehub/icons-static-svg/icons/claudecode.svg";
-import kimi from "@lobehub/icons-static-svg/icons/kimi.svg";
+import { Claude, Kimi, OpenAI } from "@lobehub/icons";
 
 const providers = {
-  codex: { icon: codex, label: "Codex" },
-  claude: { icon: claude, label: "Claude Code" },
-  kimi: { icon: kimi, label: "Kimi Code" },
+  codex: { Avatar: OpenAI.Avatar, label: "Codex" },
+  claude: { Avatar: Claude.Avatar, label: "Claude Code" },
+  kimi: { Avatar: Kimi.Avatar, label: "Kimi Code" },
 };
 
-export function ProviderIdentity({ provider }: { provider: string }) {
+export function ProviderIcon({
+  provider,
+  size = 20,
+}: {
+  provider: string;
+  size?: number;
+}) {
+  const brand = providers[provider as keyof typeof providers];
+  if (!brand) return null;
+  return (
+    <span aria-hidden="true" className="provider-icon inline-flex shrink-0">
+      <brand.Avatar size={size} iconClassName="size-full" />
+    </span>
+  );
+}
+
+export function ProviderIdentity({
+  provider,
+  size = 20,
+}: {
+  provider: string;
+  size?: number;
+}) {
   const brand = providers[provider as keyof typeof providers];
   if (!brand) return <span>{provider}</span>;
   return (
     <span className="provider-identity">
-      <span
-        aria-hidden="true"
-        className="provider-icon"
-        style={{
-          maskImage: `url("${brand.icon}")`,
-          WebkitMaskImage: `url("${brand.icon}")`,
-        }}
-      />
+      <ProviderIcon provider={provider} size={size} />
       <span>{brand.label}</span>
     </span>
   );

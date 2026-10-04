@@ -686,6 +686,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/ai/models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List models reported by the installed Agent SDK without sending a prompt */
+    get: {
+      parameters: {
+        query: {
+          provider: "codex" | "claude" | "kimi";
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Models available through this SDK */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["AgentModel"][];
+          };
+        };
+        /** @description Unknown provider */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Agent model discovery failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/ai/config": {
     parameters: {
       query?: never;
@@ -941,10 +993,25 @@ export interface components {
       key?: string;
       hasKey: boolean;
     };
+    AgentModel: {
+      id: string;
+      name: string;
+      description: string;
+      isDefault: boolean;
+      aliases?: string[];
+    };
+    /** @enum {string} */
+    ReasoningEffort: "low" | "medium" | "high" | "max";
     AIConfig: {
       primary: string;
       models: {
         [key: string]: string;
+      };
+      /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
+      efforts?: {
+        [key: string]: {
+          [key: string]: components["schemas"]["ReasoningEffort"];
+        };
       };
       textAPI: components["schemas"]["APIConnection"];
       imageAPI: components["schemas"]["APIConnection"];

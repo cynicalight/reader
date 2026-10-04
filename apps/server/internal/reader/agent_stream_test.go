@@ -70,7 +70,16 @@ func TestAgentProcess(t *testing.T) {
 		if !strings.Contains(args, "--include-partial-messages") {
 			os.Exit(10)
 		}
-		_, _ = io.ReadAll(os.Stdin)
+		reader := bufio.NewReader(os.Stdin)
+		first, _ := reader.ReadString('\n')
+		if strings.Contains(first, `"type":"control_request"`) {
+			emit(map[string]any{"type": "control_response", "response": map[string]any{"request_id": "1", "subtype": "success", "response": map[string]any{"models": []any{map[string]any{"value": "test", "resolvedModel": "test-model", "displayName": "Test"}}}}})
+			return
+		}
+		_, _ = io.ReadAll(reader)
+		if path := os.Getenv("READER_AGENT_CAPTURE"); path != "" {
+			_ = os.WriteFile(path, []byte(args), 0600)
+		}
 		if mode == "fail-before" {
 			os.Exit(1)
 		}
@@ -111,6 +120,8 @@ func TestAgentProcess(t *testing.T) {
 			case "initialize":
 				respond(map[string]string{"userAgent": "test"})
 			case "initialized":
+			case "model/list":
+				respond(map[string]any{"data": []any{map[string]any{"model": "test-model", "displayName": "Test", "isDefault": true}}})
 			case "thread/start":
 				var params map[string]any
 				_ = json.Unmarshal(req.Params, &params)
@@ -178,7 +189,12 @@ func TestAgentProcess(t *testing.T) {
 			case "initialize":
 				respond(map[string]any{"protocolVersion": 1, "agentCapabilities": map[string]any{"promptCapabilities": map[string]bool{"image": true}}})
 			case "session/new":
-				respond(map[string]string{"sessionId": "session"})
+				respond(map[string]any{"sessionId": "session", "configOptions": []any{map[string]any{"id": "model", "currentValue": "test-model", "options": []any{map[string]string{"value": "test-model", "name": "Test"}}}}})
+			case "session/set_config_option":
+				if path := os.Getenv("READER_AGENT_CAPTURE"); path != "" {
+					_ = os.WriteFile(path, req.Params, 0600)
+				}
+				respond(map[string]any{})
 			case "session/prompt":
 				part := func(kind, text string) {
 					emit(map[string]any{"method": "session/update", "params": map[string]any{"sessionId": "session", "update": map[string]any{"sessionUpdate": kind, "content": map[string]string{"type": "text", "text": text}}}})

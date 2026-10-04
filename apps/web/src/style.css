@@ -274,6 +274,14 @@ kbd {
   font-weight: 400;
   opacity: 0.65;
 }
+.cover-text {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1;
+}
 .cover-title {
   font-family: Georgia, "Songti SC", serif;
   font-size: 25px;
@@ -287,18 +295,21 @@ kbd {
   z-index: 1;
   letter-spacing: -0.5px;
 }
-.cover-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.cover-author {
+  flex-shrink: 0;
   font-size: 10px;
-  z-index: 1;
-}
-.cover-bottom span {
-  max-width: 80%;
+  line-height: 1.4;
+  font-weight: 400;
+  opacity: 0.75;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.cover-bottom {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  z-index: 1;
 }
 .cover-decoration {
   position: absolute;
@@ -336,7 +347,6 @@ kbd {
   text-overflow: ellipsis;
   text-align: left;
 }
-.book-author,
 .book-status {
   display: flex;
   justify-content: space-between;
@@ -344,21 +354,6 @@ kbd {
   font-size: 10px;
   margin-top: 8px;
   gap: 10px;
-}
-.book-author {
-  min-width: 0;
-  min-height: 17px;
-}
-.book-author-name {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.book-format {
-  flex-shrink: 0;
-  font-size: 9px;
 }
 .book-progress {
   height: 2px;
@@ -766,8 +761,201 @@ kbd {
   justify-content: space-between;
   padding: 3px 0 0;
 }
-.compose-footer [data-slot="select-trigger"] {
-  font-size: 10px;
+.compose-footer .model-select-trigger {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  flex: 0 1 auto;
+  gap: 8px;
+  padding: 5px 8px 5px 6px;
+  border: 0.5px solid var(--border);
+  border-radius: 9999px;
+  background: var(--muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+.model-trigger-name {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-select-menu {
+  width: 256px;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow:
+    0 12px 36px #00000024,
+    0 2px 8px #00000012;
+}
+.model-select-menu .model-select-option {
+  min-height: 34px;
+  padding: 7px 34px 7px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.model-select-menu .model-select-option + .model-select-option {
+  margin-top: 2px;
+}
+.model-select-menu .model-select-option[data-selected] {
+  background: color-mix(in oklch, var(--foreground) 9%, var(--popover));
+}
+.model-select-menu .model-select-option[data-highlighted]:not([data-selected]) {
+  background: var(--accent);
+}
+.model-select-menu [data-slot="select-item-indicator"] {
+  right: 12px;
+  color: #438cf5;
+}
+.model-select-name {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.model-trigger-effort {
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.effort-panel {
+  --effort-blue: #5197f5;
+  width: 256px;
+  max-width: calc(100vw - 24px);
+  gap: 12px;
+  padding: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: 18px;
+  box-shadow:
+    0 12px 36px #00000024,
+    0 2px 8px #00000012;
+}
+.effort-heading {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  align-items: center;
+}
+.effort-symbol {
+  color: var(--muted-foreground);
+  margin-left: 2px;
+}
+.effort-title {
+  color: var(--effort-blue);
+  text-align: center;
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 500;
+}
+.effort-reset {
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+}
+.effort-model-trigger {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: max-content;
+  max-width: 100%;
+  min-height: 0;
+  height: 22px;
+  gap: 3px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+}
+.effort-model-trigger > svg {
+  width: 12px;
+  height: 12px;
+  transform: rotate(-90deg);
+}
+.effort-model-trigger [data-slot="select-value"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.effort-slider-wrap {
+  position: relative;
+  padding: 0;
+}
+.effort-slider > div {
+  height: 32px;
+  container-type: inline-size;
+}
+.effort-slider [data-slot="slider-track"] {
+  height: 24px;
+  background: color-mix(in oklch, var(--foreground) 14%, var(--popover));
+  box-shadow: inset 0 0 0 0.5px var(--border);
+}
+.effort-slider [data-slot="slider-range"] {
+  background: var(--effort-blue);
+  width: 100% !important;
+  transform: translateX(
+    calc(-100% + 14px + (100cqw - 28px) * var(--effort-position))
+  );
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.effort-slider [data-slot="slider-thumb"] {
+  inset-inline-start: 0 !important;
+  transform: translateX(calc(14px + (100cqw - 28px) * var(--effort-position)));
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: white;
+  box-shadow: 0 1px 4px #00000018;
+}
+/* Saving metadata must not dim the model link on each slider release. */
+.effort-model-trigger:disabled {
+  opacity: 1;
+}
+.effort-slider[data-instant] [data-slot="slider-thumb"],
+.effort-slider[data-instant] [data-slot="slider-range"] {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .effort-slider [data-slot="slider-thumb"],
+  .effort-slider [data-slot="slider-range"] {
+    transition: none;
+  }
+}
+.effort-slider [data-slot="slider-thumb"]:focus-visible {
+  outline: 2px solid var(--effort-blue);
+  outline-offset: 3px;
+}
+.effort-ticks {
+  position: absolute;
+  inset: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.effort-ticks span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--foreground) 30%, transparent);
+}
+.effort-unavailable {
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.model-select-status {
+  padding: 10px 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 .quote-chips {
   padding: 2px 3px 5px;
@@ -1189,14 +1377,8 @@ kbd {
   }
 }
 .provider-icon {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
+  display: inline-flex;
   flex-shrink: 0;
-  background: currentColor;
-  mask-size: contain;
-  mask-position: center;
-  mask-repeat: no-repeat;
 }
 
 /* Native macOS controls occupy this sidebar space; web/other platforms keep

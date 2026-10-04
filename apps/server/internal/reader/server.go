@@ -25,6 +25,8 @@ type Server struct {
 	importMu     sync.Mutex
 	configMu     sync.Mutex
 	processingMu sync.Mutex
+	modelMu      sync.Mutex
+	modelCache   map[string]modelCatalogEntry
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -78,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/chat", s.chat)
 	mux.HandleFunc("GET /api/providers", s.providers)
 	mux.HandleFunc("GET /api/ai/config", s.getAIConfig)
+	mux.HandleFunc("GET /api/ai/models", s.agentModels)
 	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
 	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {

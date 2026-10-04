@@ -37,6 +37,9 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 		return invokeCodex(ctx, work, model, in, delta)
 	}
 	args := claudeArgs()
+	if in.Effort != "" {
+		args = append(args, "--effort", in.Effort)
+	}
 	if model != "" {
 		args = append(args, "--model", model)
 	}
@@ -228,6 +231,11 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 	_ = json.Unmarshal(raw, &session)
 	if session.ID == "" {
 		return "", errors.New("Kimi 会话无效")
+	}
+	if in.Effort != "" {
+		if _, e = request(4, "session/set_config_option", map[string]any{"sessionId": session.ID, "configId": "thinking", "value": in.Effort}); e != nil {
+			return "", e
+		}
 	}
 	parts := []any{map[string]string{"type": "text", "text": in.Prompt}}
 	if len(in.images()) > 0 {

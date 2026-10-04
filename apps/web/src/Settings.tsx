@@ -26,6 +26,11 @@ import {
   SelectContent,
   SelectItem,
 } from "@reader/ui/components/select";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@reader/ui/components/tooltip";
 import { Separator } from "@reader/ui/components/separator";
 import { useReaderStore } from "./store";
 import { toast } from "sonner";
@@ -44,7 +49,7 @@ export function Settings({
   const refreshing = useRef(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { theme, setTheme } = useReaderStore();
+  const { theme, setTheme, setAIConfig, aiModelSaving } = useReaderStore();
   const refresh = async (force = false) => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -56,6 +61,7 @@ export function Settings({
       ]);
       setProviders(providers);
       setConfig(config);
+      setAIConfig(config);
       const pending = providers.filter((provider) => {
         if (!provider.installed) return false;
         const key = JSON.stringify([
@@ -164,20 +170,24 @@ export function Settings({
               </Button>
             </div>
             {config && (
-              <div className="mb-4 space-y-2">
+              <div className="mb-4 flex flex-col gap-2">
                 <label className="text-sm" id="primary-agent-label">
-                  主 Agent · 自动图片解析使用此连接
+                  Agent SDK
                 </label>
                 <Select
                   value={config.primary || null}
-                  disabled={saving || testing.size > 0}
+                  disabled={saving || aiModelSaving || testing.size > 0}
                   onValueChange={async (value) => {
                     if (!value) return;
                     setSaving(true);
                     try {
-                      setConfig(
-                        await api.saveAIConfig({ ...config, primary: value }),
-                      );
+                      const latest = await api.aiConfig();
+                      const saved = await api.saveAIConfig({
+                        ...latest,
+                        primary: value,
+                      });
+                      setConfig(saved);
+                      setAIConfig(saved);
                     } catch (e) {
                       toast.error((e as Error).message);
                     } finally {
@@ -189,7 +199,7 @@ export function Settings({
                     aria-labelledby="primary-agent-label"
                     className="w-full"
                   >
-                    <SelectValue placeholder="请选择主 Agent">
+                    <SelectValue placeholder="请选择 Agent SDK">
                       {config.primary ? (
                         <ProviderIdentity provider={config.primary} />
                       ) : undefined}
@@ -208,23 +218,23 @@ export function Settings({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  图片理解检测通过后，导入的 PDF
+                  对话使用此
+                  SDK，具体模型在对话框中选择。图片理解检测通过后，导入的 PDF
                   将自动生成图表解析稿；图片会发送给此 Agent。
                 </p>
               </div>
             )}
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
               {(["codex", "claude", "kimi"] as const).map((name) => {
                 const p = providers.find((p) => p.id === name);
                 const capability = config?.capabilities[name];
                 const pending = loading || testing.has(name);
                 const error = errors[name] || capability?.error;
-                const passed = !error && capability?.text && capability?.vision;
                 return (
-                  <div key={name} className="rounded-xl border p-4">
+                  <div key={name} className="min-w-0 rounded-xl border p-4">
                     <div className="flex items-center gap-3">
-                      <span className="flex-1 text-sm font-medium">
-                        <ProviderIdentity provider={name} />
+                      <span className="flex-1 text-base font-medium">
+                        <ProviderIdentity provider={name} size={36} />
                       </span>
                       {!loading && !p?.installed && (
                         <Badge variant="outline">未安装</Badge>
@@ -262,7 +272,39 @@ export function Settings({
                                 ) : ready ? (
                                   <CircleCheck />
                                 ) : (
-                                  <TriangleAlert />
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      render={
+                                        <Button variant="ghost" size="icon" />
+                                      }
+                                      className="size-4 p-0 text-inherit hover:bg-transparent hover:text-inherit"
+                                      aria-label={`${label}未通过：查看详情`}
+                                    >
+                                      <TriangleAlert />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="block max-w-xs space-y-2 leading-5 break-words">
+                                      <p>
+                                        {error ||
+                                          (capability?.text
+                                            ? "文本推理可用，图片理解未通过检测。"
+                                            : "检测未通过，请确认 Agent 已完成登录。")}
+                                      </p>
+                                      {!p?.authenticated &&
+                                        !capability?.text && (
+                                          <p>
+                                            在终端运行{" "}
+                                            <code>
+                                              {name === "codex"
+                                                ? "codex login"
+                                                : name === "claude"
+                                                  ? "claude auth login"
+                                                  : "kimi login"}
+                                            </code>{" "}
+                                            完成官方登录，然后重新检测。
+                                          </p>
+                                        )}
+                                    </TooltipContent>
+                                  </Tooltip>
                                 )}
                               </span>
                               <span>{label}</span>
@@ -271,30 +313,6 @@ export function Settings({
                         })}
                       </div>
                     )}
-                    {!pending && p?.installed && !passed && (
-                      <p className="mt-2 text-xs leading-5 text-muted-foreground break-words">
-                        {error ||
-                          (capability?.text
-                            ? "文本推理可用，图片理解未通过检测。"
-                            : "检测未通过，请确认 Agent 已完成登录。")}
-                      </p>
-                    )}
-                    {!pending &&
-                      p?.installed &&
-                      !p.authenticated &&
-                      !capability?.text && (
-                        <p className="mt-3 text-xs leading-6 text-muted-foreground">
-                          在终端运行{" "}
-                          <code>
-                            {name === "codex"
-                              ? "codex login"
-                              : name === "claude"
-                                ? "claude auth login"
-                                : "kimi login"}
-                          </code>{" "}
-                          完成官方登录，然后重新检测。
-                        </p>
-                      )}
                   </div>
                 );
               })}

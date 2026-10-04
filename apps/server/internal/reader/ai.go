@@ -134,7 +134,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	send("status", map[string]string{"status": "reading"})
-	answer, err := invokeCLI(ctx, s.Store.Root, req.Provider, s.aiConfig().Models[req.Provider], AIInput{Prompt: prompt}, func(text string) {
+	answer, err := s.invoke(ctx, s.aiConfig(), req.Provider, AIInput{Prompt: prompt}, func(text string) {
 		send("delta", map[string]string{"text": text})
 	})
 	if err != nil {

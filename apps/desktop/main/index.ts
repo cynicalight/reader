@@ -12,6 +12,7 @@ import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
+import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 let child: ChildProcess | undefined;
 let serverURL = "";
 let serverToken = "";
@@ -202,6 +203,20 @@ app
         window?.close();
       };
       ipcMain.on("reader:flushed", handler);
+    });
+    // Let the renderer handle document zoom before Electron's View menu does.
+    window.webContents.on("before-input-event", (_event, input) => {
+      window?.webContents.setIgnoreMenuShortcuts(
+        input.type === "keyDown" &&
+          zoomCommand({
+            key: input.key,
+            code: input.code,
+            metaKey: input.meta,
+            ctrlKey: input.control,
+            altKey: input.alt,
+            isComposing: input.isComposing,
+          }) !== null,
+      );
     });
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     window.webContents.on("will-navigate", (event, target) => {

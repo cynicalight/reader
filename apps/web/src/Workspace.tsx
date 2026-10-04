@@ -71,13 +71,6 @@ import {
   DialogDescription,
 } from "@reader/ui/components/dialog";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@reader/ui/components/select";
-import {
   ResizablePanelGroup,
   ResizablePanel,
   usePanelRef,
@@ -89,7 +82,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
-import { ProviderIdentity } from "./ProviderIdentity";
+import { ModelSelector } from "./ModelSelector";
 import { SourceReferences } from "./SourceReferences";
 import { ImagePreview, imageLabel } from "./ImagePreview";
 import { contextReferences } from "./references";
@@ -196,7 +189,7 @@ export function Workspace({
   onBack: () => void;
   onSettings: () => void;
 }) {
-  const { setTheme } = useReaderStore();
+  const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
   const renderBlockImage = useMemo(
@@ -277,20 +270,26 @@ export function Workspace({
     null,
   );
   const readingPane = useRef<HTMLDivElement>(null);
-  const [provider, setProvider] = useState("codex");
+  const provider = aiConfig?.primary ?? "";
   const [prompt, setPrompt] = useState("");
   const [quotes, setQuotes] = useState<ReaderSelection[]>([]);
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [previewImage, setPreviewImage] = useState<ImageAttachment>();
   const composeInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
+    let alive = true;
     void api
       .aiConfig()
       .then((config) => {
-        if (config.primary) setProvider(config.primary);
+        if (alive) setAIConfig(config);
       })
-      .catch(() => {});
-  }, []);
+      .catch((error) => {
+        if (alive) toast.error(error.message);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [setAIConfig]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [stream, setStream] = useState("");
   const [sending, setSending] = useState(false);
@@ -390,7 +389,12 @@ export function Workspace({
     attachments = images,
     directImage = false,
   ) => {
-    if (sending) return;
+    if (sending || aiModelSaving) return;
+    if (!provider) {
+      toast.info("请先在设置中选择 Agent SDK");
+      onSettings();
+      return;
+    }
     if (!question.trim() && attachments.length)
       question = "请解释附件中的图表或公式。";
     if (!question.trim()) return;
@@ -894,6 +898,7 @@ export function Workspace({
                 setTOC(items);
               }}
               events={{
+                zoom: (zoom) => setTheme({ zoom }),
                 location: saveLocation,
                 selection: setSelection,
                 blockAction,
@@ -1112,33 +1117,7 @@ export function Workspace({
                     }}
                   />
                   <div className="compose-footer">
-                    <Select
-                      value={provider}
-                      onValueChange={(value) => {
-                        if (value) setProvider(value);
-                      }}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="min-w-36 w-auto border-0 shadow-none"
-                        aria-label="选择 AI 助手"
-                      >
-                        <SelectValue>
-                          <ProviderIdentity provider={provider} />
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="codex">
-                          <ProviderIdentity provider="codex" />
-                        </SelectItem>
-                        <SelectItem value="claude">
-                          <ProviderIdentity provider="claude" />
-                        </SelectItem>
-                        <SelectItem value="kimi">
-                          <ProviderIdentity provider="kimi" />
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <ModelSelector disabled={sending} onSettings={onSettings} />
                     {sending ? (
                       <Button
                         size="icon-sm"
@@ -1153,7 +1132,10 @@ export function Workspace({
                         size="icon-sm"
                         aria-label="发送问题"
                         disabled={
-                          !adapter || (!prompt.trim() && !images.length)
+                          !adapter ||
+                          aiModelSaving ||
+                          !provider ||
+                          (!prompt.trim() && !images.length)
                         }
                         onClick={() => void send()}
                       >

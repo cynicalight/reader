@@ -1,3 +1,5 @@
+export { zoomCommand } from "./zoom-shortcut";
+
 export type PDFLocation = {
   type: "pdf";
   page: number;
@@ -81,6 +83,7 @@ export const defaultTheme: ReaderTheme = {
 };
 export type PDFBlockAction = "attach" | "preview" | "explain";
 export interface ReaderEvents {
+  zoom?: (zoom: ReaderTheme["zoom"]) => void;
   blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;
   selection: (selection: ReaderSelection | null) => void;
@@ -170,10 +173,20 @@ export interface APIConnection {
   key?: string;
   hasKey: boolean;
 }
+export type ReasoningEffort = "low" | "medium" | "high" | "max";
+
 export interface AIConfig {
   primary: string;
   models: Record<string, string>;
+  efforts?: Record<string, Record<string, ReasoningEffort>>;
   textAPI: APIConnection;
   imageAPI: APIConnection;
   capabilities: Record<string, AICapability>;
+}
+export interface AgentModel {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  aliases?: string[];
 }

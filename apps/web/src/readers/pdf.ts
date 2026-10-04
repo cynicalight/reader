@@ -23,6 +23,7 @@ import type {
   TOCItem,
 } from "@reader/core";
 import { publicationURL } from "@reader/api";
+import { zoomCommand } from "@reader/core";
 pdfjs.GlobalWorkerOptions.workerSrc = workerURL;
 export class PDFReaderAdapter implements ReaderAdapter {
   private pdf?: pdfjs.PDFDocumentProxy;
@@ -37,6 +38,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private resize: ResizeObserver;
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private fitWidth = true;
+  private appliedZoom?: ReaderTheme["zoom"];
+  private wheelScale?: number;
   private disposed = false;
   private blocks: PDFBlockOverlay;
   private blockData: PDFBlock[] = [];
@@ -79,6 +82,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     document.addEventListener("pointerdown", this.onPointerDown);
     document.addEventListener("selectionchange", this.onSelectionChange);
     document.addEventListener("keydown", this.onKeyDown);
+    container.addEventListener("wheel", this.onWheel, { passive: false });
     container.addEventListener("scroll", this.clearSelection, {
       passive: true,
     });
@@ -280,6 +284,74 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.selecting = false;
     this.pointer = undefined;
     if (event.key === "Escape") this.clearSelection();
+    const command = zoomCommand(event);
+    if (!command || event.defaultPrevented || !this.canZoom(event.target))
+      return;
+    event.preventDefault();
+    this.wheelScale = undefined;
+    if (command === "width") {
+      this.clearSelection();
+      this.fitWidth = true;
+      this.appliedZoom = "width";
+      this.viewer.currentScaleValue = "page-width";
+      this.events.zoom?.("width");
+      return;
+    }
+    this.zoomTo(this.viewer.currentScale * (command === "in" ? 1.1 : 1 / 1.1));
+  };
+  private canZoom(target: EventTarget | null) {
+    if (!this.pdf || this.disposed || !this.container.isConnected) return false;
+    if (
+      document.querySelector(
+        '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+      )
+    )
+      return false;
+    return !(
+      target instanceof Element &&
+      target.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="dialog"], [role="alertdialog"]',
+      )
+    );
+  }
+  private zoomTo(scale: number, origin?: number[]) {
+    const next = Math.min(5, Math.max(0.25, scale));
+    if (!Number.isFinite(next)) return;
+    this.clearSelection();
+    this.fitWidth = false;
+    this.viewer.updateScale({
+      scaleFactor: next / this.viewer.currentScale,
+      drawingDelay: 150,
+      origin,
+    });
+    const applied = this.viewer.currentScale;
+    if (this.appliedZoom !== applied) {
+      this.appliedZoom = applied;
+      this.events.zoom?.(applied);
+    }
+  }
+  private onWheel = (event: WheelEvent) => {
+    // Chromium reports trackpad pinch as a Ctrl+wheel event.
+    if (!event.ctrlKey || event.defaultPrevented || !this.canZoom(event.target))
+      return;
+    event.preventDefault();
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+    const unit =
+      event.deltaMode === 1
+        ? 16
+        : event.deltaMode === 2
+          ? this.container.clientHeight
+          : 1;
+    const delta = Math.max(-100, Math.min(100, event.deltaY * unit));
+    // Retain sub-percent deltas that PDF.js rounds when applying each scale.
+    this.wheelScale = Math.min(
+      5,
+      Math.max(
+        0.25,
+        (this.wheelScale ?? this.viewer.currentScale) * Math.exp(-delta / 100),
+      ),
+    );
+    this.zoomTo(this.wheelScale, [event.clientX, event.clientY]);
   };
   private onMouseUp = (event: MouseEvent) => {
     this.selecting = false;
@@ -369,11 +441,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
     }
   }
   async setTheme(theme: ReaderTheme) {
-    this.fitWidth = theme.zoom === "width";
-    if (this.pdf)
+    if (this.pdf && this.appliedZoom !== theme.zoom) {
+      this.fitWidth = theme.zoom === "width";
+      this.appliedZoom = theme.zoom;
+      this.wheelScale = undefined;
       this.viewer.currentScaleValue = this.fitWidth
         ? "page-width"
         : String(theme.zoom);
+    }
     this.container.dataset.theme = theme.mode;
     this.clearSelection();
   }
@@ -431,6 +506,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     }
   }
   async destroy() {
+    if (this.disposed) return;
     this.blocks.destroy();
     this.disposed = true;
     this.resize.disconnect();
@@ -439,6 +515,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     document.removeEventListener("pointerdown", this.onPointerDown);
     document.removeEventListener("selectionchange", this.onSelectionChange);
     document.removeEventListener("keydown", this.onKeyDown);
+    this.container.removeEventListener("wheel", this.onWheel);
     this.container.removeEventListener("scroll", this.clearSelection);
     this.clearSelection();
     this.viewer.setDocument(null as unknown as pdfjs.PDFDocumentProxy);

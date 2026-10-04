@@ -755,6 +755,46 @@
                 },
             },
         },
+      "/api/ai/models":
+        {
+          "get":
+            {
+              "summary": "List models reported by the installed Agent SDK without sending a prompt",
+              "parameters":
+                [
+                  {
+                    "in": "query",
+                    "name": "provider",
+                    "required": true,
+                    "schema":
+                      { "type": "string", "enum": ["codex", "claude", "kimi"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Models available through this SDK",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/AgentModel",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "400": { "description": "Unknown provider" },
+                  "502": { "description": "Agent model discovery failed" },
+                },
+            },
+        },
       "/api/ai/config":
         {
           "get":
@@ -1151,6 +1191,21 @@
                 },
               "required": ["url", "model", "hasKey"],
             },
+          "AgentModel":
+            {
+              "type": "object",
+              "required": ["id", "name", "description", "isDefault"],
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "isDefault": { "type": "boolean" },
+                  "aliases": { "type": "array", "items": { "type": "string" } },
+                },
+            },
+          "ReasoningEffort":
+            { "type": "string", "enum": ["low", "medium", "high", "max"] },
           "AIConfig":
             {
               "type": "object",
@@ -1161,6 +1216,17 @@
                     {
                       "type": "object",
                       "additionalProperties": { "type": "string" },
+                    },
+                  "efforts":
+                    {
+                      "type": "object",
+                      "description": "Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation.",
+                      "additionalProperties":
+                        {
+                          "type": "object",
+                          "additionalProperties":
+                            { "$ref": "#/components/schemas/ReasoningEffort" },
+                        },
                     },
                   "textAPI": { "$ref": "#/components/schemas/APIConnection" },
                   "imageAPI": { "$ref": "#/components/schemas/APIConnection" },

@@ -1,5 +1,29 @@
 # Agent 流式输出：前后端对接约定
 
+## 本轮联调冻结项 · 2026-10-05
+
+本节是已确认的 LobeHub 前端迁移与后端统一适配工作的固定边界。两方分别执行 [前端任务](./frontend-streaming-migration.md) 和 [后端任务](./backend-streaming-adapter.md)，内部实现可自行决定；修改下表必须先由协调会话确认并同步两方，不能单方改变字段、追加/替换语义或完成条件。
+
+| 项目 | 本轮固定约定 |
+| --- | --- |
+| 接口与认证 | `POST /api/documents/{documentId}/chat`；Reader 会话 Bearer token；JSON 请求。不是 Agent API Key。 |
+| 必填请求字段 | `provider: "codex" \| "claude" \| "kimi"`、`prompt: string`、`context: string`；context 可为空。 |
+| 可选请求字段 | `references: SourceReference[]`、`attachments: string[]`，省略等价于空数组；附件是当前文档块 ID。不新增 connectionId 或客户端模型/认证字段。 |
+| 事件与 JSON data | `status {status:"reading"\|"reading-image"}`、`delta {text:string}`、`fallback {message:string}`、`error {error:string}`、`done {ok:true}`。仍使用独立 SSE event 行，不另包 type/payload 外壳。 |
+| 正文 | delta 仅为新增原始文本，保留空格/换行；按到达顺序追加。不是累计全文、HTML 或 AST，不携带推理/工具/日志。 |
+| 成功终态 | 适配器确认成功且完整助手消息保存成功后，仅一次 done；最终全文从 messages 读取并替换临时回答，不再次追加。 |
+| 失败终态 | 流开始前非 200 JSON error；开始后仅一次 error，不再 done；终态后无正文。EOF 本身不代表成功。 |
+| 取消/断流 | AbortSignal 断开请求并停止上游；不承诺取消事件。保存竞态/终态丢失由 messages 核对；不自动重新 POST。 |
+| 备用策略 | 最多从选定 Agent 切换到已配置且验证通过的对应备用 API；只允许首个正文之前切换，先 fallback 再 delta。已显示正文、主动取消、总超时均不自动切换；不能自动轮询另两种 Agent。 |
+| 请求限制 | 维持当前 prompt 16,000 / context 64,000 UTF-8 字节、最多 4 个附件、回答 1MiB、3 分钟总超时及交互请求并发限制。 |
+| 暂不支持 | wire 版本字段/协商、序号、messageId、usage、断点续传、正文替换事件。不得依赖未实现字段。 |
+
+正常序列为 `status → delta+ → done`；备用序列为 `status → fallback → delta+ → done`；失败为 `status → [fallback] → delta* → error`，也可能在建立流前直接 HTTP 失败。SSE 注释可忽略；网络读取分片没有业务含义。主动取消或断网可能没有终态。
+
+**实现状态边界：** 下方正文记录 `2afe113` 已交付行为。迁移目标会将“首段前可用配置内备用”统一到普通文字及图片/Kimi 路径，并把已支持的备用 HTTP API 改为真实流；这两项由后端 B2 交付，不能在交付前视为已实现。事件形状始终不变，前端需兼容单个大 delta。其余冻结项延续当前协议；后端须补足终态后拒绝迟到事件等边界测试。
+
+联调至少共同覆盖成功、首段前备用、首段后失败、主动取消、无 done 断流、保存成功但同步查询失败。前端用相同事件 fixtures 回放，后端用 gated HTTP 测试验证首段在上游结束前送达。两方都不以“HTTP 200”或“已有文字”代替成功终态。
+
 后端负责调用 Agent、过滤协议事件、及时发送回答片段，并在成功结束后保存完整回答。前端负责接收 SSE、维护临时回答及渲染状态。Markdown、公式、代码块的渲染方式、刷新频率、自动滚动及取消后的展示由前端决定。
 
 本次后端工作位于 `backend/ai-streaming` 分支，开发 worktree 为 `Reader-backend`，通过 merge 合入 `main`。现有 HTTP 接口和事件名称保持兼容；这次没有修改前端渲染代码。

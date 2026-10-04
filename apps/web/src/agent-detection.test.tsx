@@ -13,6 +13,7 @@ vi.mock("./store", () => ({
   useReaderStore: () => ({
     theme: { appearance: "system" },
     setTheme: vi.fn(),
+    setAIConfig: vi.fn(),
   }),
 }));
 vi.mock("@reader/ui/components/dialog", () => {

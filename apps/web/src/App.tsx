@@ -343,9 +343,18 @@ export function App() {
                                   <FileText size={18} />
                                 )}
                               </div>
-                              <div className="cover-title">{doc.title}</div>
+                              <div className="cover-text">
+                                <div className="cover-title">{doc.title}</div>
+                                {doc.author && (
+                                  <div
+                                    className="cover-author"
+                                    title={doc.author}
+                                  >
+                                    {doc.author}
+                                  </div>
+                                )}
+                              </div>
                               <div className="cover-bottom">
-                                <span title={doc.author}>{doc.author}</span>
                                 <ArrowUpRight size={18} />
                               </div>
                               <div className="cover-decoration" />
@@ -400,17 +409,6 @@ export function App() {
                               />
                             </Button>
                           </div>
-                          <p className="book-author">
-                            <span
-                              className="book-author-name"
-                              title={doc.author}
-                            >
-                              {doc.author}
-                            </span>
-                            <span className="book-format">
-                              {doc.type.toUpperCase()}
-                            </span>
-                          </p>
                           <div className="book-progress">
                             <div
                               style={{

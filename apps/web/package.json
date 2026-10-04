@@ -7,7 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@lobehub/icons-static-svg": "1.95.1",
+    "@lobehub/icons": "5.23.0",
     "@reader/api": "workspace:*",
     "@reader/core": "workspace:*",
     "@reader/ui": "workspace:*",
