@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -9,18 +10,27 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const windows = process.platform === "win32";
-const app = windows
+const source = windows
   ? join(root, "release/win-unpacked")
   : join(
       root,
-      `release/mac${process.arch === "arm64" ? "-arm64" : ""}/Reader.app/Contents`,
+      `release/mac${process.arch === "arm64" ? "-arm64" : ""}/Reader.app`,
     );
+const temporary = await mkdtemp(join(tmpdir(), "reader-package-smoke-"));
+const isolated = join(temporary, windows ? "Reader" : "Reader.app");
+const app = windows ? isolated : join(isolated, "Contents");
 const resources = join(app, windows ? "resources" : "Resources");
 const electron = join(app, windows ? "Reader.exe" : "MacOS/Reader");
-const temporary = await mkdtemp(join(tmpdir(), "reader-package-smoke-"));
 let child;
 let stopped;
 try {
+  // Node resolves modules relative to the script, regardless of cwd. Relocate the
+  // whole app so a missing packaged dependency cannot fall back to the checkout.
+  await cp(source, isolated, {
+    recursive: true,
+    verbatimSymlinks: true,
+    mode: constants.COPYFILE_FICLONE,
+  });
   if (!windows) {
     const signature = spawnSync(
       "codesign",

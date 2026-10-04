@@ -43,7 +43,7 @@ pnpm package      # 构建 dmg/exe，并执行相同检查
 
 ## 自动检查的范围
 
-PR 和 `main` CI 在三个平台运行类型检查、Go/前端测试、应用构建及打包目录检查。Release 和手动试跑额外生成安装程序。检查脚本从临时工作目录启动包内 Electron 的 Node 模式，验证 PDF.js 渲染、原生 canvas 和真实 ONNX 推理；随后启动包内 Go 服务，检查 SQLite 初始化、loopback 绑定、API 鉴权和 Web 资源。macOS 还检查 ad-hoc 签名完整性。
+PR 和 `main` CI 在三个平台运行类型检查、Go/前端测试、应用构建及打包目录检查。Release 和手动试跑额外生成安装程序。检查脚本先将整个应用复制到仓库以外的临时目录，再启动包内 Electron 的 Node 模式。这样可以避免漏装依赖时意外使用源码目录中的依赖。检查内容包括 PDF.js 渲染、原生 canvas 和真实 ONNX 推理。随后启动包内 Go 服务，检查 SQLite 初始化、loopback 绑定、API 鉴权和 Web 资源。macOS 还检查 ad-hoc 签名完整性。
 
 这些检查不启动 GUI，也不代替 DMG 挂载、Windows 安装/卸载、Gatekeeper/SmartScreen 以及真实用户文档的人工验收。校验生成脚本检查三份产物的命名、数量、文件头/尾和大小，再计算哈希。
 
