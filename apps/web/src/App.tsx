@@ -206,7 +206,10 @@ export function App() {
           />
         ) : (
           <>
-            <aside className={`library-sidebar ${nav ? "" : "collapsed"}`}>
+            <aside
+              className={`library-sidebar ${nav ? "" : "collapsed"}`}
+              inert={!nav}
+            >
               <div className="window-drag-handle" aria-hidden="true" />
               <Button
                 className="w-full justify-between"
@@ -270,6 +273,7 @@ export function App() {
                     size="icon-sm"
                     variant="ghost"
                     aria-label="切换侧栏"
+                    aria-expanded={nav}
                     onClick={() => setNav(!nav)}
                   >
                     <PanelLeft />

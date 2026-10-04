@@ -35,6 +35,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private annotations: Annotation[] = [];
   private texts = new Map<number, string>();
   private resize: ResizeObserver;
+  private resizeTimer?: ReturnType<typeof setTimeout>;
   private fitWidth = true;
   private disposed = false;
   private blocks: PDFBlockOverlay;
@@ -83,8 +84,15 @@ export class PDFReaderAdapter implements ReaderAdapter {
     });
     this.resize = new ResizeObserver(() => {
       this.clearSelection();
-      if (this.pdf && this.fitWidth)
-        this.viewer.currentScaleValue = "page-width";
+      clearTimeout(this.resizeTimer);
+      const fit = () => {
+        if (!this.disposed && this.pdf && this.fitWidth)
+          this.viewer.currentScaleValue = "page-width";
+      };
+      // Refit once the sidebar settles, not on every animation frame.
+      if (container.closest("[data-toggling]"))
+        this.resizeTimer = setTimeout(fit, 100);
+      else fit();
     });
     this.resize.observe(container);
   }
@@ -426,6 +434,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blocks.destroy();
     this.disposed = true;
     this.resize.disconnect();
+    clearTimeout(this.resizeTimer);
     document.removeEventListener("mouseup", this.onMouseUp);
     document.removeEventListener("pointerdown", this.onPointerDown);
     document.removeEventListener("selectionchange", this.onSelectionChange);

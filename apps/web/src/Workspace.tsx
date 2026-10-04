@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -80,6 +80,7 @@ import {
 import {
   ResizablePanelGroup,
   ResizablePanel,
+  usePanelRef,
   ResizableHandle,
 } from "@reader/ui/components/resizable";
 import {
@@ -102,11 +103,13 @@ function IconButton({
   children,
   onClick,
   active = false,
+  expanded,
 }: {
   label: string;
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
+  expanded?: boolean;
 }) {
   return (
     <Tooltip>
@@ -114,6 +117,7 @@ function IconButton({
         render={
           <Button
             aria-label={label}
+            aria-expanded={expanded}
             size="icon-sm"
             variant={active ? "secondary" : "ghost"}
             onClick={onClick}
@@ -235,6 +239,33 @@ export function Workspace({
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [left, setLeft] = useState(true);
   const [right, setRight] = useState(true);
+  const leftPanel = usePanelRef();
+  const rightPanel = usePanelRef();
+  const panelGroup = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const group = panelGroup.current;
+    const changes = [
+      [leftPanel.current, left],
+      [rightPanel.current, right],
+    ] as const;
+    if (
+      !group ||
+      !changes.some(([panel, open]) => panel && panel.isCollapsed() === open)
+    )
+      return;
+    group.setAttribute("data-toggling", "");
+    for (const [panel, open] of changes) {
+      if (panel && panel.isCollapsed() === open) {
+        if (open) panel.expand();
+        else panel.collapse();
+      }
+    }
+    const timer = setTimeout(() => group.removeAttribute("data-toggling"), 240);
+    return () => {
+      clearTimeout(timer);
+      group.removeAttribute("data-toggling");
+    };
+  }, [left, right, leftPanel, rightPanel]);
   const [rightTab, setRightTab] = useState("ai");
   const [leftTab, setLeftTab] = useState("toc");
   const [query, setQuery] = useState("");
@@ -597,6 +628,7 @@ export function Workspace({
           <IconButton
             label="目录与搜索"
             active={left}
+            expanded={left}
             onClick={() => setLeft(!left)}
           >
             <PanelLeft />
@@ -740,6 +772,7 @@ export function Workspace({
           <IconButton
             label="AI 与笔记"
             active={right}
+            expanded={right}
             onClick={() => setRight(!right)}
           >
             <PanelRight />
@@ -749,87 +782,106 @@ export function Workspace({
           </IconButton>
         </div>
       </header>
-      <ResizablePanelGroup orientation="horizontal" className="reader-panels">
-        {left && (
-          <>
-            <ResizablePanel
-              id="navigation"
-              defaultSize="19%"
-              minSize="180px"
-              maxSize="30%"
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="reader-panels"
+        elementRef={panelGroup}
+        onLayoutChanged={(layout, { isUserInteraction }) => {
+          if (isUserInteraction) {
+            setLeft(layout.navigation > 0);
+            setRight(layout.assistant > 0);
+          }
+        }}
+        onPointerDownCapture={(event) => {
+          if (
+            (event.target as Element).closest('[data-slot="resizable-handle"]')
+          )
+            panelGroup.current?.removeAttribute("data-toggling");
+        }}
+      >
+        <ResizablePanel
+          id="navigation"
+          panelRef={leftPanel}
+          collapsible
+          collapsedSize={0}
+          style={{ overflow: "hidden" }}
+          defaultSize="19%"
+          minSize="180px"
+          maxSize="30%"
+        >
+          <aside className="reader-sidebar" data-open={left} inert={!left}>
+            <Tabs
+              value={leftTab}
+              onValueChange={(value) => setLeftTab(String(value))}
+              className="h-full gap-0"
             >
-              <aside className="reader-sidebar">
-                <Tabs
-                  value={leftTab}
-                  onValueChange={(value) => setLeftTab(String(value))}
-                  className="h-full gap-0"
-                >
-                  <TabsList className="panel-tabs">
-                    <TabsTrigger value="toc">
-                      <ListTree className="size-3.5" />
-                      目录
-                    </TabsTrigger>
-                    <TabsTrigger value="search">
-                      <Search className="size-3.5" />
-                      搜索
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="toc" className="min-h-0 flex-1">
-                    <ScrollArea className="h-full">
-                      <TOCTree items={toc} go={move} location={location} />
-                      {!toc.length && (
-                        <p className="p-4 text-xs text-muted-foreground">
-                          正在读取目录…
-                        </p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="search" className="min-h-0 flex-1 p-3">
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void search();
-                      }}
-                      className="flex gap-1"
-                    >
-                      <Input
-                        aria-label="搜索文档"
-                        placeholder="搜索文档内容…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        disabled={searching}
-                        aria-label="搜索"
-                      >
-                        <Search />
-                      </Button>
-                    </form>
-                    <p className="my-3 text-xs text-muted-foreground">
-                      {searching ? "正在搜索…" : `${results.length} 个结果`}
+              <TabsList className="panel-tabs">
+                <TabsTrigger value="toc">
+                  <ListTree className="size-3.5" />
+                  目录
+                </TabsTrigger>
+                <TabsTrigger value="search">
+                  <Search className="size-3.5" />
+                  搜索
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="toc" className="min-h-0 flex-1">
+                <ScrollArea className="h-full">
+                  <TOCTree items={toc} go={move} location={location} />
+                  {!toc.length && (
+                    <p className="p-4 text-xs text-muted-foreground">
+                      正在读取目录…
                     </p>
-                    <ScrollArea className="h-[calc(100%-90px)]">
-                      {results.map((result) => (
-                        <Button
-                          key={result.id}
-                          variant="ghost"
-                          className="search-result"
-                          onClick={() => move(result.location)}
-                        >
-                          <small>{locationLabel(result.location)}</small>
-                          <span>{result.excerpt}</span>
-                        </Button>
-                      ))}
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </aside>
-            </ResizablePanel>
-            <ResizableHandle />
-          </>
-        )}
+                  )}
+                </ScrollArea>
+              </TabsContent>
+              <TabsContent value="search" className="min-h-0 flex-1 p-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void search();
+                  }}
+                  className="flex gap-1"
+                >
+                  <Input
+                    aria-label="搜索文档"
+                    placeholder="搜索文档内容…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    disabled={searching}
+                    aria-label="搜索"
+                  >
+                    <Search />
+                  </Button>
+                </form>
+                <p className="my-3 text-xs text-muted-foreground">
+                  {searching ? "正在搜索…" : `${results.length} 个结果`}
+                </p>
+                <ScrollArea className="h-[calc(100%-90px)]">
+                  {results.map((result) => (
+                    <Button
+                      key={result.id}
+                      variant="ghost"
+                      className="search-result"
+                      onClick={() => move(result.location)}
+                    >
+                      <small>{locationLabel(result.location)}</small>
+                      <span>{result.excerpt}</span>
+                    </Button>
+                  ))}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </aside>
+        </ResizablePanel>
+        <ResizableHandle
+          disabled={!left}
+          className={left ? "" : "sidebar-handle-closed"}
+        />
         <ResizablePanel id="reading" minSize="30%">
           <div className="reading-pane" ref={readingPane}>
             <ReaderView
@@ -910,273 +962,276 @@ export function Workspace({
             )}
           </div>
         </ResizablePanel>
-        {right && (
-          <>
-            <ResizableHandle />
-            <ResizablePanel
-              id="assistant"
-              defaultSize="25%"
-              minSize="250px"
-              maxSize="45%"
+        <ResizableHandle
+          disabled={!right}
+          className={right ? "" : "sidebar-handle-closed"}
+        />
+        <ResizablePanel
+          id="assistant"
+          panelRef={rightPanel}
+          collapsible
+          collapsedSize={0}
+          style={{ overflow: "hidden" }}
+          defaultSize="25%"
+          minSize="250px"
+          maxSize="45%"
+        >
+          <aside className="assistant-sidebar" data-open={right} inert={!right}>
+            <Tabs
+              value={rightTab}
+              onValueChange={(value) => setRightTab(String(value))}
+              className="h-full gap-0"
             >
-              <aside className="assistant-sidebar">
-                <Tabs
-                  value={rightTab}
-                  onValueChange={(value) => setRightTab(String(value))}
-                  className="h-full gap-0"
-                >
-                  <TabsList className="panel-tabs">
-                    <TabsTrigger value="ai">
-                      <Sparkles className="size-3.5" />
-                      AI 助读
-                    </TabsTrigger>
-                    <TabsTrigger value="notes">
-                      <StickyNote className="size-3.5" />
-                      笔记<small>{annotations.length || ""}</small>
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="ai" className="ai-panel">
-                    <ScrollArea className="chat-scroll">
-                      <div className="chat-messages">
-                        {!messages.length && !sending ? (
-                          <div className="chat-empty">
-                            <p>
-                              选中原文，可以翻译、解释，
-                              <br />
-                              或引用多段文字一起讨论。
-                            </p>
-                            <Button
-                              variant="outline"
-                              className="suggestion"
-                              disabled={!adapter}
-                              onClick={() =>
-                                void send(
-                                  doc.type === "epub"
-                                    ? "请总结当前章节的核心内容，并列出值得思考的问题。"
-                                    : "请总结当前 PDF 页的主要内容，保留重要术语。",
-                                  [],
-                                  true,
-                                )
-                              }
-                            >
-                              <BookOpen />
-                              总结当前{doc.type === "epub" ? "章节" : "页面"}
-                              <ArrowLeft className="ml-auto rotate-180" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              className="suggestion"
-                              disabled={!adapter}
-                              onClick={() =>
-                                void send(
-                                  "请找出当前内容的核心概念，并用简明的语言解释。",
-                                  [],
-                                  true,
-                                )
-                              }
-                            >
-                              <MessageSquare />
-                              解释核心概念
-                              <ArrowLeft className="ml-auto rotate-180" />
-                            </Button>
-                            <p className="privacy-note">
-                              对话发送所选文字或当前
-                              {doc.type === "epub" ? "章节" : "页面"}给 AI。PDF
-                              图表按主 Agent 设置自动预处理。
-                            </p>
-                          </div>
-                        ) : (
-                          messages.map((message) => (
-                            <div
-                              className={`chat-message ${message.role}`}
-                              key={message.id}
-                            >
-                              <span className="message-author">
-                                {message.role === "user" ? "你" : "Reader AI"}
-                              </span>
-                              <div>{message.content}</div>
-                              {!!message.attachments?.length &&
-                                imageAttachments(message.attachments)}
-                              <SourceReferences
-                                message={message}
-                                toc={toc}
-                                adapter={adapter}
-                                onNavigate={visitReference}
-                              />
-                            </div>
-                          ))
-                        )}
-                        {sending && (
-                          <div className="chat-message assistant">
-                            <span className="message-author">
-                              Reader AI <span className="pulse-dot" />
-                            </span>
-                            <div>{stream || "正在阅读上下文…"}</div>
-                          </div>
-                        )}
-                        <div ref={messageEnd} />
-                      </div>
-                    </ScrollArea>
-                    <div className="chat-compose">
-                      {quotes.length > 0 && (
-                        <div className="quote-chips">
-                          {quotes.map((q, i) => (
-                            <div key={i}>
-                              <Quote size={12} />
-                              <span>{q.text}</span>
-                              <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                aria-label="移除引用"
-                                onClick={() =>
-                                  setQuotes((items) =>
-                                    items.filter((_, j) => j !== i),
-                                  )
-                                }
-                              >
-                                <X />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {!!images.length && imageAttachments(images, true)}
-                      <Textarea
-                        ref={composeInput}
-                        aria-label="向 AI 提问"
-                        placeholder="问一个问题，或引用选中的文字…"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                            e.preventDefault();
-                            void send();
+              <TabsList className="panel-tabs">
+                <TabsTrigger value="ai">
+                  <Sparkles className="size-3.5" />
+                  AI 助读
+                </TabsTrigger>
+                <TabsTrigger value="notes">
+                  <StickyNote className="size-3.5" />
+                  笔记<small>{annotations.length || ""}</small>
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="ai" className="ai-panel">
+                <ScrollArea className="chat-scroll">
+                  <div className="chat-messages">
+                    {!messages.length && !sending ? (
+                      <div className="chat-empty">
+                        <p>
+                          选中原文，可以翻译、解释，
+                          <br />
+                          或引用多段文字一起讨论。
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              doc.type === "epub"
+                                ? "请总结当前章节的核心内容，并列出值得思考的问题。"
+                                : "请总结当前 PDF 页的主要内容，保留重要术语。",
+                              [],
+                              true,
+                            )
                           }
-                        }}
-                      />
-                      <div className="compose-footer">
-                        <Select
-                          value={provider}
-                          onValueChange={(value) => {
-                            if (value) setProvider(value);
-                          }}
                         >
-                          <SelectTrigger
-                            size="sm"
-                            className="min-w-36 w-auto border-0 shadow-none"
-                            aria-label="选择 AI 助手"
-                          >
-                            <SelectValue>
-                              <ProviderIdentity provider={provider} />
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="codex">
-                              <ProviderIdentity provider="codex" />
-                            </SelectItem>
-                            <SelectItem value="claude">
-                              <ProviderIdentity provider="claude" />
-                            </SelectItem>
-                            <SelectItem value="kimi">
-                              <ProviderIdentity provider="kimi" />
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {sending ? (
+                          <BookOpen />
+                          总结当前{doc.type === "epub" ? "章节" : "页面"}
+                          <ArrowLeft className="ml-auto rotate-180" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="suggestion"
+                          disabled={!adapter}
+                          onClick={() =>
+                            void send(
+                              "请找出当前内容的核心概念，并用简明的语言解释。",
+                              [],
+                              true,
+                            )
+                          }
+                        >
+                          <MessageSquare />
+                          解释核心概念
+                          <ArrowLeft className="ml-auto rotate-180" />
+                        </Button>
+                        <p className="privacy-note">
+                          对话发送所选文字或当前
+                          {doc.type === "epub" ? "章节" : "页面"}给 AI。PDF
+                          图表按主 Agent 设置自动预处理。
+                        </p>
+                      </div>
+                    ) : (
+                      messages.map((message) => (
+                        <div
+                          className={`chat-message ${message.role}`}
+                          key={message.id}
+                        >
+                          <span className="message-author">
+                            {message.role === "user" ? "你" : "Reader AI"}
+                          </span>
+                          <div>{message.content}</div>
+                          {!!message.attachments?.length &&
+                            imageAttachments(message.attachments)}
+                          <SourceReferences
+                            message={message}
+                            toc={toc}
+                            adapter={adapter}
+                            onNavigate={visitReference}
+                          />
+                        </div>
+                      ))
+                    )}
+                    {sending && (
+                      <div className="chat-message assistant">
+                        <span className="message-author">
+                          Reader AI <span className="pulse-dot" />
+                        </span>
+                        <div>{stream || "正在阅读上下文…"}</div>
+                      </div>
+                    )}
+                    <div ref={messageEnd} />
+                  </div>
+                </ScrollArea>
+                <div className="chat-compose">
+                  {quotes.length > 0 && (
+                    <div className="quote-chips">
+                      {quotes.map((q, i) => (
+                        <div key={i}>
+                          <Quote size={12} />
+                          <span>{q.text}</span>
                           <Button
-                            size="icon-sm"
-                            variant="secondary"
-                            aria-label="停止回答"
-                            onClick={() => abort.current?.abort()}
-                          >
-                            <Square className="size-3" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="icon-sm"
-                            aria-label="发送问题"
-                            disabled={
-                              !adapter || (!prompt.trim() && !images.length)
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label="移除引用"
+                            onClick={() =>
+                              setQuotes((items) =>
+                                items.filter((_, j) => j !== i),
+                              )
                             }
-                            onClick={() => void send()}
                           >
-                            <Send className="size-3.5" />
+                            <X />
                           </Button>
-                        )}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  </TabsContent>
-                  <TabsContent value="notes" className="notes-panel">
-                    <div className="notes-heading">
-                      <span>{annotations.length} 条记录</span>
-                      <Button
+                  )}
+                  {!!images.length && imageAttachments(images, true)}
+                  <Textarea
+                    ref={composeInput}
+                    aria-label="向 AI 提问"
+                    placeholder="问一个问题，或引用选中的文字…"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                  />
+                  <div className="compose-footer">
+                    <Select
+                      value={provider}
+                      onValueChange={(value) => {
+                        if (value) setProvider(value);
+                      }}
+                    >
+                      <SelectTrigger
                         size="sm"
-                        variant="ghost"
-                        disabled={!annotations.length}
-                        onClick={exportNotes}
+                        className="min-w-36 w-auto border-0 shadow-none"
+                        aria-label="选择 AI 助手"
                       >
-                        <Download />
-                        导出
+                        <SelectValue>
+                          <ProviderIdentity provider={provider} />
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="codex">
+                          <ProviderIdentity provider="codex" />
+                        </SelectItem>
+                        <SelectItem value="claude">
+                          <ProviderIdentity provider="claude" />
+                        </SelectItem>
+                        <SelectItem value="kimi">
+                          <ProviderIdentity provider="kimi" />
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {sending ? (
+                      <Button
+                        size="icon-sm"
+                        variant="secondary"
+                        aria-label="停止回答"
+                        onClick={() => abort.current?.abort()}
+                      >
+                        <Square className="size-3" />
                       </Button>
-                    </div>
-                    <ScrollArea className="min-h-0 flex-1">
-                      <div className="notes-list">
-                        {!annotations.length && (
-                          <div className="notes-empty">
-                            <StickyNote />
-                            <p>暂无笔记</p>
-                            <small>选中文字添加高亮、下划线或笔记。</small>
-                          </div>
-                        )}
-                        {annotations.map((a) => (
-                          <article className="note-card" key={a.id}>
-                            <div>
-                              <Badge variant="outline">
-                                {
-                                  {
-                                    highlight: "高亮",
-                                    underline: "下划线",
-                                    note: "笔记",
-                                    bookmark: "书签",
-                                  }[a.kind]
-                                }
-                              </Badge>
-                              <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                aria-label="删除记录"
-                                onClick={() => {
-                                  void api
-                                    .removeAnnotation(doc.id, a.id)
-                                    .then(() =>
-                                      setAnnotations((items) =>
-                                        items.filter((i) => i.id !== a.id),
-                                      ),
-                                    )
-                                    .catch((e) => toast.error(e.message));
-                                }}
-                              >
-                                <Trash2 />
-                              </Button>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              className="note-quote"
-                              onClick={() => move(a.location)}
-                            >
-                              {a.quote || locationLabel(a.location)}
-                            </Button>
-                            {a.note && <p>{a.note}</p>}
-                          </article>
-                        ))}
+                    ) : (
+                      <Button
+                        size="icon-sm"
+                        aria-label="发送问题"
+                        disabled={
+                          !adapter || (!prompt.trim() && !images.length)
+                        }
+                        onClick={() => void send()}
+                      >
+                        <Send className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="notes" className="notes-panel">
+                <div className="notes-heading">
+                  <span>{annotations.length} 条记录</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!annotations.length}
+                    onClick={exportNotes}
+                  >
+                    <Download />
+                    导出
+                  </Button>
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="notes-list">
+                    {!annotations.length && (
+                      <div className="notes-empty">
+                        <StickyNote />
+                        <p>暂无笔记</p>
+                        <small>选中文字添加高亮、下划线或笔记。</small>
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </aside>
-            </ResizablePanel>
-          </>
-        )}
+                    )}
+                    {annotations.map((a) => (
+                      <article className="note-card" key={a.id}>
+                        <div>
+                          <Badge variant="outline">
+                            {
+                              {
+                                highlight: "高亮",
+                                underline: "下划线",
+                                note: "笔记",
+                                bookmark: "书签",
+                              }[a.kind]
+                            }
+                          </Badge>
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label="删除记录"
+                            onClick={() => {
+                              void api
+                                .removeAnnotation(doc.id, a.id)
+                                .then(() =>
+                                  setAnnotations((items) =>
+                                    items.filter((i) => i.id !== a.id),
+                                  ),
+                                )
+                                .catch((e) => toast.error(e.message));
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          className="note-quote"
+                          onClick={() => move(a.location)}
+                        >
+                          {a.quote || locationLabel(a.location)}
+                        </Button>
+                        {a.note && <p>{a.note}</p>}
+                      </article>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </aside>
+        </ResizablePanel>
       </ResizablePanelGroup>
 
       {previewImage && (
