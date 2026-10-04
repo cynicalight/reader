@@ -111,9 +111,14 @@ export interface Provider {
   authenticated: boolean;
   status: string;
 }
+export interface SourceReference {
+  text: string;
+  location: DocumentLocation;
+  kind?: "selection" | "section";
+}
 export interface Message {
   context?: string;
-  references?: ReaderSelection[];
+  references?: SourceReference[];
   id: string;
   documentId: string;
   role: "user" | "assistant";

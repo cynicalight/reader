@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -36,6 +36,7 @@ import {
   type Document as ReaderDocument,
   type DocumentLocation,
   type Message,
+  type SourceReference,
   type ReaderAdapter,
   type ReaderSelection,
   type TOCItem,
@@ -86,6 +87,9 @@ import {
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
 import { ProviderIdentity } from "./ProviderIdentity";
+import { SourceReferences } from "./SourceReferences";
+import { contextReferences } from "./references";
+import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
@@ -187,6 +191,34 @@ export function Workspace({
   const { setTheme } = useReaderStore();
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
+  const referenceNavigation = useMemo(
+    () => (adapter ? new ReferenceNavigation(adapter) : undefined),
+    [adapter],
+  );
+  const [returnLocation, setReturnLocation] = useState<DocumentLocation>();
+  const [referenceBusy, setReferenceBusy] = useState(false);
+  const visitReference = async (target: DocumentLocation) => {
+    if (!referenceNavigation || referenceNavigation.busy) return;
+    setReferenceBusy(true);
+    try {
+      await referenceNavigation.visit(target);
+      setReturnLocation(referenceNavigation.origin);
+    } finally {
+      setReferenceBusy(false);
+    }
+  };
+  const returnFromReference = async () => {
+    if (!referenceNavigation) return;
+    setReferenceBusy(true);
+    try {
+      await referenceNavigation.back();
+      setReturnLocation(referenceNavigation.origin);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setReferenceBusy(false);
+    }
+  };
   const [toc, setTOC] = useState<TOCItem[]>([]);
   const [location, setLocation] = useState<DocumentLocation | undefined>(
     doc.progress,
@@ -319,7 +351,20 @@ export function Workspace({
           (s, i) => `[选区 ${i + 1} · ${locationLabel(s.location)}]\n${s.text}`,
         )
         .join("\n\n");
-      if (useSection || !context) context = (await adapter?.getContext()) || "";
+      let references: SourceReference[] = selected.map(
+        ({ text, location }) => ({
+          text,
+          location,
+          kind: "selection",
+        }),
+      );
+      if (useSection || !context) {
+        const sourceLocation = adapter?.getLocation();
+        context = (await adapter?.getContext()) || "";
+        references = sourceLocation
+          ? contextReferences(context.slice(0, 21000), sourceLocation)
+          : [];
+      }
       if (controller.signal.aborted) return;
       setMessages((items) => [
         ...items,
@@ -328,6 +373,8 @@ export function Workspace({
           documentId: doc.id,
           role: "user",
           content: question,
+          context: context.slice(0, 21000),
+          references,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -339,7 +386,7 @@ export function Workspace({
         context.slice(0, 21000),
         controller.signal,
         (text) => setStream((s) => s + text),
-        selected.map(({ text, location }) => ({ text, location })),
+        references,
       );
       setMessages(await api.messages(doc.id));
       setStream("");
@@ -391,6 +438,17 @@ export function Workspace({
           <Badge variant="secondary">{doc.type.toUpperCase()}</Badge>
         </div>
         <div className="toolbar-actions">
+          {returnLocation && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={referenceBusy}
+              onClick={() => void returnFromReference()}
+            >
+              <ArrowLeft className="size-3" />
+              返回阅读位置
+            </Button>
+          )}
           <div className="page-navigation">
             <IconButton
               label="上一页"
@@ -824,29 +882,12 @@ export function Workspace({
                                 {message.role === "user" ? "你" : "Reader AI"}
                               </span>
                               <div>{message.content}</div>
-                              {message.context && (
-                                <Popover>
-                                  <PopoverTrigger
-                                    render={
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="mt-2 h-6 text-[10px]"
-                                      />
-                                    }
-                                  >
-                                    <Quote className="size-3" />
-                                    引用原文
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-80">
-                                    <ScrollArea className="max-h-72">
-                                      <p className="whitespace-pre-wrap text-xs leading-6">
-                                        {message.context}
-                                      </p>
-                                    </ScrollArea>
-                                  </PopoverContent>
-                                </Popover>
-                              )}
+                              <SourceReferences
+                                message={message}
+                                toc={toc}
+                                adapter={adapter}
+                                onNavigate={visitReference}
+                              />
                             </div>
                           ))
                         )}

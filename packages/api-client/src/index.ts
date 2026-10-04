@@ -8,7 +8,7 @@ import type {
   Provider,
   Message,
   ReaderTheme,
-  ReaderSelection,
+  SourceReference,
   Processing,
   PDFBlock,
   AIConfig,
@@ -117,7 +117,7 @@ export async function chat(
   context: string,
   signal: AbortSignal,
   onDelta: (text: string) => void,
-  references: ReaderSelection[] = [],
+  references: SourceReference[] = [],
 ) {
   const response = await fetch(`/api/documents/${id}/chat`, {
     method: "POST",

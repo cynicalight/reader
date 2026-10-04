@@ -1,4 +1,5 @@
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
+import { pdfQuotePoint } from "./pdf-reference-location";
 import { PDFBlockOverlay } from "./pdf-blocks";
 import * as pdfjs from "pdfjs-dist";
 import {
@@ -149,16 +150,65 @@ export class PDFReaderAdapter implements ReaderAdapter {
           children: [],
         }));
   }
-  getLocation() {
-    return this.location;
+  getLocation(): PDFLocation {
+    const page = this.viewer.getPageView(this.location.page - 1)?.div as
+      HTMLElement | undefined;
+    const bounds = page?.getBoundingClientRect();
+    if (!bounds?.height || !bounds.width)
+      return { type: "pdf", page: this.location.page };
+    const viewport = this.container.getBoundingClientRect();
+    return {
+      type: "pdf",
+      page: this.location.page,
+      x: Math.max(0, Math.min(1, (viewport.left - bounds.left) / bounds.width)),
+      y: Math.max(0, Math.min(1, (viewport.top - bounds.top) / bounds.height)),
+    };
   }
   async goTo(location: DocumentLocation) {
     if (location.type !== "pdf" || !this.pdf) return;
     this.clearSelection();
     const page = Math.max(1, Math.min(this.pdf.numPages, location.page));
+    const pdfPage = await this.pdf.getPage(page);
+    if (this.disposed) return;
+    const viewport = pdfPage.getViewport({ scale: 1 });
+    let point =
+      location.rects?.[0] ||
+      (location.x !== undefined || location.y !== undefined
+        ? { x: location.x ?? 0, y: location.y ?? 0 }
+        : undefined);
+    if (!point && location.quote) {
+      const content = await pdfPage.getTextContent();
+      point = pdfQuotePoint(
+        content.items.filter((item) => "str" in item),
+        location.quote,
+        viewport,
+      );
+    }
+    if (this.disposed) return;
     this.viewer.currentPageNumber = page;
-    this.viewer.scrollPageIntoView({ pageNumber: page });
+    const coordinates = point
+      ? viewport.convertToPdfPoint(
+          point.x * viewport.width,
+          point.y * viewport.height,
+        )
+      : undefined;
+    this.viewer.scrollPageIntoView({
+      pageNumber: page,
+      ...(coordinates
+        ? {
+            destArray: [
+              null,
+              { name: "XYZ" },
+              coordinates[0],
+              coordinates[1],
+              null,
+            ],
+            ignoreDestinationZoom: true,
+          }
+        : {}),
+    });
     this.location = { ...location, page };
+    this.events.location(this.location, page / this.pdf.numPages);
   }
   async next() {
     await this.goTo({ type: "pdf", page: this.location.page + 1 });

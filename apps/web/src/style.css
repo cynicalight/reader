@@ -1146,3 +1146,59 @@ kbd {
   .library-topbar {
   padding-left: 104px;
 }
+
+/* A bounded list of source excerpts; the document remains the full-text view. */
+.reference-popover {
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(440px, var(--available-height, 70vh));
+  overflow: hidden;
+  gap: 6px;
+}
+.reference-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.reference-card {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  text-align: left;
+  white-space: normal;
+  background: var(--muted);
+  transition: background-color 120ms ease;
+}
+.reference-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.reference-card-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.reference-card-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+}
