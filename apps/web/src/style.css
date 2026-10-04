@@ -720,7 +720,7 @@ kbd {
   min-height: 0;
 }
 .chat-messages {
-  padding: 0 18px 15px;
+  padding: 0 18px;
 }
 .chat-empty > p:first-child {
   font-size: 11px;
@@ -753,6 +753,9 @@ kbd {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.chat-message.assistant {
+  padding-bottom: 0;
+}
 .chat-message-actions {
   display: flex;
   align-items: center;
@@ -761,6 +764,19 @@ kbd {
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+.chat-message.assistant:hover .chat-message-actions,
+.chat-message.assistant:focus-within .chat-message-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .chat-message-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .chat-message-actions button {
   color: inherit;
