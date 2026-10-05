@@ -22,8 +22,6 @@ jobs:
         include:
           - os: macos-15
             target: mac-arm64
-          - os: macos-15-intel
-            target: mac-x64
           - os: windows-2022
             target: win-x64
     runs-on: ${{ matrix.os }}

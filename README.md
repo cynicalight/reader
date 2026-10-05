@@ -6,7 +6,7 @@ A local-first EPUB / PDF reader for books and papers, with annotations and AI as
 
 Reader treats EPUB and PDF as core document formats. It provides a shared library, table of contents, annotation tools, and chat interface, with Readium and PDF.js powering their respective reading experiences. Documents, reading progress, and notes stay on your machine. AI features use an already authenticated Claude Code or Codex CLI, without requiring a separate API key in Reader.
 
-Run from source, or use installers built by CI after a Release is published: DMG for Apple Silicon / Intel Macs and EXE for Windows x64. Installers have no developer certificate and may require approval in your system security settings. See the [packaging and release guide (Chinese)](docs/releasing.md) for the workflow and validation scope. Windows installation still requires manual acceptance; Linux installers are not provided.
+Run from source, or use installers built by CI after a Release is published: DMG for Apple Silicon Macs and EXE for Windows x64. Installers have no developer certificate and may require approval in your system security settings. See the [packaging and release guide (Chinese)](docs/releasing.md) for the workflow and validation scope. Windows installation still requires manual acceptance; Linux installers are not provided.
 
 ## Features
 

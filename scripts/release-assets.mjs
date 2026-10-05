@@ -8,7 +8,6 @@ const { version } = JSON.parse(
 );
 const expected = [
   `Reader-${version}-mac-arm64.dmg`,
-  `Reader-${version}-mac-x64.dmg`,
   `Reader-${version}-win-x64.exe`,
 ].sort();
 const actual = (await readdir("release"))
@@ -17,7 +16,7 @@ const actual = (await readdir("release"))
 assert.deepEqual(
   actual,
   expected,
-  "Release must contain exactly all three installers",
+  "Release must contain exactly the Apple Silicon Mac and Windows x64 installers",
 );
 const checksums = [];
 for (const file of expected) {
