@@ -644,6 +644,56 @@ kbd {
   pointer-events: none;
   z-index: 5;
   mix-blend-mode: multiply;
+  background: var(--annotation-color);
+}
+.reader-highlight[data-kind="underline"] {
+  background: transparent;
+  border-bottom: 2px solid var(--annotation-color);
+}
+.reader-highlight[data-hovered] {
+  background: var(--annotation-color);
+  opacity: 0.48;
+}
+.reader-highlight[data-kind="underline"][data-hovered] {
+  background: color-mix(in srgb, var(--annotation-color) 30%, transparent);
+}
+.annotation-actions {
+  width: 280px;
+  max-width: 100%;
+}
+.annotation-actions-heading,
+.annotation-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.annotation-actions-heading {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.annotation-actions-list {
+  max-height: 200px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.annotation-action {
+  padding: 6px 0;
+}
+.annotation-action > div {
+  min-width: 0;
+}
+.annotation-action small {
+  color: var(--muted-foreground);
+}
+.annotation-action p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.annotation-action button {
+  flex-shrink: 0;
 }
 .reader-loading {
   position: absolute;

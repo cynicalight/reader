@@ -66,6 +66,10 @@ export interface ReaderSelection {
   text: string;
   location: DocumentLocation;
 }
+export interface ReaderAnnotationTarget {
+  ids: string[];
+  anchor: SelectionAnchor;
+}
 export type Appearance = "light" | "dark" | "system";
 export interface ReaderTheme {
   appearance?: Appearance;
@@ -89,6 +93,7 @@ export const defaultTheme: ReaderTheme = {
 };
 export type PDFBlockAction = "attach" | "preview" | "explain";
 export interface ReaderEvents {
+  annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;

@@ -49,6 +49,9 @@ export function ReaderView({
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
       engine = new Engine(container, {
+        annotation: (target) => {
+          if (!disposed) latest.current.events.annotation?.(target);
+        },
         zoom: (zoom) => {
           if (!disposed) latest.current.events.zoom?.(zoom);
         },

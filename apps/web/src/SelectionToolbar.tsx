@@ -33,10 +33,12 @@ export function SelectionToolbar({
   anchor,
   pane,
   children,
+  label = "选中文字操作",
 }: {
   anchor: SelectionAnchor;
   pane: RefObject<HTMLDivElement | null>;
   children: ReactNode;
+  label?: string;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number }>();
@@ -67,7 +69,7 @@ export function SelectionToolbar({
       ref={bar}
       className="selection-bar"
       role="toolbar"
-      aria-label="选中文字操作"
+      aria-label={label}
       style={{ ...position, visibility: position ? "visible" : "hidden" }}
       onMouseDown={(event) => event.preventDefault()}
     >

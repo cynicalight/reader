@@ -38,6 +38,7 @@ import {
   type SourceReference,
   type ReaderAdapter,
   type ReaderSelection,
+  type ReaderAnnotationTarget,
   type TOCItem,
   type SearchResult,
   type ReaderTheme,
@@ -89,6 +90,8 @@ import { ImagePreview, imageLabel } from "./ImagePreview";
 import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
+import { useAnnotationDeletion } from "./useAnnotationDeletion";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -231,6 +234,19 @@ export function Workspace({
   );
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotationTarget, setAnnotationTarget] =
+    useState<ReaderAnnotationTarget | null>(null);
+  const { deleting, remove: removeAnnotation } = useAnnotationDeletion(
+    doc.id,
+    (id) => {
+      setAnnotations((items) => items.filter((item) => item.id !== id));
+      setAnnotationTarget((target) => {
+        if (!target) return null;
+        const ids = target.ids.filter((item) => item !== id);
+        return ids.length ? { ...target, ids } : null;
+      });
+    },
+  );
   const [left, setLeft] = useState(true);
   const [right, setRight] = useState(true);
   const leftPanel = usePanelRef();
@@ -355,6 +371,7 @@ export function Workspace({
         color: "#e6b94c",
       });
       setAnnotations((items) => [...items, a]);
+      adapter?.clearSelection();
       toast.success(kind === "bookmark" ? "已添加书签" : "批注已保存");
       setNoteOpen(false);
       setNoteSelection(null);
@@ -893,12 +910,25 @@ export function Workspace({
                 setTOC(items);
               }}
               events={{
+                annotation: setAnnotationTarget,
                 zoom: (zoom) => setTheme({ zoom }),
                 location: saveLocation,
                 selection: setSelection,
                 blockAction,
               }}
             />
+            {!selection && annotationTarget && (
+              <AnnotationToolbar
+                annotations={annotations.filter((a) =>
+                  annotationTarget.ids.includes(a.id),
+                )}
+                anchor={annotationTarget.anchor}
+                pane={readingPane}
+                deleting={deleting}
+                onDelete={(id) => void removeAnnotation(id)}
+                onClose={() => setAnnotationTarget(null)}
+              />
+            )}
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
                 <Badge variant="secondary">
@@ -1158,29 +1188,14 @@ export function Workspace({
                       <article className="note-card" key={a.id}>
                         <div>
                           <Badge variant="outline">
-                            {
-                              {
-                                highlight: "高亮",
-                                underline: "下划线",
-                                note: "笔记",
-                                bookmark: "书签",
-                              }[a.kind]
-                            }
+                            {annotationLabels[a.kind]}
                           </Badge>
                           <Button
                             size="icon-xs"
                             variant="ghost"
                             aria-label="删除记录"
-                            onClick={() => {
-                              void api
-                                .removeAnnotation(doc.id, a.id)
-                                .then(() =>
-                                  setAnnotations((items) =>
-                                    items.filter((i) => i.id !== a.id),
-                                  ),
-                                )
-                                .catch((e) => toast.error(e.message));
-                            }}
+                            disabled={deleting.has(a.id)}
+                            onClick={() => void removeAnnotation(a.id)}
                           >
                             <Trash2 />
                           </Button>
