@@ -1,0 +1,403 @@
+{
+  "block": {
+    "id": "p6-b4",
+    "page": 6,
+    "label": "text",
+    "bounds": {
+      "x": 0.08295678780748954,
+      "y": 0.40110825047348486,
+      "width": 0.40211911918291077,
+      "height": 0.15351894648388176
+    },
+    "text": "(2) Merging record-local graphs: If the version order can be de- termined for all records in the write set while keeping the graph acyclic, 𝑡 then merges the record-local graph for each record in 𝑖 the read set into its transaction-local graph. Each time 𝑡 merges a 𝑖 record-local graph, it checks the acyclicity of the resulting graph and identifies all its followers. If a follower of 𝑡 exists, 𝑖 𝑡 merges 𝑖 record-local graphs of the records read or written by that follower and repeats identifying its followers and merging the record-local graphs. If no cycle is found in 𝑆𝐺 ( 𝑠, 𝑡 ) , which is obtained by merg- 𝑖 ing all graphs on records read or written by all followers, 𝑡 proceeds 𝑖 to the finalizing phase for committing."
+  },
+  "sentences": [
+    {
+      "source": "(2) Merging record-local graphs: If the version order can be de- termined for all records in the write set while keeping the graph acyclic, 𝑡 then merges the record-local graph for each record in 𝑖 the read set into its transaction-local graph.",
+      "target": "(2) 合并记录局部图：如果能够为写集合中的所有记录确定版本顺序，同时保持图无环，事务 𝑡 就将读集合中每条记录的记录局部图合并到自己的事务局部图中；原文中的下标 𝑖 随 OCR 排列分散。"
+    },
+    {
+      "source": "Each time 𝑡 merges a 𝑖 record-local graph, it checks the acyclicity of the resulting graph and identifies all its followers.",
+      "target": "每合并一个记录局部图，事务 𝑡 都会检查所得图是否无环，并识别自己的所有后继事务；原文中的下标 𝑖 随 OCR 排列分散。"
+    },
+    {
+      "source": "If a follower of 𝑡 exists, 𝑖 𝑡 merges 𝑖 record-local graphs of the records read or written by that follower and repeats identifying its followers and merging the record-local graphs.",
+      "target": "如果 𝑡 存在后继事务，就继续合并该后继事务所读写记录的记录局部图，并重复识别后继事务和合并记录局部图的过程；原文中的下标 𝑖 随 OCR 排列分散。"
+    },
+    {
+      "source": "If no cycle is found in 𝑆𝐺 ( 𝑠, 𝑡 ) , which is obtained by merg- 𝑖 ing all graphs on records read or written by all followers, 𝑡 proceeds 𝑖 to the finalizing phase for committing.",
+      "target": "如果合并所有后继事务所读写记录的图后得到的 𝑆𝐺 ( 𝑠, 𝑡 ) 中没有环，事务 𝑡 就进入最终处理阶段，以完成提交；原文中的下标 𝑖 随 OCR 排列分散。"
+    }
+  ],
+  "runs": [
+    {
+      "text": "cannot be read by other transactions at this point) into the version",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.3698863636363636,
+        "width": 0.39256642666666663,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "list of the record; and (1c)",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.38372348484848484,
+        "width": 0.1521910585411765,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.24322875816993464,
+        "y": 0.3787761151515151,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.24776470588235294,
+        "y": 0.3814272417929293,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "merges the record-local graph into its",
+      "bounds": {
+        "x": 0.2567156862745098,
+        "y": 0.38372348484848484,
+        "width": 0.22375475388235302,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "transaction-local graph.",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.39756060606060606,
+        "width": 0.14230497254901958,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "(2) Merging record-local graphs: If the version order can be de-",
+      "bounds": {
+        "x": 0.10418464052287582,
+        "y": 0.4113977272727273,
+        "width": 0.3787598994823531,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "termined for all records in the write set while keeping the graph",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.4252348484848485,
+        "width": 0.39256393600000017,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "acyclic,",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.4390719696969697,
+        "width": 0.044876832000000005,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.13644934640522877,
+        "y": 0.43412459999999997,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.14098366013071897,
+        "y": 0.4367757266414142,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "then merges the record-local graph for each record in",
+      "bounds": {
+        "x": 0.15046078431372548,
+        "y": 0.4390719696969697,
+        "width": 0.33000835200000017,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "the read set into its transaction-local graph. Each time",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.45290909090909093,
+        "width": 0.32262285138823543,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.4136633986928105,
+        "y": 0.4479617212121212,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.41819771241830067,
+        "y": 0.4506128478535354,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "merges a",
+      "bounds": {
+        "x": 0.4271535947712418,
+        "y": 0.45290909090909093,
+        "width": 0.053305951247058794,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "record-local graph, it checks the acyclicity of the resulting graph",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.46674621212121215,
+        "width": 0.3925566398117648,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "and identifies all its followers. If a follower of",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.48058333333333336,
+        "width": 0.2770468160000002,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.3682401960784314,
+        "y": 0.4756359636363636,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.37277614379084967,
+        "y": 0.47828709027777777,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "exists,",
+      "bounds": {
+        "x": 0.38188398692810455,
+        "y": 0.48058333333333336,
+        "width": 0.03761404799999999,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.42279738562091507,
+        "y": 0.4756359636363636,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.4273316993464052,
+        "y": 0.47828709027777777,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "merges",
+      "bounds": {
+        "x": 0.4364411764705882,
+        "y": 0.48058333333333336,
+        "width": 0.04402502400000001,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "record-local graphs of the records read or written by that follower",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.4944204545454546,
+        "width": 0.3928365321411769,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "and repeats identifying its followers and merging the record-local",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.5082575757575758,
+        "width": 0.3925609911529412,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "graphs. If no cycle is found in",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.5220934343434344,
+        "width": 0.17398976878431371,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑆𝐺",
+      "bounds": {
+        "x": 0.2651160130718954,
+        "y": 0.5171460646464646,
+        "width": 0.016819325490196074,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "(",
+      "bounds": {
+        "x": 0.2839264705882353,
+        "y": 0.5140893373737373,
+        "width": 0.004878776470588236,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑠, 𝑡",
+      "bounds": {
+        "x": 0.28880555555555554,
+        "y": 0.5171460646464646,
+        "width": 0.01555934117647058,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.30440522875816994,
+        "y": 0.5197971912878788,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": ")",
+      "bounds": {
+        "x": 0.30970424836601307,
+        "y": 0.5140893373737373,
+        "width": 0.004878776470588236,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": ", which is obtained by merg-",
+      "bounds": {
+        "x": 0.3153153594771242,
+        "y": 0.5220934343434344,
+        "width": 0.16762919215686276,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "ing all graphs on records read or written by all followers,",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.5359305555555556,
+        "width": 0.32572469835294143,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑡",
+      "bounds": {
+        "x": 0.41584313725490196,
+        "y": 0.5309831858585858,
+        "width": 0.0044978509803921575,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "𝑖",
+      "bounds": {
+        "x": 0.4203774509803922,
+        "y": 0.5336343125,
+        "width": 0.003648233496732026,
+        "height": 0.009182702020202022
+      }
+    },
+    {
+      "text": "proceeds",
+      "bounds": {
+        "x": 0.4284003267973856,
+        "y": 0.5359305555555556,
+        "width": 0.05206196580392169,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "to the finalizing phase for committing.",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.5497676767676768,
+        "width": 0.2298299294117648,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "3.2.3",
+      "bounds": {
+        "x": 0.08790522875816993,
+        "y": 0.5635673636363636,
+        "width": 0.025442306509803923,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "Finalizing phase.",
+      "bounds": {
+        "x": 0.12799265526797385,
+        "y": 0.5635673636363636,
+        "width": 0.09513584815686273,
+        "height": 0.01132121212121212
+      }
+    },
+    {
+      "text": "For a transaction that passed the validation",
+      "bounds": {
+        "x": 0.2288251633986928,
+        "y": 0.5714356060606061,
+        "width": 0.25163762070588225,
+        "height": 0.01132121212121212
+      }
+    }
+  ]
+}

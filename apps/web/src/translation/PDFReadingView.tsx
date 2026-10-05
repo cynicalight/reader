@@ -27,6 +27,7 @@ import { TranslationPanes } from "./TranslationPanes";
 import { TranslationText } from "./TranslationText";
 import { paintTranslatedAnnotations } from "./annotations";
 import { translatedSelection as captureTranslationSelection } from "./selection";
+import { installTranslationSelectionHighlight } from "./selection-highlight";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -88,6 +89,9 @@ export function PDFReadingView({
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
   const visibleBlocks = blocks.filter((b) => !isPDFPageDecoration(b));
+  useEffect(() => {
+    if (pane.current) return installTranslationSelectionHighlight(pane.current);
+  }, [mode, doc.id]);
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -135,10 +135,9 @@ it("uses selected glyph positions to distinguish repeated words and includes bot
     await nav.focusPassages([
       { blockId: "a", sources: ["The model works."], sourceOffset: 14 },
     ]);
-    const highlighted = page.querySelector<HTMLElement>(
-      ".reader-linked-highlight",
-    )!;
-    expect(highlighted.style.top).toBe("13%");
+    // Sentence focusing is exercised through native highlight ranges in
+    // pdf-sentence-highlights.test.ts; it no longer appends page rectangles.
+    expect(page.querySelector(".reader-linked-highlight")).toBeNull();
     nav.destroy();
   } finally {
     Range.prototype.getClientRects = old;

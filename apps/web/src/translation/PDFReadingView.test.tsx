@@ -182,6 +182,16 @@ it("switches modes without recreating the PDF and links an original selection to
   expect(adapter.destroy).not.toHaveBeenCalled();
 });
 it("keeps the translated selection as the quote and anchors its counterpart to original text", async () => {
+  const highlights = new Map<string, Set<Range>>();
+  vi.stubGlobal("CSS", { highlights });
+  vi.stubGlobal(
+    "Highlight",
+    class extends Set<Range> {
+      constructor(...ranges: Range[]) {
+        super(ranges);
+      }
+    },
+  );
   await click("原文译文");
   const sentence = host.querySelector('[data-sentence="1"] p')!;
   await act(async () =>
@@ -194,6 +204,15 @@ it("keeps the translated selection as the quote and anchors its counterpart to o
   });
   window.getSelection()!.removeAllRanges();
   window.getSelection()!.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+  expect(
+    [...highlights.get("reader-translation-selection")!][0].toString(),
+  ).toBe("第二句。");
+  expect(
+    host
+      .querySelector(".translation-document")
+      ?.hasAttribute("data-compact-selection"),
+  ).toBe(true);
   await act(async () =>
     sentence.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
   );
@@ -216,6 +235,8 @@ it("keeps the translated selection as the quote and anchors its counterpart to o
   );
   await act(async () => fixture.ready!.clearSelection());
   expect(events.selection).toHaveBeenLastCalledWith(null);
+  document.dispatchEvent(new Event("selectionchange"));
+  expect(highlights.has("reader-translation-selection")).toBe(false);
 });
 it("restores the translated reading position without changing zoom on mode change", async () => {
   await click("仅译文");

@@ -1,4 +1,5 @@
 import { animatePDFScroll } from "./pdf-scroll";
+import { sentenceTextRanges } from "./pdf-sentence-matching";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { isPDFPageDecoration, pdfFontAscent } from "@reader/core";
@@ -16,7 +17,6 @@ import {
   columnReadingScale,
   overlap,
   readingColumns,
-  sentenceBoxes,
   type Box,
   type TextRun,
 } from "./pdf-reading";
@@ -32,6 +32,7 @@ export class PDFReadingNavigation {
   private lastLeft = 0;
   private gesture = new ColumnGesture();
   private focus: PDFPassage[] = [];
+  private linkedRanges: Range[] = [];
   constructor(
     private host: HTMLElement,
     private viewer: PDFViewer,
@@ -387,53 +388,70 @@ export class PDFReadingNavigation {
     );
   }
   async focusPassages(passages: PDFPassage[], scroll = false) {
+    if (this.disposed) return;
     this.focus = passages;
-    this.host
-      .querySelectorAll(".reader-linked-highlight")
-      .forEach((n) => n.remove());
-    for (const [index, passage] of passages.entries()) {
+    this.paintFocus();
+    const first = passages[0];
+    if (!scroll || !first) return;
+    const block = this.blocks().find((b) => b.id === first.blockId);
+    if (!block) return;
+    const node = this.pageNode(block.page);
+    const top = node
+      ? this.domSentenceBoxes(node, block, first.sources, first.sourceOffset)[0]
+          ?.y
+      : undefined;
+    // An unrendered sentence can still scroll to its paragraph. It must never
+    // use that paragraph's bounds as the visible sentence highlight.
+    await this.follow({
+      blockId: block.id,
+      fraction: Math.max(
+        0,
+        Math.min(
+          1,
+          ((top ?? block.bounds.y) - block.bounds.y) /
+            (block.bounds.height || 1),
+        ),
+      ),
+    });
+    if (!this.disposed && this.focus === passages) this.paintFocus();
+  }
+  private clearLinkedRanges() {
+    const registry = typeof CSS !== "undefined" ? CSS.highlights : undefined;
+    const highlight = registry?.get("reader-linked-sentences");
+    if (highlight) {
+      for (const range of this.linkedRanges) highlight.delete(range);
+      if (!highlight.size) registry!.delete("reader-linked-sentences");
+    }
+    this.linkedRanges = [];
+  }
+  private paintFocus() {
+    this.clearLinkedRanges();
+    if (
+      this.disposed ||
+      typeof Highlight === "undefined" ||
+      typeof CSS === "undefined" ||
+      !CSS.highlights
+    )
+      return;
+    for (const passage of this.focus) {
       const block = this.blocks().find((b) => b.id === passage.blockId);
       if (!block || !passage.sources.length) continue;
-      const runs = await this.runs(block.page);
-      if (this.disposed || this.focus !== passages) return;
-      const approximate = sentenceBoxes(
-        block,
-        passage.sources,
-        runs,
-        passage.sourceOffset,
-      );
-      if (scroll && index === 0)
-        await this.follow({
-          blockId: block.id,
-          fraction: Math.max(
-            0,
-            Math.min(
-              1,
-              (approximate[0].y - block.bounds.y) / block.bounds.height,
-            ),
-          ),
-        });
-      if (this.disposed || this.focus !== passages) return;
       const node = this.pageNode(block.page);
       if (!node) continue;
-      const exact = this.domSentenceBoxes(
-        node,
-        block,
-        passage.sources,
-        passage.sourceOffset,
+      this.linkedRanges.push(
+        ...this.domSentenceRanges(
+          node,
+          block,
+          passage.sources,
+          passage.sourceOffset,
+        ),
       );
-      for (const b of exact.length ? exact : approximate) {
-        const el = document.createElement("div");
-        el.className = "reader-linked-highlight";
-        Object.assign(el.style, {
-          left: `${b.x * 100}%`,
-          top: `${b.y * 100}%`,
-          width: `${b.width * 100}%`,
-          height: `${b.height * 100}%`,
-        });
-        node.append(el);
-      }
     }
+    if (!this.linkedRanges.length) return;
+    const highlight =
+      CSS.highlights.get("reader-linked-sentences") ?? new Highlight();
+    for (const range of this.linkedRanges) highlight.add(range);
+    CSS.highlights.set("reader-linked-sentences", highlight);
   }
   async matchSentences(
     location: PDFLocation,
@@ -490,61 +508,97 @@ export class PDFReadingNavigation {
     startOffset = 0,
   ): Box[] {
     const page = node.getBoundingClientRect();
+    return this.domSentenceRanges(node, block, sources, startOffset).flatMap(
+      (range) =>
+        Array.from(range.getClientRects())
+          .filter((r) => r.width && r.height)
+          .map((r) => ({
+            x: (r.left - page.left) / page.width,
+            y: (r.top - page.top) / page.height,
+            width: r.width / page.width,
+            height: r.height / page.height,
+          })),
+    );
+  }
+  private domSentenceRanges(
+    node: HTMLElement,
+    block: PDFBlock,
+    sources: string[],
+    startOffset = 0,
+  ): Range[] {
+    const page = node.getBoundingClientRect();
     if (!page.width) return [];
-    const nodes: Array<{ node: Text; offset: number }> = [],
+    const nodes: Array<{ node: Text; offset: number; group: number }> = [],
       chars: string[] = [];
     const walker = document.createTreeWalker(
       node.querySelector(".textLayer") ?? document.createElement("div"),
       NodeFilter.SHOW_TEXT,
     );
-    let text: Node | null;
+    let text: Node | null,
+      group = 0;
     while ((text = walker.nextNode())) {
       const parent = text.parentElement,
         r = parent?.getBoundingClientRect();
-      if (!r) continue;
+      if (!r) {
+        group++;
+        continue;
+      }
       const b = {
         x: (r.left - page.left) / page.width,
         y: (r.top - page.top) / page.height,
         width: r.width / page.width,
         height: r.height / page.height,
       };
-      if (overlap(b, block.bounds) / (b.width * b.height || 1) < 0.5) continue;
+      // Parser bounds can cut through a PDF.js line. Include one line of
+      // vertical context; sentence text, not this box, determines the highlight.
+      const region = {
+        ...block.bounds,
+        y: block.bounds.y - b.height,
+        height: block.bounds.height + 2 * b.height,
+      };
+      if (overlap(b, region) / (b.width * b.height || 1) < 0.5) {
+        group++;
+        continue;
+      }
       for (let i = 0; i < (text.textContent?.length ?? 0); i++) {
         const c = text.textContent![i];
         if (/[\s\u00ad]/.test(c)) continue;
         chars.push(c.toLowerCase());
-        nodes.push({ node: text as Text, offset: i });
+        nodes.push({ node: text as Text, offset: i, group });
       }
     }
     const joined = chars.join(""),
-      boxes: Box[] = [];
-    let cursor = startOffset;
-    for (const source of sources) {
-      const needle = source.toLowerCase().replace(/[\s\u00ad]/g, "");
-      const i = joined.indexOf(needle, cursor);
-      if (i < 0 || !needle) return [];
-      cursor = i + needle.length;
-      const a = nodes[i],
-        z = nodes[cursor - 1];
-      const range = document.createRange();
-      range.setStart(a.node, a.offset);
-      range.setEnd(z.node, z.offset + 1);
-      for (const r of Array.from(range.getClientRects()))
-        if (r.width && r.height)
-          boxes.push({
-            x: (r.left - page.left) / page.width,
-            y: (r.top - page.top) / page.height,
-            width: r.width / page.width,
-            height: r.height / page.height,
-          });
+      ranges: Range[] = [];
+    const normalize = (value: string) =>
+      value.toLowerCase().replace(/[\s\u00ad]/g, "");
+    for (const { start: i, end: cursor } of sentenceTextRanges(
+      joined,
+      normalize(block.text),
+      sources.map(normalize),
+      startOffset,
+    )) {
+      // PDF DOM order can interleave columns. Never let a Range bridge text
+      // nodes that were excluded from this paragraph during matching.
+      for (let start = i; start < cursor;) {
+        let end = start + 1;
+        while (end < cursor && nodes[end].group === nodes[start].group) end++;
+        const a = nodes[start],
+          z = nodes[end - 1];
+        const range = document.createRange();
+        range.setStart(a.node, a.offset);
+        range.setEnd(z.node, z.offset + 1);
+        ranges.push(range);
+        start = end;
+      }
     }
-    return boxes;
+    return ranges;
   }
   repaint() {
-    if (this.focus.length) void this.focusPassages(this.focus).catch(() => {});
+    this.paintFocus();
   }
   destroy() {
     this.disposed = true;
+    this.clearLinkedRanges();
     cancelAnimationFrame(this.frame);
     this.host.removeEventListener("pointerdown", this.interrupt);
     this.host.removeEventListener("scroll", this.scrolled);
