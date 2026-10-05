@@ -1794,7 +1794,7 @@
                   "phase":
                     {
                       "type": "string",
-                      "enum": ["learning", "settling", "ready"],
+                      "enum": ["learning", "settling", "translating", "ready"],
                     },
                   "status":
                     {
@@ -1806,6 +1806,8 @@
                   "pagesTotal": { "type": "integer" },
                   "assetsDone": { "type": "integer" },
                   "assetsTotal": { "type": "integer" },
+                  "translationsDone": { "type": "integer" },
+                  "translationsTotal": { "type": "integer" },
                   "detail": { "type": "string" },
                   "warning": { "type": "string" },
                   "updatedAt": { "type": "string" },
@@ -1820,6 +1822,8 @@
                   "pagesTotal",
                   "assetsDone",
                   "assetsTotal",
+                  "translationsDone",
+                  "translationsTotal",
                   "detail",
                   "updatedAt",
                 ],

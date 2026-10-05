@@ -195,6 +195,10 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	if maxActive.Load() != 3 || items[0].Status != "complete" || items[1].Status != "complete" || items[2].Status != "complete" || items[3].Status != "pending" {
 		t.Fatalf("lost partial results or exceeded concurrency: max=%d %+v", maxActive.Load(), items)
 	}
+	saved, err := s.Store.processing("doc")
+	if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 3 || saved.TranslationsTotal != 4 {
+		t.Fatalf("streamed progress was not persisted: %+v, %v", saved, err)
+	}
 }
 func TestTranslationSubscriptionSnapshotAndLiveLine(t *testing.T) {
 	s, _, m := translationFixture(t)

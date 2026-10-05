@@ -124,7 +124,7 @@ func (s *Server) queueUntranslatedPDFs() {
 		}
 		for _, t := range items {
 			if t.Status != "complete" {
-				p.Phase = "settling"
+				p.Phase = "translating"
 				p.Status = "queued"
 				p.Detail = "等待翻译正文"
 				_ = s.Store.saveProcessing(p)
@@ -217,9 +217,11 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.Status != "running" {
-		p.Phase = "settling"
+		if p.Phase == "ready" {
+			p.Phase = "translating"
+		}
 		p.Status = "queued"
-		p.Detail = "等待翻译正文"
+		p.Detail = "等待继续处理"
 		if err = s.Store.saveProcessing(p); err != nil {
 			fail(w, 500, "无法安排翻译任务")
 			return

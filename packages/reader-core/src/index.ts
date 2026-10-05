@@ -207,12 +207,14 @@ export interface Message {
 export interface Processing {
   incomplete?: boolean;
   documentId: string;
-  phase: "learning" | "settling" | "ready";
+  phase: "learning" | "settling" | "translating" | "ready";
   status: "queued" | "running" | "waiting" | "failed" | "complete";
   pagesDone: number;
   pagesTotal: number;
   assetsDone: number;
   assetsTotal: number;
+  translationsDone: number;
+  translationsTotal: number;
   detail: string;
   warning?: string;
   updatedAt: string;

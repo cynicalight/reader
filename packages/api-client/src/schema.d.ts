@@ -1433,13 +1433,15 @@ export interface components {
     Processing: {
       documentId: string;
       /** @enum {string} */
-      phase: "learning" | "settling" | "ready";
+      phase: "learning" | "settling" | "translating" | "ready";
       /** @enum {string} */
       status: "queued" | "running" | "waiting" | "failed" | "complete";
       pagesDone: number;
       pagesTotal: number;
       assetsDone: number;
       assetsTotal: number;
+      translationsDone: number;
+      translationsTotal: number;
       detail: string;
       warning?: string;
       updatedAt: string;

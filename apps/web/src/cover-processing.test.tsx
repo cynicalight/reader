@@ -19,6 +19,8 @@ const job: Processing = {
   pagesTotal: 10,
   assetsDone: 0,
   assetsTotal: 4,
+  translationsDone: 0,
+  translationsTotal: 10,
   detail: "",
   updatedAt: "",
 };
@@ -38,10 +40,44 @@ it("shows one stage, completes it before advancing, and removes finished backgro
   expect(host.textContent).toContain("学习完成100%");
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toContain("沉淀中25%");
-  render({ ...job, phase: "ready", status: "complete", assetsDone: 4 });
+  render({ ...job, phase: "translating", assetsDone: 4, translationsDone: 3 });
   expect(host.textContent).toContain("沉淀完成100%");
   act(() => vi.advanceTimersByTime(750));
+  expect(host.textContent).toContain("翻译中30%");
+  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+  render({
+    ...job,
+    phase: "ready",
+    status: "complete",
+    assetsDone: 4,
+    translationsDone: 10,
+  });
+  expect(host.textContent).toContain("翻译完成100%");
+  act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toBe("");
+});
+it("shows persisted translation progress and detail when a parsing warning exists", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  root = createRoot(host);
+  act(() =>
+    root!.render(
+      <CoverProcessing
+        job={{
+          ...job,
+          phase: "translating",
+          translationsDone: 6,
+          detail: "正在翻译正文 · 6 / 10 段",
+          warning: "第 5 页有未归入版面块的文字，已保留。",
+        }}
+        onSettings={() => {}}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("翻译中60%");
+  expect(
+    host.querySelector(".cover-processing")?.getAttribute("title"),
+  ).toContain("正在翻译正文 · 6 / 10 段");
 });
 it("keeps a configuration action without active glow while waiting", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

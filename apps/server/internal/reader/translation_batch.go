@@ -225,6 +225,20 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 		if err != nil {
 			return err
 		}
+		p.TranslationsTotal = len(items)
+		p.TranslationsDone = 0
+		for _, t := range items {
+			if t.Status == "complete" {
+				p.TranslationsDone++
+			}
+		}
+		if len(items) > 0 {
+			p.Phase = "translating"
+			p.Detail = fmt.Sprintf("正在翻译正文 · %d / %d 段", p.TranslationsDone, p.TranslationsTotal)
+			if err = s.Store.saveProcessing(*p); err != nil {
+				return err
+			}
+		}
 		batches := translationBatches(m, items, translationBatchCharacters)
 		if len(batches) == 0 {
 			failed := 0
@@ -254,17 +268,11 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 			s.configMu.Unlock()
 		}
 		var progressMu sync.Mutex
-		completed := 0
-		for _, t := range items {
-			if t.Status == "complete" {
-				completed++
-			}
-		}
 		progress := func() {
 			progressMu.Lock()
 			defer progressMu.Unlock()
-			completed++
-			p.Detail = fmt.Sprintf("正在翻译正文 · %d / %d 段", completed, len(items))
+			p.TranslationsDone++
+			p.Detail = fmt.Sprintf("正在翻译正文 · %d / %d 段", p.TranslationsDone, p.TranslationsTotal)
 			if err := s.Store.saveProcessing(*p); err != nil {
 				log.Printf("cannot save translation progress: %v", err)
 			}

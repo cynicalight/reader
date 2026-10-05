@@ -137,6 +137,10 @@ func TestProcessingCompletesAttachmentsBeforeTranslation(t *testing.T) {
 			defer images.Close()
 			text := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				textCalls.Add(1)
+				saved, err := s.Store.processing("doc")
+				if err != nil || saved.Phase != "translating" || saved.AssetsDone != 1 || saved.TranslationsTotal != 1 {
+					t.Errorf("translation stage was not published: %+v, %v", saved, err)
+				}
 				if data, err := os.ReadFile(target); err != nil || string(data) != "saved interpretation\n" {
 					t.Error("translation started before attachment transcript was saved")
 				}
@@ -172,7 +176,7 @@ func TestProcessingCompletesAttachmentsBeforeTranslation(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || p.Phase != "ready" || p.AssetsDone != 1 || textCalls.Load() != 1 {
+			if err != nil || p.Phase != "ready" || p.AssetsDone != 1 || p.TranslationsDone != 1 || textCalls.Load() != 1 {
 				t.Fatalf("processing did not complete: %+v, %v, text calls=%d", p, err, textCalls.Load())
 			}
 			if mode == "saved" && imageCalls.Load() != 0 {

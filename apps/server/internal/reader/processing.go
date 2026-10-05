@@ -18,17 +18,19 @@ import (
 )
 
 type Processing struct {
-	Incomplete  bool   `json:"incomplete"`
-	DocumentID  string `json:"documentId"`
-	Phase       string `json:"phase"`
-	Status      string `json:"status"`
-	PagesDone   int    `json:"pagesDone"`
-	PagesTotal  int    `json:"pagesTotal"`
-	AssetsDone  int    `json:"assetsDone"`
-	AssetsTotal int    `json:"assetsTotal"`
-	Detail      string `json:"detail"`
-	Warning     string `json:"warning,omitempty"`
-	UpdatedAt   string `json:"updatedAt"`
+	Incomplete        bool   `json:"incomplete"`
+	DocumentID        string `json:"documentId"`
+	Phase             string `json:"phase"`
+	Status            string `json:"status"`
+	PagesDone         int    `json:"pagesDone"`
+	PagesTotal        int    `json:"pagesTotal"`
+	AssetsDone        int    `json:"assetsDone"`
+	AssetsTotal       int    `json:"assetsTotal"`
+	TranslationsDone  int    `json:"translationsDone"`
+	TranslationsTotal int    `json:"translationsTotal"`
+	Detail            string `json:"detail"`
+	Warning           string `json:"warning,omitempty"`
+	UpdatedAt         string `json:"updatedAt"`
 }
 type PDFBlock struct {
 	ID     string `json:"id"`
@@ -220,7 +222,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Lock()
 				var body string
-				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE phase=? AND status='queued' ORDER BY rowid LIMIT 1", phase).Scan(&body)
+				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE (phase=? OR (?='settling' AND phase='translating')) AND status='queued' ORDER BY rowid LIMIT 1", phase, phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)
@@ -279,7 +281,7 @@ func (s *Server) wakeProcessing() {
 	rows.Close()
 	for _, p := range pending {
 		p.Status = "queued"
-		p.Detail = "等待图片解析"
+		p.Detail = "等待继续处理"
 		_ = s.Store.saveProcessing(p)
 	}
 }
@@ -384,14 +386,17 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 	p.Phase = "settling"
 	p.Status = "queued"
 	p.Detail = "等待解析图表与公式"
-	needsTranslation := false
+	p.TranslationsTotal = 0
 	for _, b := range m.Blocks {
 		if translationSource(b) != "" {
-			needsTranslation = true
-			break
+			p.TranslationsTotal++
 		}
 	}
-	if p.AssetsTotal == 0 && !needsTranslation {
+	if p.AssetsTotal == 0 && p.TranslationsTotal > 0 {
+		p.Phase = "translating"
+		p.Detail = "等待翻译正文"
+	}
+	if p.AssetsTotal == 0 && p.TranslationsTotal == 0 {
 		p.Phase = "ready"
 		p.Status = "complete"
 		p.Detail = "正文已就绪，无图片附件需要解析"
@@ -420,6 +425,7 @@ func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 		}
 	}
 	if p.AssetsDone < p.AssetsTotal {
+		p.Phase = "settling"
 		waiting, err := s.waitForVision(p)
 		if err != nil || waiting {
 			return err

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func translationFixture(t *testing.T) (*Server, Processing, layoutManifest) {
@@ -53,7 +54,7 @@ func TestTranslationRejectsMissingReorderedOrEmptySentences(t *testing.T) {
 }
 func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T) {
 	s, p, m := translationFixture(t)
-	if p.Phase != "settling" {
+	if p.Phase != "translating" {
 		t.Fatal("text-only paper skipped translation")
 	}
 	var calls atomic.Int32
@@ -74,6 +75,9 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	}
 	if err := s.settlePDF(context.Background(), &p); err == nil {
 		t.Fatal("invalid translation reported success")
+	}
+	if p.Phase != "translating" || p.TranslationsDone != 1 || p.TranslationsTotal != 2 {
+		t.Fatalf("partial failure lost translation progress: %+v", p)
 	}
 	response := request(t, s, "GET", "/api/documents/doc/translations", nil)
 	var items []TranslationBlock
@@ -128,5 +132,89 @@ func TestTranslationResumesInterruptedWithoutPrioritizingRequestedParagraph(t *t
 	}
 	if len(order) != 2 || order[0] != m.Blocks[0].ID {
 		t.Fatalf("unexpected order: %v", order)
+	}
+}
+
+func TestTranslationStageResumesPersistedProgressAfterRestart(t *testing.T) {
+	for _, phase := range []string{"settling", "translating"} {
+		t.Run(phase, func(t *testing.T) {
+			s, p, m := translationFixture(t)
+			if _, err := s.Store.DB.Exec("UPDATE documents SET classification_status='done'"); err != nil {
+				t.Fatal(err)
+			}
+			first := newTranslation(m.Blocks[0])
+			first.Status = "complete"
+			first.Sentences = []TranslationSentence{{Source: m.Blocks[0].Text, Target: "已保存译文"}}
+			second := newTranslation(m.Blocks[1])
+			second.Status = "running"
+			for _, item := range []TranslationBlock{first, second} {
+				if err := s.saveTranslation("doc", item); err != nil {
+					t.Fatal(err)
+				}
+			}
+			p.Phase, p.Status = phase, "running"
+			p.TranslationsDone, p.TranslationsTotal = 0, 0
+			if err := s.Store.saveProcessing(p); err != nil {
+				t.Fatal(err)
+			}
+			started := make(chan string, 1)
+			release := make(chan struct{})
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				batch := readTranslationInput(t, r).Batch
+				if len(batch.Paragraphs) != 1 {
+					t.Error("regenerated completed translation")
+					return
+				}
+				started <- batch.Paragraphs[0].BlockID
+				select {
+				case <-release:
+				case <-r.Context().Done():
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				sendTranslationDelta(w, translationParagraphLine(batch.Paragraphs[0]))
+				finishTranslationStream(w)
+			}))
+			defer provider.Close()
+			configureTranslationTest(t, s, provider.URL)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stop := s.StartProcessing(ctx)
+			defer stop()
+			if id := waitTranslationSignal(t, started); id != second.BlockID {
+				t.Fatalf("wrong pending paragraph: %s", id)
+			}
+			saved, err := s.Store.processing("doc")
+			if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 1 || saved.TranslationsTotal != 2 {
+				t.Fatalf("did not restore progress from saved translations: %+v, %v", saved, err)
+			}
+			close(release)
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				saved, err = s.Store.processing("doc")
+				if err == nil && saved.Phase == "ready" && saved.Status == "complete" && saved.TranslationsDone == 2 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("translation stage did not finish: %+v, %v", saved, err)
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
+	}
+}
+
+func TestTranslationStageWaitsForTextCapabilityAndResumes(t *testing.T) {
+	s, p, _ := translationFixture(t)
+	if err := s.settlePDF(context.Background(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Phase != "translating" || p.Status != "waiting" || p.TranslationsDone != 0 || p.TranslationsTotal != 2 {
+		t.Fatalf("wrong translation waiting state: %+v", p)
+	}
+	s.wakeProcessing()
+	saved, err := s.Store.processing("doc")
+	if err != nil || saved.Phase != "translating" || saved.Status != "queued" || saved.TranslationsTotal != 2 {
+		t.Fatalf("configuration wake lost translation stage: %+v, %v", saved, err)
 	}
 }

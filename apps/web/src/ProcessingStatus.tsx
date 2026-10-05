@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ScanLine, Sparkles, RefreshCw } from "lucide-react";
+import { Check, ScanLine, Sparkles, RefreshCw, Languages } from "lucide-react";
 import type { Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Progress } from "@reader/ui/components/progress";
@@ -35,6 +35,7 @@ export function useProcessing() {
 }
 export function processingStages(job: Processing) {
   const learned = job.phase !== "learning";
+  const settled = job.phase === "translating" || job.phase === "ready";
   return [
     {
       key: "learning",
@@ -57,21 +58,39 @@ export function processingStages(job: Processing) {
     },
     {
       key: "settling",
-      label: job.phase === "ready" ? "沉淀完成" : "沉淀中",
+      label: settled ? "沉淀完成" : "沉淀中",
       icon: Sparkles,
-      done: job.phase === "ready",
+      done: settled,
       active: job.phase === "settling" && job.status === "running",
-      value:
-        job.phase === "ready"
-          ? 100
-          : job.assetsTotal
-            ? Math.min(100, (job.assetsDone / job.assetsTotal) * 100)
-            : 0,
+      value: settled
+        ? 100
+        : job.assetsTotal
+          ? Math.min(100, (job.assetsDone / job.assetsTotal) * 100)
+          : 0,
       count: learned
         ? job.assetsTotal
           ? `${job.assetsDone} / ${job.assetsTotal} 个附件`
           : "无需解析图片"
         : "等待学习完成",
+    },
+    {
+      key: "translating",
+      label: job.phase === "ready" ? "翻译完成" : "翻译中",
+      icon: Languages,
+      done: job.phase === "ready",
+      active: job.phase === "translating" && job.status === "running",
+      value:
+        job.phase === "ready"
+          ? 100
+          : job.translationsTotal
+            ? Math.min(
+                100,
+                (job.translationsDone / job.translationsTotal) * 100,
+              )
+            : 0,
+      count: settled
+        ? `${job.translationsDone} / ${job.translationsTotal} 段`
+        : "等待解析完成",
     },
   ];
 }
@@ -99,22 +118,18 @@ export function CoverProcessing({
         正文不完整
       </span>
     ) : null;
-  const stage = processingStages(job)[phase === "learning" ? 0 : 1]!;
-  const label = leaving
-    ? phase === "learning"
-      ? job.incomplete
-        ? "学习部分完成"
-        : "学习完成"
-      : "沉淀完成"
-    : phase === "learning"
-      ? "学习中"
-      : "沉淀中";
+  const stage = processingStages(job).find((stage) => stage.key === phase)!;
+  const label = stage.label;
   return (
     <div
       className="cover-processing"
       key={phase}
       data-leaving={leaving}
-      title={unavailable ? "暂时无法同步进度" : job.warning || job.detail}
+      title={
+        unavailable
+          ? "暂时无法同步进度"
+          : [job.detail, job.warning].filter(Boolean).join("\n")
+      }
     >
       <div
         className="processing-step"
