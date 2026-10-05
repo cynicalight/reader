@@ -272,7 +272,9 @@
                           "application/json":
                             {
                               "schema":
-                                { "$ref": "#/components/schemas/Annotation" },
+                                {
+                                  "$ref": "#/components/schemas/SavedAnnotation",
+                                },
                             },
                         },
                     },
@@ -1124,6 +1126,25 @@
                   "note",
                   "color",
                   "createdAt",
+                ],
+            },
+          "SavedAnnotation":
+            {
+              "allOf":
+                [
+                  { "$ref": "#/components/schemas/Annotation" },
+                  {
+                    "type": "object",
+                    "properties":
+                      {
+                        "replacedIds":
+                          {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "IDs removed when overlapping underlines were merged into the returned annotation.",
+                          },
+                      },
+                  },
                 ],
             },
           "SearchResult":

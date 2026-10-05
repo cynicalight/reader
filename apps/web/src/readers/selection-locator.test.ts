@@ -31,5 +31,7 @@ it("stores an exact Readium DOM range for the second identical passage", () => {
   expect(doc.querySelector(start.cssSelector)).toBe(paragraphs[1]);
   expect(start.charOffset).toBe(0);
   expect(restored.text.highlight).toBe("The same words.");
+  expect(first.locations.textRange).toEqual({ start: 0, end: 15 });
+  expect(restored.locations.textRange).toEqual({ start: 15, end: 30 });
   dom.window.close();
 });

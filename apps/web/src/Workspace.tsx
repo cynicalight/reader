@@ -92,6 +92,7 @@ import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
+import { applySavedAnnotation } from "./annotations";
 import { ReaderView } from "./ReaderView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -234,6 +235,7 @@ export function Workspace({
   );
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const annotationSaving = useRef(false);
   const [annotationTarget, setAnnotationTarget] =
     useState<ReaderAnnotationTarget | null>(null);
   const { deleting, remove: removeAnnotation } = useAnnotationDeletion(
@@ -361,7 +363,8 @@ export function Workspace({
   const annotate = async (kind: Annotation["kind"], noteText = "") => {
     const source = kind === "note" ? noteSelection : selection;
     const target = kind === "bookmark" ? location : source?.location;
-    if (!target) return;
+    if (!target || annotationSaving.current) return;
+    annotationSaving.current = true;
     try {
       const a = await api.annotate(doc.id, {
         kind,
@@ -370,7 +373,7 @@ export function Workspace({
         note: noteText,
         color: "#e6b94c",
       });
-      setAnnotations((items) => [...items, a]);
+      setAnnotations((items) => applySavedAnnotation(items, a));
       adapter?.clearSelection();
       toast.success(kind === "bookmark" ? "已添加书签" : "批注已保存");
       setNoteOpen(false);
@@ -378,6 +381,8 @@ export function Workspace({
       setNote("");
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      annotationSaving.current = false;
     }
   };
   const search = async () => {

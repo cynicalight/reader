@@ -257,7 +257,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            "application/json": components["schemas"]["Annotation"];
+            "application/json": components["schemas"]["SavedAnnotation"];
           };
         };
         /** @description Error */
@@ -974,6 +974,10 @@ export interface components {
       note: string;
       color: string;
       createdAt: string;
+    };
+    SavedAnnotation: components["schemas"]["Annotation"] & {
+      /** @description IDs removed when overlapping underlines were merged into the returned annotation. */
+      replacedIds?: string[];
     };
     SearchResult: {
       id: string;

@@ -396,13 +396,12 @@ func (s *Server) saveAnnotation(w http.ResponseWriter, r *http.Request) {
 	a.ID = id()
 	a.DocumentID = d.ID
 	a.CreatedAt = now()
-	b, _ := json.Marshal(a)
-	_, err = s.Store.DB.Exec("INSERT INTO annotations VALUES(?,?,?)", a.ID, a.DocumentID, string(b))
+	result, err := s.Store.saveAnnotation(a)
 	if err != nil {
 		fail(w, 500, "批注保存失败")
 		return
 	}
-	respond(w, 201, a)
+	respond(w, 201, result)
 }
 func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 	if subtle.ConstantTimeCompare([]byte(r.PathValue("cap")), []byte(s.Token)) != 1 {

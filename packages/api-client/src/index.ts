@@ -1,7 +1,7 @@
 import { consumeChatStream, type ChatStreamEvent } from "./chat-stream";
 export { ChatStreamError, type ChatStreamEvent } from "./chat-stream";
 import createClient from "openapi-fetch";
-import type { paths } from "./schema";
+import type { components, paths } from "./schema";
 import type {
   Document,
   DocumentLocation,
@@ -112,10 +112,13 @@ export const api = {
       "kind" | "location" | "quote" | "note" | "color"
     >,
   ) =>
-    request<Annotation>(`/api/documents/${id}/annotations`, {
-      method: "POST",
-      body: JSON.stringify(annotation),
-    }),
+    request<components["schemas"]["SavedAnnotation"]>(
+      `/api/documents/${id}/annotations`,
+      {
+        method: "POST",
+        body: JSON.stringify(annotation),
+      },
+    ),
   removeAnnotation: (id: string, annotation: string) =>
     request<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",
