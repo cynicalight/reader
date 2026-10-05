@@ -366,6 +366,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		Type        string  `json:"type"`
 		Page        int     `json:"page"`
 		Href        string  `json:"href"`
+		Locator     string  `json:"locator"`
 		Progression float64 `json:"progression"`
 	}
 	if json.Unmarshal(data, &l) != nil || l.Type != kind {
@@ -375,7 +376,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		return l.Page > 0
 	}
 	_, err := safeResource(l.Href)
-	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1
+	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href)
 }
 func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
