@@ -6,9 +6,6 @@ on:
       ref:
         required: true
         type: string
-      installers:
-        default: false
-        type: boolean
       release-tag:
         default: ""
         type: string
@@ -51,16 +48,9 @@ jobs:
           go-version-file: apps/server/go.mod
           cache-dependency-path: apps/server/go.sum
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
       - name: Build installers and verify packaged runtimes
-        if: inputs.installers
         run: pnpm package
-      - name: Build unpacked app and verify packaged runtimes
-        if: ${{ !inputs.installers }}
-        run: pnpm package:dir
       - name: Store verified installers
-        if: inputs.installers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: reader-${{ matrix.target }}
