@@ -30,7 +30,15 @@ export function AnnotationToolbar({
     <SelectionToolbar anchor={anchor} pane={pane} label="批注操作">
       <div className="annotation-actions">
         <div className="annotation-actions-heading">
-          <span>批注</span>
+          <span>
+            {[
+              ...new Set(
+                annotations.map(
+                  (annotation) => annotationLabels[annotation.kind],
+                ),
+              ),
+            ].join(" / ")}
+          </span>
           <Button
             size="icon-xs"
             variant="ghost"
@@ -44,7 +52,9 @@ export function AnnotationToolbar({
           {annotations.map((annotation) => (
             <div className="annotation-action" key={annotation.id}>
               <div>
-                <small>{annotationLabels[annotation.kind]}</small>
+                {annotations.length > 1 && (
+                  <small>{annotationLabels[annotation.kind]}</small>
+                )}
                 <p>{annotation.note || annotation.quote}</p>
               </div>
               <Button
