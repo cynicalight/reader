@@ -24,7 +24,7 @@ func processingFixture(t *testing.T) (*Server, Processing) {
 	}
 	s := NewServer(store, "test", "")
 	d, _ := store.Document("doc")
-	if e = store.enqueuePDF(d); e != nil {
+	if e = store.enqueueDocument(d); e != nil {
 		t.Fatal(e)
 	}
 	p, _ := store.processing("doc")
@@ -100,7 +100,7 @@ func TestProcessingTranslatesWithoutConsolidatingAttachments(t *testing.T) {
 	if p.Phase != "translating" || p.Status != "queued" {
 		t.Fatalf("translation not queued after learning: %+v", p)
 	}
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	if p.Status != "complete" || p.Phase != "ready" || p.TranslationsDone != 1 {

@@ -49,7 +49,7 @@ func newTranslation(b PDFBlock) TranslationBlock {
 	}
 	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
-func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+func (s *Server) translations(documentID string, m translationInput) ([]TranslationBlock, error) {
 	rows, err := s.Store.DB.Query("SELECT body FROM translations WHERE document_id=?", documentID)
 	if err != nil {
 		return nil, err
@@ -74,11 +74,7 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 		return nil, err
 	}
 	result := []TranslationBlock{}
-	for _, b := range m.Blocks {
-		if !needsTranslation(b) {
-			continue
-		}
-		t := newTranslation(b)
+	for _, t := range m.translationItems() {
 		if value, ok := saved[t.BlockID+":"+t.SourceHash]; ok {
 			t = value
 		}
@@ -88,7 +84,7 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 }
 
 func (s *Server) retryFailedTranslations(documentID string) error {
-	m, err := s.readLayout(documentID)
+	m, err := s.readTranslationSource(documentID)
 	if err != nil {
 		return nil
 	}
@@ -109,20 +105,20 @@ func (s *Server) retryFailedTranslations(documentID string) error {
 }
 
 // Upgrade previously settled documents without changing their layout or notes.
-func (s *Server) queueUntranslatedPDFs() {
+func (s *Server) queueUntranslatedDocuments() {
 	docs, err := s.Store.Documents()
 	if err != nil {
 		return
 	}
 	for _, doc := range docs {
-		if doc.Type != "pdf" {
-			continue
+		if doc.Type == "epub" {
+			_ = s.Store.enqueueDocument(doc)
 		}
 		p, err := s.Store.processing(doc.ID)
 		if err != nil || p.Status != "complete" {
 			continue
 		}
-		m, err := s.readLayout(doc.ID)
+		m, err := s.readTranslationSource(doc.ID)
 		if err != nil {
 			continue
 		}
@@ -157,11 +153,11 @@ func (s *Server) saveTranslation(documentID string, t TranslationBlock) error {
 }
 func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
-	if err != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if err != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
-	m, err := s.readLayout(d.ID)
+	m, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		respond(w, 200, []TranslationBlock{})
 		return
@@ -178,8 +174,8 @@ func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 // completed responses independently, so closing a reader never loses progress.
 func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
-	if err != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if err != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
 	var req struct {
@@ -188,7 +184,7 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	m, err := s.readLayout(d.ID)
+	m, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		fail(w, 409, "正文仍在解析中")
 		return
@@ -218,6 +214,10 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 	if !found {
 		fail(w, 404, "没有可翻译的段落")
+		return
+	}
+	if err = s.Store.enqueueDocument(d); err != nil {
+		fail(w, 500, "无法安排翻译任务")
 		return
 	}
 	p, err := s.Store.processing(d.ID)

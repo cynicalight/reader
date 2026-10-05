@@ -99,12 +99,23 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 	return errors.Join(failures...)
 }
 
-func (s *Server) translatePDFContent(ctx context.Context, p *Processing, m layoutManifest) error {
+func (s *Server) translateContent(ctx context.Context, p *Processing, input translationInput) error {
 	finish, err := s.startUsageStage(p.DocumentID, "translating")
 	if err != nil {
 		return err
 	}
 	defer finish()
+	m, ok := input.(layoutManifest)
+	if !ok {
+		// EPUB paragraphs have no formula images to convert.
+		p.Phase = "translating"
+		p.Detail = "正在翻译正文"
+		if err = s.Store.saveProcessing(*p); err != nil {
+			return err
+		}
+		textErr := s.settleTranslations(ctx, p, input)
+		return errors.Join(textErr, s.refreshTranslationCounts(p, input))
+	}
 	p.Phase = "translating"
 	p.Detail = "正在翻译正文并转换公式"
 	if err = s.Store.saveProcessing(*p); err != nil {

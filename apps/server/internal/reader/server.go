@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
+	mux.HandleFunc("GET /api/documents/{id}/epub-blocks", s.epubBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
@@ -257,7 +258,7 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		if d, err = s.restore(docID); err != nil {
 			return failure(500, "无法恢复回收站中的文档")
 		}
-		if err = s.Store.enqueuePDF(d); err != nil {
+		if err = s.Store.enqueueDocument(d); err != nil {
 			return failure(500, "无法创建解析任务")
 		}
 		return d, 200, nil
@@ -343,8 +344,8 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 			}
 		}
 	}
-	if err == nil && kind == "pdf" {
-		p := initialProcessing(d.ID)
+	if err == nil {
+		p := initialDocumentProcessing(d)
 		b, _ := json.Marshal(p)
 		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}
@@ -376,7 +377,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		return l.Page > 0
 	}
 	_, err := safeResource(l.Href)
-	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href)
+	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href) && validEPUBTranslationLocations(data)
 }
 func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))

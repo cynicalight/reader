@@ -28,7 +28,8 @@ func validEPUBLocator(encoded, href string) bool {
 				Start *annotationDOMPoint `json:"start"`
 				End   *annotationDOMPoint `json:"end"`
 			} `json:"domRange"`
-			TextRange *annotationTextRange `json:"textRange"`
+			SourceSlice *annotationTextRange `json:"sourceSlice"`
+			TextRange   *annotationTextRange `json:"textRange"`
 		} `json:"locations"`
 	}
 	if json.Unmarshal([]byte(encoded), &locator) != nil || locator.Href == "" || locator.Type == "" {
@@ -52,8 +53,47 @@ func validEPUBLocator(encoded, href string) bool {
 			return false
 		}
 	}
-	if r := locator.Locations.TextRange; r != nil && (r.Start < 0 || r.End <= r.Start) {
+	for _, r := range []*annotationTextRange{locator.Locations.TextRange, locator.Locations.SourceSlice} {
+		if r != nil && (r.Start < 0 || r.End <= r.Start) {
+			return false
+		}
+	}
+	return true
+}
+
+// Translation annotations retain original chapter locations for every selected
+// paragraph. Validate them at the same boundary as the outer location.
+func validEPUBTranslationLocations(data json.RawMessage) bool {
+	var outer struct {
+		Translation *struct {
+			Ranges []struct {
+				Location json.RawMessage `json:"location"`
+			} `json:"ranges"`
+		} `json:"translation"`
+	}
+	if json.Unmarshal(data, &outer) != nil {
 		return false
+	}
+	if outer.Translation == nil {
+		return true
+	}
+	for _, r := range outer.Translation.Ranges {
+		if len(r.Location) == 0 {
+			continue
+		}
+		var source struct {
+			Type        string          `json:"type"`
+			Href        string          `json:"href"`
+			Locator     string          `json:"locator"`
+			Progression float64         `json:"progression"`
+			Translation json.RawMessage `json:"translation"`
+		}
+		if json.Unmarshal(r.Location, &source) != nil || source.Type != "epub" || len(source.Translation) > 0 {
+			return false
+		}
+		if _, err := safeResource(source.Href); err != nil || source.Href == "" || source.Progression < 0 || source.Progression > 1 || !validEPUBLocator(source.Locator, source.Href) {
+			return false
+		}
 	}
 	return true
 }

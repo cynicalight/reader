@@ -113,6 +113,10 @@ export const api = {
     }
     return consumeTranslationStream(response.body, signal, onEvent);
   },
+  epubBlocks: (id: string) =>
+    request<import("@reader/core").EPUBReadingBlock[]>(
+      `/api/documents/${id}/epub-blocks`,
+    ),
   translations: (id: string) =>
     request<import("@reader/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,

@@ -6,43 +6,48 @@ export {
   type ReaderLinkTarget,
 } from "./reader-link";
 
+/** Sentence pairs captured when marking; both sides share one annotation. */
+export type SentenceLink = {
+  origin: "source" | "translation";
+  parts: {
+    blockId: string;
+    sourceHash: string;
+    sentenceIndex: number;
+    source: string;
+    target: string;
+  }[];
+};
 export type PDFLocation = {
   type: "pdf";
   page: number;
   x?: number;
   y?: number;
   quote?: string;
-  /** Sentence pairs captured when marking; both sides share one annotation. */
-  sentenceLink?: {
-    origin: "source" | "translation";
-    parts: {
-      blockId: string;
-      sourceHash: string;
-      sentenceIndex: number;
-      source: string;
-      target: string;
-    }[];
-  };
-  translation?: {
+  sentenceLink?: SentenceLink;
+  translation?: TranslationLocation;
+  rects?: { x: number; y: number; width: number; height: number }[];
+};
+export type TranslationLocation = {
+  blockId: string;
+  sourceHash: string;
+  sentenceIndexes: number[];
+  start: number;
+  end: number;
+  ranges?: {
     blockId: string;
     sourceHash: string;
     sentenceIndexes: number[];
     start: number;
     end: number;
-    ranges?: {
-      blockId: string;
-      sourceHash: string;
-      sentenceIndexes: number[];
-      start: number;
-      end: number;
-      quote: string;
-    }[];
-  };
-  rects?: { x: number; y: number; width: number; height: number }[];
+    quote: string;
+    location?: EPUBLocation;
+  }[];
 };
 export type EPUBLocation = {
   type: "epub";
   href: string;
+  sentenceLink?: SentenceLink;
+  translation?: TranslationLocation;
   locator?: string;
   progression?: number;
   quote?: string;
@@ -298,6 +303,8 @@ export interface ReaderEvents {
   linkPreview?: (preview: LinkPreview | null) => void;
   /** An internal link is about to move away from this location. */
   internalLink?: (origin: DocumentLocation) => void;
+  epubInteraction?: () => void;
+  epubReadingAnchor?: (blockId: string) => void;
   blockHover?: (block: PDFBlock | null) => void;
   annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
@@ -323,6 +330,8 @@ export interface ReaderAdapter {
   /** Whether most of a remembered viewport position is on screen again. */
   isNear?(location: DocumentLocation): boolean;
   setBlocks?(blocks: PDFBlock[]): void;
+  setEPUBBlocks?(blocks: EPUBReadingBlock[]): void;
+  focusEPUBLocations?(locations: EPUBLocation[]): Promise<void>;
   hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
@@ -417,6 +426,13 @@ export interface PDFBlock {
   text: string;
   image?: string;
   caption?: string;
+}
+export interface EPUBReadingBlock {
+  image?: string;
+  id: string;
+  label: string;
+  text: string;
+  location: EPUBLocation;
 }
 export interface TranslationSentence {
   source: string;

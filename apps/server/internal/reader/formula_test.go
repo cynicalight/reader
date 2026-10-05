@@ -136,7 +136,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 		t.Fatalf("wrong translation total: %+v", p)
 	}
 	done := make(chan error, 1)
-	go func() { done <- s.processPDF(context.Background(), &p) }()
+	go func() { done <- s.processTranslation(context.Background(), &p) }()
 	waitFormulaSignal(t, formulaStarted)
 	waitFormulaSignal(t, textStarted)
 	deadline := time.Now().Add(5 * time.Second)
@@ -172,7 +172,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 			t.Fatalf("obsolete formula artifact: %s", relative)
 		}
 	}
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	if imageCalls.Load() != 1 {
@@ -205,7 +205,7 @@ func TestFormulaFailurePreservesCaptionAndCanRetry(t *testing.T) {
 	if err := s.learnPDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.processPDF(context.Background(), &p); err == nil {
+	if err := s.processTranslation(context.Background(), &p); err == nil {
 		t.Fatal("accepted invalid math")
 	}
 	items, _ := s.translations("doc", m)
@@ -218,7 +218,7 @@ func TestFormulaFailurePreservesCaptionAndCanRetry(t *testing.T) {
 		t.Fatalf("retry failed: %s", w.Body.String())
 	}
 	p, _ = s.Store.processing("doc")
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	items, _ = s.translations("doc", m)
