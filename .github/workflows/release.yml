@@ -15,8 +15,12 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
     outputs:
       sha: ${{ steps.source.outputs.sha }}
+      verified: ${{ steps.ci.outputs.verified }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -31,16 +35,37 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: node scripts/release-source.mjs
 
-  desktop:
+      - name: Reuse successful CI for this exact source commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          verified=$(gh api --method GET "repos/$GH_REPO/actions/workflows/ci.yml/runs" \
+            -f head_sha="$SOURCE_SHA" -f event=push -f status=success -f per_page=100 \
+            --jq '.workflow_runs | any(.head_sha == env.SOURCE_SHA and .conclusion == "success" and .event == "push" and .head_repository.full_name == env.GH_REPO)')
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+          echo "Reuse successful CI for $SOURCE_SHA: $verified" >> "$GITHUB_STEP_SUMMARY"
+
+  checks:
     needs: prepare
+    if: needs.prepare.outputs.verified != 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+
+  desktop:
+    needs: [prepare, checks]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') }}
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ needs.prepare.outputs.sha }}
-      installers: true
       release-tag: ${{ github.event.release.tag_name || '' }}
 
   publish:
     needs: [prepare, desktop]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.desktop.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
