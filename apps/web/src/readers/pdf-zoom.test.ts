@@ -125,21 +125,30 @@ it("supports zoom out, Ctrl shortcuts and reset to fit width", () => {
   expect(state.scaleValue).toBe("page-width");
   expect(zoom).toHaveBeenLastCalledWith("width");
 });
-it("routes pinch gestures to PDF.js with the pointer as the zoom origin", () => {
-  expect(wheel().defaultPrevented).toBe(true);
-  expect(state.scale).toBeGreaterThan(1);
-  expect(state.update).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      origin: [240, 320],
-      drawingDelay: expect.any(Number),
-    }),
-  );
-  expect(wheel({ deltaY: 40 }).defaultPrevented).toBe(true);
-  expect(state.scale).toBeLessThan(1);
-});
+it.each([
+  { ctrlKey: true, metaKey: false },
+  { ctrlKey: false, metaKey: true },
+])(
+  "routes modified wheel input %j to PDF.js with the pointer as the zoom origin",
+  (modifiers) => {
+    expect(wheel(modifiers).defaultPrevented).toBe(true);
+    expect(state.scale).toBeGreaterThan(1);
+    expect(state.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        origin: [240, 320],
+        drawingDelay: expect.any(Number),
+      }),
+    );
+    expect(wheel({ ...modifiers, deltaY: 40 }).defaultPrevented).toBe(true);
+    expect(state.scale).toBeLessThan(1);
+  },
+);
 it("leaves ordinary scrolling and gestures outside the PDF untouched", () => {
   expect(wheel({ ctrlKey: false }).defaultPrevented).toBe(false);
   expect(wheel({}, document.body).defaultPrevented).toBe(false);
+  expect(
+    wheel({ ctrlKey: false, metaKey: true }, document.body).defaultPrevented,
+  ).toBe(false);
   expect(state.update).not.toHaveBeenCalled();
 });
 it("accumulates small pinch deltas and handles line-based wheel input", () => {

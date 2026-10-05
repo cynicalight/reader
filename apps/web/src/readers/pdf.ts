@@ -331,8 +331,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
     }
   }
   private onWheel = (event: WheelEvent) => {
-    // Chromium reports trackpad pinch as a Ctrl+wheel event.
-    if (!event.ctrlKey || event.defaultPrevented || !this.canZoom(event.target))
+    // Chromium reports trackpad pinch as Ctrl+wheel; macOS Cmd+wheel uses metaKey.
+    if (
+      !(event.ctrlKey || event.metaKey) ||
+      event.defaultPrevented ||
+      !this.canZoom(event.target)
+    )
       return;
     event.preventDefault();
     if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
