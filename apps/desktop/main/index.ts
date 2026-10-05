@@ -14,6 +14,7 @@ import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 import { writeClipboardText } from "./clipboard";
+import { childProxyEnvironment } from "./proxy";
 let child: ChildProcess | undefined;
 let serverURL = "";
 let serverToken = "";
@@ -23,6 +24,15 @@ let closing = false;
 let flushed = false;
 const root = resolve(__dirname, "../..");
 async function startServer() {
+  let childEnv = { ...process.env };
+  try {
+    childEnv = await childProxyEnvironment(process.env);
+  } catch {
+    dialog.showErrorBox(
+      "无法应用系统代理",
+      "无法读取系统代理，或当前使用了暂不支持的 PAC/自动代理规则。本次保留原有网络环境，Agent 连接可能不可用。请使用手动系统代理后重启 Reader。",
+    );
+  }
   serverToken = randomBytes(32).toString("hex");
   const binary = app.isPackaged
     ? join(
@@ -60,7 +70,7 @@ async function startServer() {
     ],
     {
       env: {
-        ...process.env,
+        ...childEnv,
         READER_TOKEN: serverToken,
         PATH: pathValue,
         READER_NODE: process.execPath,
