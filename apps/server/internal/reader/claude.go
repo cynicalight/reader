@@ -3,7 +3,10 @@ package reader
 import "encoding/json"
 
 func claudeArgs() []string {
-	return []string{"-p", "--safe-mode", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", "", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--setting-sources", "", "--disable-slash-commands", "--no-session-persistence"}
+	// Let the CLI resolve user-managed API keys, gateways and model defaults.
+	// Safe mode still disables customizations; project/local settings and tools
+	// remain excluded from document requests. Reader never reads credentials.
+	return []string{"-p", "--safe-mode", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", "", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--setting-sources", "user", "--disable-slash-commands", "--no-session-persistence"}
 }
 
 // Only top-level assistant text crosses the provider boundary. The assistant

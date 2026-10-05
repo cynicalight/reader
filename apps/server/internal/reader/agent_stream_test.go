@@ -74,10 +74,17 @@ func runAgentProcess() {
 		return
 	}
 	if strings.Contains(args, "auth status") {
+		if mode == "user-settings" {
+			emit(map[string]bool{"loggedIn": false})
+			os.Exit(1)
+		}
 		emit(map[string]bool{"loggedIn": true})
 		return
 	}
 	if provider == "claude" {
+		if mode == "user-settings" && !strings.Contains(args, "--setting-sources user") {
+			os.Exit(1)
+		}
 		if path := os.Getenv("READER_SYSTEM_CAPTURE"); path != "" {
 			for i, arg := range os.Args {
 				if arg == "--append-system-prompt" && i+1 < len(os.Args) {
