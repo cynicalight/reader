@@ -189,14 +189,7 @@
   background: #f5efdf;
   color: #3e3528;
 }
-.fit-column {
-  grid-row: 1;
-  grid-column: 3;
-  justify-self: end;
-  height: 32px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px #0002;
-}
+
 .textLayer ::highlight(reader-linked-sentences) {
   /* A subtle linked-sentence cue; visible glyphs remain on the PDF canvas. */
   background-color: rgba(128, 128, 128, 0.22);

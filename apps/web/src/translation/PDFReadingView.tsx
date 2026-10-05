@@ -441,6 +441,23 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
+      {theme.pdfColumnReading && mode !== "translation" && (
+        <Button
+          className="shrink-0"
+          variant="secondary"
+          size="sm"
+          aria-pressed={fitted}
+          title={fitted ? "切换到普通模式" : "切换到单栏模式"}
+          onClick={() => {
+            if (fitted) engine?.stopColumnFit?.();
+            else
+              void engine?.fitColumn?.().catch((e) => toast.error(e.message));
+          }}
+        >
+          <Columns2 />
+          {fitted ? "单栏模式" : "普通模式"}
+        </Button>
+      )}
     </div>
   );
   return (
@@ -541,23 +558,6 @@ export function PDFReadingView({
                       <ChevronRight />
                     </Button>
                   </div>
-                )}
-                {theme.pdfColumnReading && (
-                  <Button
-                    className="fit-column"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      if (fitted) engine?.stopColumnFit?.();
-                      else
-                        void engine
-                          ?.fitColumn?.()
-                          .catch((e) => toast.error(e.message));
-                    }}
-                  >
-                    <Columns2 />
-                    {fitted ? "退出单栏" : "适合单栏"}
-                  </Button>
                 )}
               </div>
             )}

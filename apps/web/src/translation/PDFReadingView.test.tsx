@@ -333,25 +333,32 @@ it("enables column reading in original mode and preserves it across mode changes
   await click("仅原文");
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
   expect(adapter.stopColumnFit).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("适合单栏");
+  expect(host.textContent).toContain("普通模式");
   await act(async () => fixture.events!.columnFit?.(true));
-  expect(host.textContent).toContain("退出单栏");
-  expect(host.textContent).not.toContain("适合单栏");
-  await click("退出单栏");
+  expect(host.textContent).toContain("单栏模式");
+  const modeButton = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent?.includes("单栏模式"),
+  )!;
+  expect(modeButton.closest(".translation-toolbar")).not.toBeNull();
+  expect(modeButton.closest(".pdf-reading-controls")).toBeNull();
+  expect(modeButton.getAttribute("aria-pressed")).toBe("true");
+  expect(host.textContent).not.toContain("普通模式");
+  await click("单栏模式");
   expect(adapter.stopColumnFit).toHaveBeenCalledTimes(1);
   await act(async () => fixture.events!.columnFit?.(false));
-  await click("适合单栏");
+  await click("普通模式");
   expect(adapter.fitColumn).toHaveBeenCalledTimes(2);
   vi.mocked(adapter.stopColumnFit!).mockClear();
   await renderView({ ...defaultTheme, pdfColumnReading: false });
   expect(adapter.stopColumnFit).toHaveBeenCalled();
-  expect(host.textContent).not.toContain("适合单栏");
+  expect(host.textContent).not.toContain("普通模式");
 });
 
 it("defers initial fitting while the original pane is hidden", async () => {
   await click("仅译文");
   await renderView({ ...defaultTheme, pdfColumnReading: true });
   expect(adapter.fitColumn).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("普通模式");
   await click("原文译文");
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
   await click("仅原文");
