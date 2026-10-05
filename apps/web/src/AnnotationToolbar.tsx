@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { Annotation, SelectionAnchor } from "@reader/core";
-import { Trash2, StickyNote, SquarePen, MessageSquare } from "lucide-react";
+import { Trash2, StickyNote, SquarePen, Sparkles } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import {
   Tooltip,
@@ -36,16 +36,16 @@ export function AnnotationToolbar({
   const hasNote = !!annotation.note.trim();
   const actions = [
     {
-      label: `删除${annotationLabels[annotation.kind]}`,
-      Icon: Trash2,
-      onClick: () => onDelete(annotation.id),
-    },
-    {
       label: hasNote ? "编辑笔记" : "添加笔记",
       Icon: hasNote ? SquarePen : StickyNote,
       onClick: () => onNote(annotation),
     },
-    { label: "问 AI", Icon: MessageSquare, onClick: () => onAskAI(annotation) },
+    { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) },
+    {
+      label: `删除${annotationLabels[annotation.kind]}`,
+      Icon: Trash2,
+      onClick: () => onDelete(annotation.id),
+    },
   ];
   return (
     <SelectionToolbar anchor={anchor} pane={pane} label="批注操作">

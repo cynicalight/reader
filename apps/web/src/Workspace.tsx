@@ -1038,7 +1038,7 @@ export function Workspace({
                   <Languages />
                 </IconButton>
                 <IconButton
-                  label="解释选区"
+                  label="问 AI"
                   onClick={() =>
                     void send(
                       "请解释这段文字的含义，区分原文结论与你的补充说明。",
