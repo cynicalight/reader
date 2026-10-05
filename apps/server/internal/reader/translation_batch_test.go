@@ -124,14 +124,15 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 		return ""
 	}
 }
-func TestTranslationRunsTwoBatchesAndSavesBeforeProviderCompletes(t *testing.T) {
+func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T) {
 	s, p, m := translationFixture(t)
-	m.Blocks = append(m.Blocks, m.Blocks[1])
+	m.Blocks = append(m.Blocks, m.Blocks[1], m.Blocks[1])
 	m.Blocks[2].ID = "p1-b3"
+	m.Blocks[3].ID = "p1-b4"
 	for i := range m.Blocks {
-		m.Blocks[i].Text = strings.Repeat(fmt.Sprintf("段%d", i), 10001)
+		m.Blocks[i].Text = strings.Repeat(fmt.Sprintf("段%d", i), 5001)
 	}
-	started := make(chan string, 3)
+	started := make(chan string, 4)
 	released := make(chan struct{})
 	defer close(released)
 	var active, maxActive atomic.Int32
@@ -161,9 +162,9 @@ func TestTranslationRunsTwoBatchesAndSavesBeforeProviderCompletes(t *testing.T) 
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.settleTranslations(ctx, &p, m) }()
-	first, second := waitTranslationSignal(t, started), waitTranslationSignal(t, started)
-	if first == second || first == "p1-b3" || second == "p1-b3" {
-		t.Fatalf("bad batch scheduling: %s %s", first, second)
+	first, second, third := waitTranslationSignal(t, started), waitTranslationSignal(t, started), waitTranslationSignal(t, started)
+	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
+		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -171,7 +172,7 @@ func TestTranslationRunsTwoBatchesAndSavesBeforeProviderCompletes(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if items[0].Status == "complete" && items[1].Status == "complete" {
+		if items[0].Status == "complete" && items[1].Status == "complete" && items[2].Status == "complete" {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -181,7 +182,7 @@ func TestTranslationRunsTwoBatchesAndSavesBeforeProviderCompletes(t *testing.T) 
 	}
 	select {
 	case <-started:
-		t.Fatal("started a third concurrent batch")
+		t.Fatal("started a fourth concurrent batch")
 	default:
 	}
 	cancel()
@@ -191,7 +192,7 @@ func TestTranslationRunsTwoBatchesAndSavesBeforeProviderCompletes(t *testing.T) 
 		t.Fatal("workers ignored cancellation")
 	}
 	items, _ := s.translations("doc", m)
-	if maxActive.Load() != 2 || items[0].Status != "complete" || items[1].Status != "complete" || items[2].Status != "pending" {
+	if maxActive.Load() != 3 || items[0].Status != "complete" || items[1].Status != "complete" || items[2].Status != "complete" || items[3].Status != "pending" {
 		t.Fatalf("lost partial results or exceeded concurrency: max=%d %+v", maxActive.Load(), items)
 	}
 }

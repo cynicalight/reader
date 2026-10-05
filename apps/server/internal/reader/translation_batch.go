@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 )
 
-const translationBatchCharacters = 20000
-const translationBatchConcurrency = 2
+const translationBatchCharacters = 10000
+const translationBatchConcurrency = 3
 const translationBatchTimeout = 20 * time.Minute
 
 type translationParagraph struct {
