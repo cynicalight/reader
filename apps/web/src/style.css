@@ -629,6 +629,13 @@ kbd {
 }
 .reader-engine.pdf-container {
   overflow: auto;
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+.reader-engine.pdf-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .pdfViewer .page {
   margin: 20px auto !important;
