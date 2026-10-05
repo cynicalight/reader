@@ -17,7 +17,7 @@ it("detects body columns in the checked-in Oze paper before any AI call", async 
   });
   try {
     const pdf = await task.promise;
-    for (const n of [2, 3]) {
+    for (const n of [1, 2, 3]) {
       const page = await pdf.getPage(n),
         viewport = page.getViewport({ scale: 1 }),
         content = await page.getTextContent();
@@ -40,6 +40,10 @@ it("detects body columns in the checked-in Oze paper before any AI call", async 
         ];
       });
       const columns = readingColumns(runs);
+      expect(
+        columns.every((b) => b.width > 0.1),
+        `page ${n} has no page-number region`,
+      ).toBe(true);
       expect(
         columns.some((b) => b.x < 0.2 && b.width < 0.5),
         `page ${n} left column`,

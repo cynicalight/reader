@@ -71,7 +71,7 @@ func translationPrompt(doc Document, m layoutManifest, batch translationBatch) s
 		if b.Label == "paragraph_title" || strings.EqualFold(text, "abstract") || text == "摘要" {
 			break
 		}
-		if text != "" && b.Image == "" && b.Label != "header" && b.Label != "footer" {
+		if text != "" && b.Image == "" && !isPDFPageDecoration(b) {
 			frontMatter = append(frontMatter, text)
 		}
 	}

@@ -22,6 +22,9 @@ type TranslationBlock struct {
 }
 
 func translationSource(b PDFBlock) string {
+	if isPDFPageDecoration(b) {
+		return ""
+	}
 	switch b.Label {
 	case "reference", "reference_content", "algorithm", "display_formula", "inline_formula", "formula_number", "header", "footer", "number":
 		return ""

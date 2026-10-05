@@ -1,4 +1,8 @@
-import type { PDFBlock, PDFLocation } from "@reader/core";
+import {
+  isPDFPageDecoration,
+  type PDFBlock,
+  type PDFLocation,
+} from "@reader/core";
 
 export type Box = NonNullable<PDFLocation["rects"]>[number];
 export interface TextRun {
@@ -21,15 +25,41 @@ export function union(boxes: Box[]): Box {
 
 // Infer a gutter from repeated text on both sides, excluding wide headings.
 // Returns reading regions with full-width bands kept in their original order.
-export function readingColumns(runs: TextRun[]): Box[] {
-  const body = runs.filter(
-    (r) =>
-      r.text.trim() &&
-      r.bounds.width > 0.015 &&
-      r.bounds.y > 0.02 &&
-      r.bounds.y < 0.97,
-  );
-  if (!body.length) return [{ x: 0, y: 0, width: 1, height: 1 }];
+export function readingColumns(
+  runs: TextRun[],
+  blocks: PDFBlock[] = [],
+  neighbors: TextRun[] = [],
+): Box[] {
+  const decorations = blocks.filter(isPDFPageDecoration);
+  const body = runs.filter((r) => {
+    if (!r.text.trim() || r.bounds.width <= 0.015) return false;
+    const covers = (b: Box) =>
+      overlap(r.bounds, b) / (r.bounds.width * r.bounds.height || 1) > 0.5;
+    if (decorations.some((b) => covers(b.bounds))) return false;
+    if (blocks.some((b) => !["", "text"].includes(b.label) && covers(b.bounds)))
+      return true;
+    if (isPDFPageDecoration({ ...r, label: "text" })) return false;
+    const edge = r.bounds.y < 0.08 || r.bounds.y + r.bounds.height > 0.92;
+    // Repeated margin text is a conservative fallback before Paddle is ready.
+    return (
+      !edge ||
+      !neighbors.some(
+        (n) =>
+          normalized(n.text) === normalized(r.text) &&
+          Math.abs(n.bounds.y - r.bounds.y) < 0.015,
+      )
+    );
+  });
+  if (!body.length) {
+    const content = blocks.filter(
+      (b) => !isPDFPageDecoration(b) && (b.image || b.text.trim()),
+    );
+    if (content.length) return [union(content.map((b) => b.bounds))];
+    // Even scans can have a text page number. Without layout evidence retain the page.
+    return blocks.length > 0 && blocks.every(isPDFPageDecoration)
+      ? []
+      : [{ x: 0, y: 0, width: 1, height: 1 }];
+  }
   const boxes = body.map((r) => r.bounds),
     all = union(boxes);
   let split: number | undefined,
@@ -93,6 +123,34 @@ export function readingColumns(runs: TextRun[]): Box[] {
   return result.length ? result : [all];
 }
 
+export function hasParallelColumns(regions: Box[]) {
+  return regions.some((a, i) =>
+    regions
+      .slice(i + 1)
+      .some(
+        (b) =>
+          (a.x + a.width < b.x || b.x + b.width < a.x) &&
+          Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 0.1,
+      ),
+  );
+}
+
+export function columnReadingScale(
+  regions: Box[],
+  viewportWidth: number,
+  pageWidth: number,
+) {
+  if (hasParallelColumns(regions)) return 1.5;
+  // PDFViewer scales PDF points into CSS pixels before applying its zoom.
+  return Math.min(
+    5,
+    Math.max(
+      0.25,
+      (viewportWidth - 32) / (pageWidth * (96 / 72) * union(regions).width),
+    ),
+  );
+}
+
 function normalized(text: string) {
   return text.toLowerCase().replace(/[\s\u00ad]/g, "");
 }
@@ -143,7 +201,7 @@ export function sentenceBoxes(
 }
 export function blockForRects(blocks: PDFBlock[], page: number, rects: Box[]) {
   return blocks
-    .filter((b) => b.page === page && !b.image)
+    .filter((b) => b.page === page && !b.image && !isPDFPageDecoration(b))
     .map((block) => ({
       block,
       score: rects.reduce((v, r) => v + overlap(block.bounds, r), 0),

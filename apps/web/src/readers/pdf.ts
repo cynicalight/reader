@@ -111,8 +111,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.clearSelection();
       clearTimeout(this.resizeTimer);
       const fit = () => {
+        if (container.closest("[inert]")) return;
         if (!this.disposed && this.pdf && this.navigation.fitted) {
-          void this.navigation.fit();
+          void this.navigation.fit(false);
           return;
         }
         if (!this.disposed && this.pdf && this.fitWidth)
@@ -249,7 +250,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     });
     this.navigation.relocated();
     this.location = { ...location, page };
-    if (this.navigation.fitted) await this.navigation.fit();
+    if (this.navigation.fitted) await this.navigation.fit(false);
     this.events.location(this.location, page / this.pdf.numPages);
   }
   async next() {
@@ -457,6 +458,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async setTheme(theme: ReaderTheme) {
     if (this.pdf && this.appliedZoom !== theme.zoom) {
+      this.navigation.stop();
       this.fitWidth = theme.zoom === "width";
       this.appliedZoom = theme.zoom;
       this.wheelScale = undefined;
@@ -473,10 +475,16 @@ export class PDFReaderAdapter implements ReaderAdapter {
   setBlocks(blocks: PDFBlock[]) {
     this.blockData = blocks;
     this.blocks.setBlocks(blocks);
+    if (this.navigation.fitted && !this.container.closest("[inert]"))
+      void this.navigation.fit(false).catch(() => this.navigation.stop());
   }
-  fitColumn() {
+  async fitColumn() {
     this.fitWidth = false;
-    return this.navigation.fit();
+    await this.navigation.fit();
+    if (this.navigation.fitted) {
+      this.appliedZoom = this.viewer.currentScale;
+      this.events.zoom?.(this.appliedZoom);
+    }
   }
   stopColumnFit() {
     this.navigation.stop();

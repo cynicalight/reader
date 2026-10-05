@@ -163,3 +163,29 @@ it("reports source hover and paints a passive counterpart without feeding hover 
   await act(async () => layer.destroy());
   vi.unstubAllGlobals();
 });
+
+it("excludes page furniture from hover while keeping footnotes interactive", () => {
+  for (const label of [
+    "header",
+    "footer",
+    "number",
+    "header_image",
+    "footer_image",
+  ])
+    expect(hitBlock([{ ...block, label }], 2, 0.2, 0.3)).toBeUndefined();
+  const footnote = {
+    ...block,
+    image: undefined,
+    text: "1 Important note",
+    label: "footnote",
+    bounds: { x: 0.1, y: 0.94, width: 0.7, height: 0.02 },
+  };
+  expect(hitBlock([footnote], 2, 0.2, 0.95)?.id).toBe(footnote.id);
+  const pageNumber = {
+    ...footnote,
+    text: "12",
+    label: "text",
+    bounds: { x: 0.48, y: 0.95, width: 0.04, height: 0.02 },
+  };
+  expect(hitBlock([pageNumber], 2, 0.5, 0.96)).toBeUndefined();
+});

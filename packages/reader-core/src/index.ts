@@ -95,6 +95,7 @@ export interface ReaderTheme {
   margin: number;
   scroll: boolean;
   zoom: number | "width";
+  pdfColumnReading?: boolean;
 }
 export const defaultTheme: ReaderTheme = {
   appearance: "system",
@@ -105,6 +106,7 @@ export const defaultTheme: ReaderTheme = {
   margin: 40,
   scroll: false,
   zoom: "width",
+  pdfColumnReading: false,
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
@@ -259,3 +261,5 @@ export interface AgentModel {
   isDefault: boolean;
   aliases?: string[];
 }
+
+export { isPDFPageDecoration } from "./pdf-content";

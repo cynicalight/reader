@@ -182,6 +182,20 @@ export function Settings({
           </section>
           <Separator />
           <section>
+            <h3 className="mb-3 text-sm font-medium">PDF 阅读</h3>
+            <Button
+              aria-pressed={!!theme.pdfColumnReading}
+              variant={theme.pdfColumnReading ? "default" : "outline"}
+              onClick={() =>
+                setTheme({ pdfColumnReading: !theme.pdfColumnReading })
+              }
+            >
+              单栏阅读
+              {theme.pdfColumnReading && <Check className="size-3" />}
+            </Button>
+          </section>
+          <Separator />
+          <section>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-sm font-medium">Agent 连接</h3>
               <Button

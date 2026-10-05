@@ -7,6 +7,7 @@ import {
   type Document,
   type ReaderAdapter,
   type ReaderEvents,
+  type ReaderTheme,
   type TranslationBlock,
 } from "@reader/core";
 const fixture = vi.hoisted(() => ({
@@ -109,11 +110,14 @@ beforeEach(async () => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  await renderView();
+});
+async function renderView(theme: ReaderTheme = defaultTheme) {
   await act(async () =>
     root.render(
       <PDFReadingView
         document={{ id: "doc", type: "pdf" } as Document}
-        theme={defaultTheme}
+        theme={theme}
         annotations={[]}
         blocks={[
           {
@@ -131,7 +135,8 @@ beforeEach(async () => {
       />,
     ),
   );
-});
+}
+
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
@@ -150,7 +155,7 @@ async function click(label: string) {
 }
 it("switches modes without recreating the PDF and links an original selection to its sentence", async () => {
   await click("原文译文");
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  expect(adapter.fitColumn).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.selection({
       text: "Second",
@@ -210,7 +215,7 @@ it("keeps the translated selection as the quote and anchors its counterpart to o
   await act(async () => fixture.ready!.clearSelection());
   expect(events.selection).toHaveBeenLastCalledWith(null);
 });
-it("restores the translated reading position before fitting the original on mode change", async () => {
+it("restores the translated reading position without changing zoom on mode change", async () => {
   await click("仅译文");
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
@@ -227,9 +232,7 @@ it("restores the translated reading position before fitting the original on mode
     blockId: "p1-b1",
     fraction: 0.25,
   });
-  expect(
-    vi.mocked(adapter.followBlock!).mock.invocationCallOrder[0],
-  ).toBeLessThan(vi.mocked(adapter.fitColumn!).mock.invocationCallOrder[0]);
+  expect(adapter.fitColumn).not.toHaveBeenCalled();
 });
 
 it("renders an incoming paragraph while the subscription remains open", async () => {
@@ -295,4 +298,29 @@ it("provides a resizable divider with the swap action outside the toolbar", asyn
   ).toBeNull();
   await click("交换原文和译文");
   expect(adapter.destroy).not.toHaveBeenCalled();
+});
+
+it("enables column reading in original mode and preserves it across mode changes", async () => {
+  await renderView({ ...defaultTheme, pdfColumnReading: true });
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  vi.mocked(adapter.stopColumnFit!).mockClear();
+  await click("原文译文");
+  await click("仅译文");
+  await click("仅原文");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  expect(adapter.stopColumnFit).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("适合单栏");
+  await renderView({ ...defaultTheme, pdfColumnReading: false });
+  expect(adapter.stopColumnFit).toHaveBeenCalled();
+  expect(host.textContent).not.toContain("适合单栏");
+});
+
+it("defers initial fitting while the original pane is hidden", async () => {
+  await click("仅译文");
+  await renderView({ ...defaultTheme, pdfColumnReading: true });
+  expect(adapter.fitColumn).not.toHaveBeenCalled();
+  await click("原文译文");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  await click("仅原文");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
 });

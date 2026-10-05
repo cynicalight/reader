@@ -1,7 +1,11 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { BlockActions } from "../BlockActions";
-import type { PDFBlock, PDFBlockAction } from "@reader/core";
+import {
+  isPDFPageDecoration,
+  type PDFBlock,
+  type PDFBlockAction,
+} from "@reader/core";
 export function hitBlock(
   blocks: PDFBlock[],
   page: number,
@@ -12,6 +16,7 @@ export function hitBlock(
     .filter(
       (b) =>
         b.page === page &&
+        !isPDFPageDecoration(b) &&
         (b.image || b.text.trim()) &&
         x >= b.bounds.x &&
         y >= b.bounds.y &&
@@ -54,7 +59,7 @@ export class PDFBlockOverlay {
     host.addEventListener("scroll", this.clear, { passive: true });
   }
   setBlocks(blocks: PDFBlock[]) {
-    this.blocks = blocks;
+    this.blocks = blocks.filter((b) => !isPDFPageDecoration(b));
     this.clear();
     this.repaint();
   }

@@ -1,5 +1,6 @@
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import { isPDFPageDecoration } from "@reader/core";
 import type {
   PDFBlock,
   PDFReadingAnchor,
@@ -11,6 +12,7 @@ import type {
 } from "@reader/core";
 import {
   ColumnGesture,
+  columnReadingScale,
   overlap,
   readingColumns,
   sentenceBoxes,
@@ -79,6 +81,18 @@ export class PDFReadingNavigation {
       );
     return this.cache.get(page)!;
   }
+  private async columns(page: number) {
+    const [runs, ...neighbors] = await Promise.all(
+      [page, page - 1, page + 1]
+        .filter((n) => n >= 1 && n <= this.count())
+        .map((n) => this.runs(n)),
+    );
+    return readingColumns(
+      runs,
+      this.blocks().filter((b) => b.page === page),
+      neighbors.flat(),
+    );
+  }
   private pageNode(n: number) {
     return this.viewer.getPageView(n - 1)?.div as HTMLElement | undefined;
   }
@@ -101,6 +115,7 @@ export class PDFReadingNavigation {
       distance = Infinity,
       fraction = 0;
     for (const b of this.blocks()) {
+      if (isPDFPageDecoration(b)) continue;
       const node = this.pageNode(b.page);
       if (!node) continue;
       const r = node.getBoundingClientRect();
@@ -126,12 +141,24 @@ export class PDFReadingNavigation {
     this.active = false;
     this.events.columnFit?.(false);
   }
-  async fit() {
+  async fit(resetScale = true) {
     const operation = ++this.operation;
     const anchor = this.anchor(),
       block = this.blocks().find((b) => b.id === anchor?.blockId);
     const page = block?.page ?? this.viewer.currentPageNumber;
-    const columns = readingColumns(await this.runs(page));
+    const columns = await this.columns(page);
+    if (this.disposed || operation !== this.operation) return;
+    if (!columns.length) {
+      this.stop();
+      return;
+    }
+    const scale = resetScale
+      ? columnReadingScale(
+          columns,
+          this.host.clientWidth,
+          (await this.page(page)).getViewport({ scale: 1 }).width,
+        )
+      : undefined;
     if (this.disposed || operation !== this.operation) return;
     const node = this.pageNode(page),
       view = this.host.getBoundingClientRect(),
@@ -159,6 +186,7 @@ export class PDFReadingNavigation {
       block
         ? block.bounds.y + (anchor?.fraction ?? 0) * block.bounds.height
         : undefined,
+      scale,
     );
   }
   private async place(
@@ -167,25 +195,19 @@ export class PDFReadingNavigation {
     bounds: Box,
     bottom = false,
     targetY?: number,
+    scale?: number,
   ) {
     const operation = ++this.operation;
     this.moving = true;
     this.active = true;
     this.column = { page, index, bounds };
     try {
-      const p = await this.page(page);
-      if (this.disposed || operation !== this.operation) return;
-      const vp = p.getViewport({ scale: 1 });
-      const scale = Math.min(
-        5,
-        Math.max(
-          0.25,
-          (this.host.clientWidth - 32) / (vp.width * (bounds.width + 0.025)),
-        ),
-      );
       if (this.viewer.currentPageNumber !== page)
         this.viewer.currentPageNumber = page;
-      if (Math.abs(this.viewer.currentScale - scale) > 0.002)
+      if (
+        scale !== undefined &&
+        Math.abs(this.viewer.currentScale - scale) > 0.002
+      )
         this.viewer.currentScaleValue = String(scale);
       await new Promise<void>((r) =>
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
@@ -246,12 +268,13 @@ export class PDFReadingNavigation {
     const operation = ++this.operation;
     let { page, index } = this.column;
     index += direction;
-    let columns = readingColumns(await this.runs(page));
+    let columns = await this.columns(page);
     if (this.disposed || operation !== this.operation) return;
-    if (index < 0 || index >= columns.length) {
+    while (index < 0 || index >= columns.length) {
       page += direction;
       if (page < 1 || page > this.count()) return;
-      columns = readingColumns(await this.runs(page));
+      columns = await this.columns(page);
+      if (this.disposed || operation !== this.operation) return;
       index = direction > 0 ? 0 : columns.length - 1;
     }
     if (!this.disposed && operation === this.operation)
@@ -260,9 +283,10 @@ export class PDFReadingNavigation {
   async follow(anchor: PDFReadingAnchor) {
     const operation = ++this.operation;
     const block = this.blocks().find((b) => b.id === anchor.blockId);
-    if (!block) return;
+    if (!block || isPDFPageDecoration(block)) return;
     if (this.active) {
-      const columns = readingColumns(await this.runs(block.page));
+      const columns = await this.columns(block.page);
+      if (!columns.length) return;
       const index =
         columns
           .map((bounds, i) => ({ i, area: overlap(bounds, block.bounds) }))
@@ -356,6 +380,7 @@ export class PDFReadingNavigation {
     const selection = location.rects ?? [],
       result: PDFSentenceLink[] = [];
     for (const block of this.blocks()) {
+      if (isPDFPageDecoration(block)) continue;
       if (
         block.page !== location.page ||
         !selection.some((r) => overlap(r, block.bounds) > 0)

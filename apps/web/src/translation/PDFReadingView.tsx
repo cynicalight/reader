@@ -14,6 +14,7 @@ import type {
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
+import { isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
 import { Columns2, Link2, Unlink2 } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
@@ -70,6 +71,7 @@ export function PDFReadingView({
     );
   };
   const previousMode = useRef<Mode>("source");
+  const columnInitialized = useRef(false);
   const root = useRef<HTMLDivElement>(null),
     pane = useRef<HTMLDivElement>(null),
     control = useRef(new ReadingSync()),
@@ -84,9 +86,7 @@ export function PDFReadingView({
   const selecting = useRef(false),
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
-  const visibleBlocks = blocks.filter(
-    (b) => !["header", "footer", "number"].includes(b.label),
-  );
+  const visibleBlocks = blocks.filter((b) => !isPDFPageDecoration(b));
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -244,15 +244,9 @@ export function PDFReadingView({
     setLinked(undefined);
     void engine.focusSentences?.("", []);
     const restore = async () => {
-      if (
-        previous === "translation" &&
-        mode !== "translation" &&
-        reading.current
-      )
+      if (previous !== mode && mode !== "translation" && reading.current)
         await engine.followBlock?.(reading.current);
       if (cancelled) return;
-      if (mode === "parallel") await engine.fitColumn?.();
-      else engine.stopColumnFit?.();
       if (!cancelled && mode !== "source" && reading.current)
         followTranslation(reading.current);
     };
@@ -261,10 +255,25 @@ export function PDFReadingView({
     });
     return () => {
       cancelled = true;
-      engine.stopColumnFit?.();
       engine.hoverBlock?.(null);
     };
   }, [mode, engine]);
+  useEffect(() => {
+    columnInitialized.current = false;
+    if (!theme.pdfColumnReading) engine?.stopColumnFit?.();
+    return () => engine?.stopColumnFit?.();
+  }, [engine, theme.pdfColumnReading]);
+  useEffect(() => {
+    if (
+      !engine ||
+      !theme.pdfColumnReading ||
+      mode === "translation" ||
+      columnInitialized.current
+    )
+      return;
+    columnInitialized.current = true;
+    void engine.fitColumn?.().catch((e) => toast.error(e.message));
+  }, [engine, theme.pdfColumnReading, mode]);
   useEffect(() => () => cancelAnimationFrame(scrollFrame.current), []);
   useEffect(() => {
     const release = () => {
@@ -502,7 +511,7 @@ export function PDFReadingView({
                 },
               }}
             />
-            {mode === "parallel" && !fitted && (
+            {theme.pdfColumnReading && mode !== "translation" && !fitted && (
               <Button
                 className="fit-column"
                 variant="secondary"
