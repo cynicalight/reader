@@ -1,0 +1,123 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { api } from "@reader/api";
+import type { Document } from "@reader/core";
+import { LibraryDocuments } from "./LibraryDocuments";
+import { useReaderStore } from "./store";
+vi.mock("@reader/api", () => ({ api: { removeDocument: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("./ProcessingStatus", () => ({ CoverProcessing: () => null }));
+const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
+  id: String(i),
+  title,
+  author: "",
+  type: "epub",
+  category: "book",
+  categorySource: "manual",
+  classificationStatus: "done",
+  classificationError: "",
+  tags: [],
+  size: 100,
+  createdAt: "",
+  lastOpenedAt: "",
+  favorite: false,
+  percentage: 0,
+}));
+let root: Root, host: HTMLDivElement;
+const open = vi.fn(),
+  edit = vi.fn();
+function Harness() {
+  const documents = useReaderStore((s) => s.documents);
+  return (
+    <LibraryDocuments
+      documents={documents}
+      libraryView="grid"
+      jobs={[]}
+      processingError=""
+      openDocument={open}
+      favorite={() => {}}
+      onEdit={edit}
+      onSettings={() => {}}
+    />
+  );
+}
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.clearAllMocks();
+  useReaderStore.setState({ documents: docs });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => root.render(<Harness />));
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+});
+const button = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (b) => b.textContent?.trim() === label,
+  )!;
+it("selects all current results and waits for explicit confirmation before deleting", async () => {
+  await act(async () =>
+    host
+      .querySelector("article")!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "a",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+  );
+  expect(host.textContent).toContain("已选 2 份");
+  await act(async () => button("删除所选").click());
+  expect(api.removeDocument).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "删除 2 份文档",
+  );
+  vi.mocked(api.removeDocument).mockImplementation(async (id) => {
+    if (id === "1") throw Error("offline");
+  });
+  await act(async () => button("删除文档").click());
+  expect(useReaderStore.getState().documents.map((d) => d.id)).toEqual(["1"]);
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "删除 1 份文档",
+  );
+  expect(open).not.toHaveBeenCalled();
+  vi.mocked(api.removeDocument).mockResolvedValue(undefined);
+  await act(async () => button("删除文档").click());
+  expect(useReaderStore.getState().documents).toEqual([]);
+});
+it("opens the context menu on the targeted document and edits that document", async () => {
+  const card = host.querySelectorAll("article")[1];
+  await act(async () =>
+    card.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 50,
+        clientY: 50,
+      }),
+    ),
+  );
+  const item = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((el) => el.textContent?.includes("编辑文档信息"));
+  expect(item).toBeDefined();
+  await act(async () => item!.click());
+  expect(edit).toHaveBeenCalledExactlyOnceWith("1");
+  expect(open).not.toHaveBeenCalled();
+});

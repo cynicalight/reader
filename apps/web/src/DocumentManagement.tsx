@@ -214,6 +214,8 @@ export function DocumentEditor({
 }) {
   const [title, setTitle] = useState(d.title);
   const [author, setAuthor] = useState(d.author);
+  const [titleChanged, setTitleChanged] = useState(false);
+  const [authorChanged, setAuthorChanged] = useState(false);
   const [category, setCategory] = useState(d.category);
   const [categoryChanged, setCategoryChanged] = useState(false);
   const [tags, setTags] = useState(d.tags);
@@ -248,8 +250,8 @@ export function DocumentEditor({
     setBusy(true);
     try {
       await api.update(d.id, {
-        title: title.trim(),
-        author: author.trim(),
+        ...(titleChanged ? { title: title.trim() } : {}),
+        ...(authorChanged ? { author: author.trim() } : {}),
         tags,
         ...(categoryChanged ? { category } : {}),
       });
@@ -292,9 +294,12 @@ export function DocumentEditor({
             </label>
             <Input
               id="document-title"
-              value={title}
+              value={titleChanged ? title : d.title}
               maxLength={300}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setTitleChanged(true);
+              }}
             />
           </div>
           <div className="space-y-2">
@@ -303,9 +308,12 @@ export function DocumentEditor({
             </label>
             <Input
               id="document-author"
-              value={author}
+              value={authorChanged ? author : d.author}
               maxLength={200}
-              onChange={(e) => setAuthor(e.target.value)}
+              onChange={(e) => {
+                setAuthor(e.target.value);
+                setAuthorChanged(true);
+              }}
             />
           </div>
           <div className="space-y-2">
@@ -416,7 +424,11 @@ export function DocumentEditor({
               取消
             </Button>
             <Button
-              disabled={busy || !title.trim() || !!draft.trim()}
+              disabled={
+                busy ||
+                !(titleChanged ? title : d.title).trim() ||
+                !!draft.trim()
+              }
               onClick={() => void save()}
             >
               {busy ? "保存中…" : "保存"}
