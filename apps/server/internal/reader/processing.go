@@ -233,10 +233,14 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				if e != nil {
 					continue
 				}
+				work, finish, startErr := s.beginDocumentTask(ctx, p.DocumentID)
+				if startErr != nil {
+					continue
+				}
 				if phase == "learning" {
-					e = s.learnPDF(ctx, &p)
+					e = s.learnPDF(work, &p)
 				} else {
-					e = s.settlePDF(ctx, &p)
+					e = s.settlePDF(work, &p)
 				}
 				if e != nil {
 					if ctx.Err() != nil {
@@ -248,6 +252,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 					}
 					_ = s.Store.saveProcessing(p)
 				}
+				finish()
 			}
 		}(phase)
 	}

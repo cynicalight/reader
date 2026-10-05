@@ -14,7 +14,6 @@ import {
   PanelLeft,
   Command,
   X,
-  Tags,
 } from "lucide-react";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
@@ -32,14 +31,11 @@ import { Toaster, toast } from "sonner";
 import { useReaderStore, refreshLibrary } from "./store";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
-import { CoverProcessing, useProcessing } from "./ProcessingStatus";
+import { useProcessing } from "./ProcessingStatus";
 import { useResolvedTheme } from "./appearance";
 import { flushProgress } from "./progress";
-import {
-  DocumentBadges,
-  DocumentEditor,
-  LibraryFilterBar,
-} from "./DocumentManagement";
+import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
+import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
 export function App() {
   const { documents, active, theme, setTheme, open } = useReaderStore();
@@ -359,128 +355,17 @@ export function App() {
                     <p>正在打开本地书库</p>
                   </div>
                 ) : filtered.length ? (
-                  <div
-                    className={`book-grid ${libraryView === "list" ? "book-list" : ""}`}
-                  >
-                    {filtered.map((doc, i) => (
-                      <article className="book-card" key={doc.id}>
-                        <div className="book-cover-frame">
-                          <Button
-                            variant="ghost"
-                            title={doc.title}
-                            aria-label={`打开 ${doc.title}`}
-                            className={`book-cover cover-${i % 4}`}
-                            onClick={() => openDocument(doc)}
-                          >
-                            <div className="cover-top">
-                              <span>{doc.type.toUpperCase()}</span>
-                              {doc.type === "epub" ? (
-                                <BookOpen size={18} />
-                              ) : (
-                                <FileText size={18} />
-                              )}
-                            </div>
-                            <div className="cover-text">
-                              <div className="cover-title">{doc.title}</div>
-                              {doc.author && (
-                                <div
-                                  className="cover-author"
-                                  title={doc.author}
-                                >
-                                  {doc.author}
-                                </div>
-                              )}
-                            </div>
-                            <div className="cover-bottom">
-                              <ArrowUpRight size={18} />
-                            </div>
-                            <div className="cover-decoration" />
-                          </Button>
-                          {doc.type === "pdf" &&
-                            (jobs.find((job) => job.documentId === doc.id) ? (
-                              <CoverProcessing
-                                job={jobs.find(
-                                  (job) => job.documentId === doc.id,
-                                )!}
-                                onSettings={() => setSettings(true)}
-                                unavailable={!!processingError}
-                              />
-                            ) : (
-                              <Button
-                                className="cover-analyze"
-                                size="xs"
-                                variant="secondary"
-                                onClick={() =>
-                                  void api
-                                    .process(doc.id)
-                                    .catch((e) => toast.error(e.message))
-                                }
-                              >
-                                分析文档
-                              </Button>
-                            ))}
-                        </div>
-                        <div className="book-meta">
-                          <Button
-                            title={doc.title}
-                            className="book-title"
-                            variant="ghost"
-                            onClick={() => openDocument(doc)}
-                          >
-                            <span>{doc.title}</span>
-                          </Button>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label={doc.favorite ? "取消收藏" : "收藏文档"}
-                            onClick={() => void favorite(doc)}
-                          >
-                            <Star
-                              className={
-                                doc.favorite
-                                  ? "fill-current text-amber-500"
-                                  : ""
-                              }
-                            />
-                          </Button>
-                        </div>
-                        <div className="document-organization">
-                          <DocumentBadges document={doc} />
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label={`管理 ${doc.title} 的类型和标签`}
-                            title="管理类型和标签"
-                            onClick={() => setEditingId(doc.id)}
-                          >
-                            <Tags />
-                          </Button>
-                        </div>
-                        {doc.categorySource !== "manual" &&
-                          (doc.classificationStatus === "failed" ||
-                            doc.classificationStatus === "running") && (
-                            <p className="classification-status">
-                              {doc.classificationStatus === "failed"
-                                ? "AI 分类失败 · 可手动修改或重试"
-                                : "AI 分类中"}
-                            </p>
-                          )}
-                        <div className="book-progress">
-                          <div
-                            style={{
-                              width: `${Math.round(doc.percentage * 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <p className="book-status">
-                          {doc.percentage > 0
-                            ? `已读 ${Math.round(doc.percentage * 100)}%`
-                            : "还未开始阅读"}
-                          <span>{(doc.size / 1024 / 1024).toFixed(1)} MB</span>
-                        </p>
-                      </article>
-                    ))}
-                  </div>
+                  <LibraryDocuments
+                    key={JSON.stringify([filter, query, filters])}
+                    documents={filtered}
+                    libraryView={libraryView}
+                    jobs={jobs}
+                    processingError={processingError}
+                    openDocument={openDocument}
+                    favorite={favorite}
+                    onEdit={setEditingId}
+                    onSettings={() => setSettings(true)}
+                  />
                 ) : (
                   <div className="empty-state">
                     <div className="empty-books">

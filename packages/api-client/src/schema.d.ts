@@ -93,7 +93,36 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    delete?: never;
+    /** Delete a document and its library-owned data after stopping background tasks */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Deleted or already absent */
+        204: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
     options?: never;
     head?: never;
     patch: {
@@ -114,6 +143,8 @@ export interface paths {
             favorite?: boolean;
             progress?: components["schemas"]["DocumentLocation"];
             percentage?: number;
+            title?: string;
+            author?: string;
           };
         };
       };

@@ -162,8 +162,45 @@
                                       "$ref": "#/components/schemas/DocumentLocation",
                                     },
                                   "percentage": { "type": "number" },
+                                  "title":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 300,
+                                    },
+                                  "author":
+                                    { "type": "string", "maxLength": 200 },
                                 },
                               "required": [],
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Delete a document and its library-owned data after stopping background tasks",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "204": { "description": "Deleted or already absent" },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
                             },
                         },
                     },

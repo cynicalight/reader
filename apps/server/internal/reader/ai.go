@@ -95,5 +95,12 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档不存在")
 		return
 	}
+	ctx, finish, err := s.beginDocumentTask(r.Context(), d.ID)
+	if err != nil {
+		fail(w, 409, "文档正在删除")
+		return
+	}
+	defer finish()
+	r = r.WithContext(ctx)
 	s.chatDocument(w, r, d.ID, d.Title, req.Provider, req.Prompt, *req.Context, req.References, req.Attachments)
 }

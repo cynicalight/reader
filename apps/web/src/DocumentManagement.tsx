@@ -212,6 +212,8 @@ export function DocumentEditor({
   documents: Document[];
   onClose: () => void;
 }) {
+  const [title, setTitle] = useState(d.title);
+  const [author, setAuthor] = useState(d.author);
   const [category, setCategory] = useState(d.category);
   const [categoryChanged, setCategoryChanged] = useState(false);
   const [tags, setTags] = useState(d.tags);
@@ -246,6 +248,8 @@ export function DocumentEditor({
     setBusy(true);
     try {
       await api.update(d.id, {
+        title: title.trim(),
+        author: author.trim(),
         tags,
         ...(categoryChanged ? { category } : {}),
       });
@@ -276,12 +280,34 @@ export function DocumentEditor({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>管理文档</DialogTitle>
+          <DialogTitle>编辑文档信息</DialogTitle>
           <DialogDescription className="truncate" title={d.title}>
             {d.title}
           </DialogDescription>
         </DialogHeader>
         <fieldset disabled={busy} className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="document-title" className="text-sm font-medium">
+              标题
+            </label>
+            <Input
+              id="document-title"
+              value={title}
+              maxLength={300}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="document-author" className="text-sm font-medium">
+              作者
+            </label>
+            <Input
+              id="document-author"
+              value={author}
+              maxLength={200}
+              onChange={(e) => setAuthor(e.target.value)}
+            />
+          </div>
           <div className="space-y-2">
             <p className="text-sm font-medium">文档类型（必选）</p>
             <Choice
@@ -390,7 +416,7 @@ export function DocumentEditor({
               取消
             </Button>
             <Button
-              disabled={busy || !!draft.trim()}
+              disabled={busy || !title.trim() || !!draft.trim()}
               onClick={() => void save()}
             >
               {busy ? "保存中…" : "保存"}

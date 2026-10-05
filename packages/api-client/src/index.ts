@@ -122,6 +122,10 @@ export const api = {
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
+  removeDocument: (id: string) =>
+    request<void>(`/api/documents/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
   classify: (id: string) =>
     request<Document>(`/api/documents/${id}/classification`, {
       method: "POST",
@@ -129,6 +133,8 @@ export const api = {
   update: (
     id: string,
     patch: {
+      title?: string;
+      author?: string;
       category?: Document["category"];
       tags?: string[];
       favorite?: boolean;
