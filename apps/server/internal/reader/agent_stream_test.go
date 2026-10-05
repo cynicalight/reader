@@ -31,7 +31,9 @@ func fakeAgent(t *testing.T, provider, mode string) string {
 		name += ".exe"
 	}
 	target := filepath.Join(dir, name)
-	if err := os.Link(binary, target); err != nil {
+	// Windows keeps the running test executable locked, including its hard links.
+	// Copy there so TempDir cleanup can remove the helper after the child exits.
+	if runtime.GOOS == "windows" || os.Link(binary, target) != nil {
 		data, err := os.ReadFile(binary)
 		if err != nil {
 			t.Fatal(err)

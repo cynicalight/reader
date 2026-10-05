@@ -10,6 +10,9 @@ vi.mock("@reader/api", () => ({
   api: { agentModels: vi.fn(), aiConfig: vi.fn(), saveAIConfig: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+// Branding has its own tests. Keep model interactions independent of Lobe's
+// avatar style runtime, while exercising the real Base UI popover/select/slider.
+vi.mock("./ProviderIdentity", () => ({ ProviderIcon: () => <span /> }));
 const models: AgentModel[] = [
   {
     id: "model-a",
