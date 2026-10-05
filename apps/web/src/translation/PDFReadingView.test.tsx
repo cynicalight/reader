@@ -112,7 +112,9 @@ beforeEach(async () => {
   root = createRoot(host);
   await renderView();
 });
-async function renderView(theme: ReaderTheme = defaultTheme) {
+async function renderView(
+  theme: ReaderTheme = { ...defaultTheme, pdfColumnReading: false },
+) {
   await act(async () =>
     root.render(
       <PDFReadingView
@@ -322,5 +324,10 @@ it("defers initial fitting while the original pane is hidden", async () => {
   await click("原文译文");
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
   await click("仅原文");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+});
+
+it("enables column reading with the default settings", async () => {
+  await renderView(defaultTheme);
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
 });

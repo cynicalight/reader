@@ -106,7 +106,7 @@ export const defaultTheme: ReaderTheme = {
   margin: 40,
   scroll: false,
   zoom: "width",
-  pdfColumnReading: false,
+  pdfColumnReading: true,
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
