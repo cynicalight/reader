@@ -312,6 +312,15 @@ it("enables column reading in original mode and preserves it across mode changes
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
   expect(adapter.stopColumnFit).not.toHaveBeenCalled();
   expect(host.textContent).toContain("适合单栏");
+  await act(async () => fixture.events!.columnFit?.(true));
+  expect(host.textContent).toContain("退出单栏");
+  expect(host.textContent).not.toContain("适合单栏");
+  await click("退出单栏");
+  expect(adapter.stopColumnFit).toHaveBeenCalledTimes(1);
+  await act(async () => fixture.events!.columnFit?.(false));
+  await click("适合单栏");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(2);
+  vi.mocked(adapter.stopColumnFit!).mockClear();
   await renderView({ ...defaultTheme, pdfColumnReading: false });
   expect(adapter.stopColumnFit).toHaveBeenCalled();
   expect(host.textContent).not.toContain("适合单栏");

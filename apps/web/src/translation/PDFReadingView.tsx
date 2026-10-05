@@ -443,7 +443,9 @@ export function PDFReadingView({
     <div className="pdf-reading" ref={root} data-theme={theme.mode}>
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       {mode === "translation" && (
-        <div className="pdf-page-navigation">{pageNavigation}</div>
+        <div className="pdf-reading-controls">
+          <div className="pdf-page-navigation">{pageNavigation}</div>
+        </div>
       )}
       <TranslationPanes
         mode={mode}
@@ -504,22 +506,26 @@ export function PDFReadingView({
               }}
             />
             {mode !== "translation" && (
-              <div className="pdf-page-navigation">{pageNavigation}</div>
-            )}
-            {theme.pdfColumnReading && mode !== "translation" && !fitted && (
-              <Button
-                className="fit-column"
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  void engine
-                    ?.fitColumn?.()
-                    .catch((e) => toast.error(e.message))
-                }
-              >
-                <Columns2 />
-                适合单栏
-              </Button>
+              <div className="pdf-reading-controls">
+                <div className="pdf-page-navigation">{pageNavigation}</div>
+                {theme.pdfColumnReading && (
+                  <Button
+                    className="fit-column"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      if (fitted) engine?.stopColumnFit?.();
+                      else
+                        void engine
+                          ?.fitColumn?.()
+                          .catch((e) => toast.error(e.message));
+                    }}
+                  >
+                    <Columns2 />
+                    {fitted ? "退出单栏" : "适合单栏"}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         }
