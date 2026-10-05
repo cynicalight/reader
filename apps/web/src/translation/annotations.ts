@@ -36,23 +36,25 @@ export function translatedAnnotationRanges(
       annotation.location.type === "pdf"
         ? annotation.location.translation
         : undefined;
-    if (
-      !mark ||
-      !translations.some(
-        (t) =>
-          t.blockId === mark.blockId &&
-          t.sourceHash === mark.sourceHash &&
-          t.status === "complete",
+    if (!mark) continue;
+    for (const part of mark.ranges ?? [{ ...mark, quote: annotation.quote }]) {
+      if (
+        !translations.some(
+          (t) =>
+            t.blockId === part.blockId &&
+            t.sourceHash === part.sourceHash &&
+            t.status === "complete",
+        )
       )
-    )
-      continue;
-    const node = Array.from(
-      host.querySelectorAll<HTMLElement>("[data-translation-block]"),
-    ).find((n) => n.dataset.translationBlock === mark.blockId);
-    if (!node) continue;
-    const range = textRange(node, mark.start, mark.end);
-    if (range?.toString().trim() === annotation.quote.trim())
-      result.push({ annotation, range });
+        continue;
+      const node = Array.from(
+        host.querySelectorAll<HTMLElement>("[data-translation-block]"),
+      ).find((n) => n.dataset.translationBlock === part.blockId);
+      if (!node) continue;
+      const range = textRange(node, part.start, part.end);
+      if (range?.toString().trim() === part.quote.trim())
+        result.push({ annotation, range });
+    }
   }
   return result;
 }

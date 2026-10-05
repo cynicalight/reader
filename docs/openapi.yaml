@@ -1164,6 +1164,48 @@
                                   },
                                 "start": { "type": "integer", "minimum": 0 },
                                 "end": { "type": "integer", "minimum": 0 },
+                                "ranges":
+                                  {
+                                    "type": "array",
+                                    "items":
+                                      {
+                                        "type": "object",
+                                        "required":
+                                          [
+                                            "blockId",
+                                            "sourceHash",
+                                            "sentenceIndexes",
+                                            "start",
+                                            "end",
+                                            "quote",
+                                          ],
+                                        "properties":
+                                          {
+                                            "blockId": { "type": "string" },
+                                            "sourceHash": { "type": "string" },
+                                            "sentenceIndexes":
+                                              {
+                                                "type": "array",
+                                                "items":
+                                                  {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                  },
+                                              },
+                                            "start":
+                                              {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                              },
+                                            "end":
+                                              {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                              },
+                                            "quote": { "type": "string" },
+                                          },
+                                      },
+                                  },
                               },
                           },
                       },

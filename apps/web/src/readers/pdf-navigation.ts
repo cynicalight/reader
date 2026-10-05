@@ -1,6 +1,14 @@
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
-import type { PDFBlock, PDFReadingAnchor, ReaderEvents } from "@reader/core";
+import type {
+  PDFBlock,
+  PDFReadingAnchor,
+  ReaderEvents,
+  PDFLocation,
+  PDFPassage,
+  PDFSentenceLink,
+  TranslationBlock,
+} from "@reader/core";
 import {
   ColumnGesture,
   overlap,
@@ -20,7 +28,7 @@ export class PDFReadingNavigation {
   private operation = 0;
   private lastLeft = 0;
   private gesture = new ColumnGesture();
-  private focus?: { blockId: string; sources: string[] };
+  private focus: PDFPassage[] = [];
   constructor(
     private host: HTMLElement,
     private viewer: PDFViewer,
@@ -34,6 +42,12 @@ export class PDFReadingNavigation {
   }
   get fitted() {
     return this.active;
+  }
+  relocated() {
+    this.operation++;
+    this.moving = false;
+    this.lastLeft = this.host.scrollLeft;
+    this.column = undefined;
   }
   private async runs(page: number) {
     if (!this.cache.has(page))
@@ -113,11 +127,12 @@ export class PDFReadingNavigation {
     this.events.columnFit?.(false);
   }
   async fit() {
+    const operation = ++this.operation;
     const anchor = this.anchor(),
       block = this.blocks().find((b) => b.id === anchor?.blockId);
     const page = block?.page ?? this.viewer.currentPageNumber;
     const columns = readingColumns(await this.runs(page));
-    if (this.disposed) return;
+    if (this.disposed || operation !== this.operation) return;
     const node = this.pageNode(page),
       view = this.host.getBoundingClientRect(),
       r = node?.getBoundingClientRect();
@@ -228,19 +243,22 @@ export class PDFReadingNavigation {
   };
   private async step(direction: number) {
     if (!this.column) return;
+    const operation = ++this.operation;
     let { page, index } = this.column;
     index += direction;
     let columns = readingColumns(await this.runs(page));
+    if (this.disposed || operation !== this.operation) return;
     if (index < 0 || index >= columns.length) {
       page += direction;
       if (page < 1 || page > this.count()) return;
       columns = readingColumns(await this.runs(page));
       index = direction > 0 ? 0 : columns.length - 1;
     }
-    if (!this.disposed)
+    if (!this.disposed && operation === this.operation)
       await this.place(page, index, columns[index], direction < 0);
   }
   async follow(anchor: PDFReadingAnchor) {
+    const operation = ++this.operation;
     const block = this.blocks().find((b) => b.id === anchor.blockId);
     if (!block) return;
     if (this.active) {
@@ -249,7 +267,7 @@ export class PDFReadingNavigation {
         columns
           .map((bounds, i) => ({ i, area: overlap(bounds, block.bounds) }))
           .sort((a, b) => b.area - a.area)[0]?.i ?? 0;
-      if (this.disposed) return;
+      if (this.disposed || operation !== this.operation) return;
       await this.place(
         block.page,
         index,
@@ -276,50 +294,113 @@ export class PDFReadingNavigation {
       this.lastLeft = this.host.scrollLeft;
     }
   }
-  async focusSentences(blockId: string, sources: string[], scroll = false) {
-    this.focus = sources.length ? { blockId, sources } : undefined;
-    const focus = this.focus;
+  focusSentences(blockId: string, sources: string[], scroll = false) {
+    return this.focusPassages(
+      sources.length ? [{ blockId, sources }] : [],
+      scroll,
+    );
+  }
+  async focusPassages(passages: PDFPassage[], scroll = false) {
+    this.focus = passages;
     this.host
       .querySelectorAll(".reader-linked-highlight")
       .forEach((n) => n.remove());
-    const block = this.blocks().find((b) => b.id === blockId);
-    if (!block || !sources.length) return;
-    const runs = await this.runs(block.page);
-    if (this.disposed || this.focus !== focus) return;
-    const approximate = sentenceBoxes(block, sources, runs);
-    if (scroll)
-      await this.follow({
-        blockId,
-        fraction: Math.max(
-          0,
-          Math.min(
-            1,
-            (approximate[0].y - block.bounds.y) / block.bounds.height,
+    for (const [index, passage] of passages.entries()) {
+      const block = this.blocks().find((b) => b.id === passage.blockId);
+      if (!block || !passage.sources.length) continue;
+      const runs = await this.runs(block.page);
+      if (this.disposed || this.focus !== passages) return;
+      const approximate = sentenceBoxes(
+        block,
+        passage.sources,
+        runs,
+        passage.sourceOffset,
+      );
+      if (scroll && index === 0)
+        await this.follow({
+          blockId: block.id,
+          fraction: Math.max(
+            0,
+            Math.min(
+              1,
+              (approximate[0].y - block.bounds.y) / block.bounds.height,
+            ),
           ),
-        ),
-      });
-    if (this.disposed || this.focus !== focus) return;
-    const node = this.pageNode(block.page);
-    if (!node) return;
-    // Prefer DOM ranges so sentence endpoints follow actual glyph widths.
-    const ranges = this.domSentenceBoxes(node, block, sources);
-    const boxes = ranges.length ? ranges : approximate;
-    for (const b of boxes) {
-      const el = document.createElement("div");
-      el.className = "reader-linked-highlight";
-      Object.assign(el.style, {
-        left: `${b.x * 100}%`,
-        top: `${b.y * 100}%`,
-        width: `${b.width * 100}%`,
-        height: `${b.height * 100}%`,
-      });
-      node.append(el);
+        });
+      if (this.disposed || this.focus !== passages) return;
+      const node = this.pageNode(block.page);
+      if (!node) continue;
+      const exact = this.domSentenceBoxes(
+        node,
+        block,
+        passage.sources,
+        passage.sourceOffset,
+      );
+      for (const b of exact.length ? exact : approximate) {
+        const el = document.createElement("div");
+        el.className = "reader-linked-highlight";
+        Object.assign(el.style, {
+          left: `${b.x * 100}%`,
+          top: `${b.y * 100}%`,
+          width: `${b.width * 100}%`,
+          height: `${b.height * 100}%`,
+        });
+        node.append(el);
+      }
     }
+  }
+  async matchSentences(
+    location: PDFLocation,
+    translations: TranslationBlock[],
+  ): Promise<PDFSentenceLink[]> {
+    const selection = location.rects ?? [],
+      result: PDFSentenceLink[] = [];
+    for (const block of this.blocks()) {
+      if (
+        block.page !== location.page ||
+        !selection.some((r) => overlap(r, block.bounds) > 0)
+      )
+        continue;
+      const translation = translations.find(
+        (t) => t.blockId === block.id && t.status === "complete",
+      );
+      if (!translation) continue;
+      const node = this.pageNode(block.page);
+      let prefix = "",
+        reliable = !!node;
+      const indexes: number[] = [];
+      for (const [i, sentence] of translation.sentences.entries()) {
+        const boxes = node
+          ? this.domSentenceBoxes(
+              node,
+              block,
+              [sentence.source],
+              prefix.replace(/[\s\u00ad]/g, "").length,
+            )
+          : [];
+        prefix += sentence.source;
+        if (!boxes.length) {
+          reliable = false;
+          break;
+        }
+        if (boxes.some((b) => selection.some((r) => overlap(b, r) > 0)))
+          indexes.push(i);
+      }
+      result.push({
+        blockId: block.id,
+        sentenceIndexes:
+          reliable && indexes.length
+            ? indexes
+            : translation.sentences.map((_, i) => i),
+      });
+    }
+    return result;
   }
   private domSentenceBoxes(
     node: HTMLElement,
     block: PDFBlock,
     sources: string[],
+    startOffset = 0,
   ): Box[] {
     const page = node.getBoundingClientRect();
     if (!page.width) return [];
@@ -350,7 +431,7 @@ export class PDFReadingNavigation {
     }
     const joined = chars.join(""),
       boxes: Box[] = [];
-    let cursor = 0;
+    let cursor = startOffset;
     for (const source of sources) {
       const needle = source.toLowerCase().replace(/[\s\u00ad]/g, "");
       const i = joined.indexOf(needle, cursor);
@@ -373,8 +454,7 @@ export class PDFReadingNavigation {
     return boxes;
   }
   repaint() {
-    if (this.focus)
-      void this.focusSentences(this.focus.blockId, this.focus.sources);
+    if (this.focus.length) void this.focusPassages(this.focus).catch(() => {});
   }
   destroy() {
     this.disposed = true;

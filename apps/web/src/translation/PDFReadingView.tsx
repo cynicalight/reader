@@ -20,9 +20,10 @@ import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { Popover, PopoverContent } from "@reader/ui/components/popover";
 import { toast } from "sonner";
 import { ReaderView } from "../ReaderView";
-import { blockForRects, ReadingSync } from "../readers/pdf-reading";
+import { overlap, ReadingSync } from "../readers/pdf-reading";
 import { TranslationText } from "./TranslationText";
 import { paintTranslatedAnnotations } from "./annotations";
+import { translatedSelection as captureTranslationSelection } from "./selection";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -50,8 +51,9 @@ export function PDFReadingView({
   const [translations, setTranslations] = useState<TranslationBlock[]>([]),
     [error, setError] = useState("");
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>(),
-    [linked, setLinked] = useState<{ blockId: string; indexes: number[] }>();
+    [linked, setLinked] = useState<Record<string, number[]>>();
   const [engine, setEngine] = useState<ReaderAdapter>();
+  const previousMode = useRef<Mode>("source");
   const root = useRef<HTMLDivElement>(null),
     pane = useRef<HTMLDivElement>(null),
     control = useRef(new ReadingSync()),
@@ -210,17 +212,34 @@ export function PDFReadingView({
   };
   useEffect(() => {
     if (!engine) return;
+    const previous = previousMode.current;
+    previousMode.current = mode;
+    let cancelled = false;
     selection.current = null;
     events.selection(null);
     window.getSelection()?.removeAllRanges();
     setLinked(undefined);
     void engine.focusSentences?.("", []);
-    if (mode === "parallel") {
-      void engine.fitColumn?.().catch((e) => toast.error(e.message));
-      if (reading.current) followTranslation(reading.current);
-    } else engine.stopColumnFit?.();
-    if (mode === "translation" && reading.current)
-      followTranslation(reading.current);
+    const restore = async () => {
+      if (
+        previous === "translation" &&
+        mode !== "translation" &&
+        reading.current
+      )
+        await engine.followBlock?.(reading.current);
+      if (cancelled) return;
+      if (mode === "parallel") await engine.fitColumn?.();
+      else engine.stopColumnFit?.();
+      if (!cancelled && mode !== "source" && reading.current)
+        followTranslation(reading.current);
+    };
+    void restore().catch((e) => {
+      if (!cancelled) toast.error(e.message);
+    });
+    return () => {
+      cancelled = true;
+      engine.stopColumnFit?.();
+    };
   }, [mode, engine]);
   useEffect(() => () => cancelAnimationFrame(scrollFrame.current), []);
   useEffect(() => {
@@ -266,99 +285,69 @@ export function PDFReadingView({
       setLinked(undefined);
       return;
     }
-    const block = blockForRects(
-      blocks,
-      value.location.page,
-      value.location.rects ?? [],
-    );
-    if (!block) return;
-    const translation = byId.get(block.id),
-      needle = value.text.replace(/\s/g, "").toLowerCase();
-    let indexes =
-      translation?.sentences.flatMap((s, i) =>
-        s.source.replace(/\s/g, "").toLowerCase().includes(needle) ? [i] : [],
-      ) ?? [];
-    if (!indexes.length && translation) {
-      const combined = translation.sentences
-        .map((s) => s.source.replace(/\s/g, "").toLowerCase())
-        .join("");
-      const a = combined.indexOf(needle);
-      if (a >= 0) {
-        let pos = 0;
-        indexes = translation.sentences.flatMap((s, i) => {
-          const end = pos + s.source.replace(/\s/g, "").length,
-            hit = pos < a + needle.length && end > a;
-          pos = end;
-          return hit ? [i] : [];
-        });
-      }
-    }
-    if (!indexes.length)
-      indexes = translation?.sentences.map((_, i) => i) ?? [];
-    setLinked({ blockId: block.id, indexes });
-    reading.current = { blockId: block.id, fraction: 0 };
-    if (mode === "parallel") followTranslation(reading.current, indexes[0]);
+    const location = value.location;
+    const fallback = blocks
+      .filter(
+        (b) =>
+          b.page === location.page &&
+          location.rects?.some((r) => overlap(r, b.bounds) > 0),
+      )
+      .flatMap((block) => {
+        const t = byId.get(block.id);
+        if (!t) return [];
+        const needle = value.text.replace(/\s/g, "").toLowerCase();
+        const matches = t.sentences.flatMap((s, i) =>
+          s.source.replace(/\s/g, "").toLowerCase().includes(needle) ? [i] : [],
+        );
+        return [
+          {
+            blockId: block.id,
+            sentenceIndexes:
+              matches.length === 1 ? matches : t.sentences.map((_, i) => i),
+          },
+        ];
+      });
+    const map = async () => {
+      const links =
+        (await engine?.matchSentences?.(location, translations)) ?? fallback;
+      if (selection.current !== value || !links.length) return;
+      setLinked(
+        Object.fromEntries(links.map((l) => [l.blockId, l.sentenceIndexes])),
+      );
+      reading.current = { blockId: links[0].blockId, fraction: 0 };
+      if (state.current.mode === "parallel")
+        followTranslation(reading.current, links[0].sentenceIndexes[0]);
+    };
+    void map().catch((e) => toast.error(e.message));
   };
   const translatedSelection = () => {
     selecting.current = false;
-    const sel = window.getSelection(),
-      text = sel?.toString().trim();
-    if (!sel?.rangeCount || !text) return;
-    const range = sel.getRangeAt(0),
-      start = range.startContainer.parentElement?.closest<HTMLElement>(
-        "[data-translation-block]",
+    const selected = window.getSelection();
+    if (!selected?.rangeCount || !selected.toString().trim() || !pane.current)
+      return;
+    const value = captureTranslationSelection(
+      pane.current,
+      selected.getRangeAt(0),
+      blocks,
+      translations,
+    );
+    if (!value) return;
+    selection.current = value.selection;
+    events.selection(value.selection);
+    setLinked(
+      Object.fromEntries(
+        value.links.map((l) => [l.blockId, l.sentenceIndexes]),
       ),
-      end = range.endContainer.parentElement?.closest<HTMLElement>(
-        "[data-translation-block]",
-      );
-    if (!start || start !== end || !pane.current?.contains(start)) return;
-    const block = blocks.find((b) => b.id === start.dataset.translationBlock),
-      translation = byId.get(start.dataset.translationBlock!);
-    if (!block || !translation || translation.status !== "complete") return;
-    const sentences = Array.from(
-        start.querySelectorAll<HTMLElement>("[data-sentence]"),
-      ),
-      indexes = sentences
-        .filter((n) => range.intersectsNode(n))
-        .map((n) => Number(n.dataset.sentence));
-    if (!indexes.length) return;
-    const rect = range.getBoundingClientRect(),
-      before = range.cloneRange();
-    before.selectNodeContents(start);
-    before.setEnd(range.startContainer, range.startOffset);
-    const offset = before.toString().length;
-    const value: ReaderSelection = {
-      text,
-      anchor: {
-        x: (rect.left + rect.right) / 2,
-        top: rect.top,
-        bottom: rect.bottom,
-      },
-      location: {
-        type: "pdf",
-        page: block.page,
-        quote: indexes.map((i) => translation.sentences[i].source).join(" "),
-        rects: [block.bounds],
-        translation: {
-          blockId: block.id,
-          sourceHash: translation.sourceHash,
-          sentenceIndexes: indexes,
-          start: offset,
-          end: offset + range.toString().length,
-        },
-      },
-    };
-    selection.current = value;
-    events.selection(value);
-    setLinked({ blockId: block.id, indexes });
-    reading.current = { blockId: block.id, fraction: 0 };
+    );
+    reading.current = { blockId: value.links[0].blockId, fraction: 0 };
     if (mode === "parallel") {
       control.current.following("source");
-      void engine?.focusSentences?.(
-        block.id,
-        indexes.map((i) => translation.sentences[i].source),
-        true,
-      );
+      const first = value.passages[0];
+      void (
+        engine?.focusPassages
+          ? engine.focusPassages(value.passages, true)
+          : engine?.focusSentences?.(first.blockId, first.sources, true)
+      )?.catch((e) => toast.error(e.message));
     }
   };
   const translatedScroll = () => {
@@ -545,13 +534,21 @@ export function PDFReadingView({
             )}
             {visibleBlocks.map((block) => {
               const translated = byId.get(block.id),
-                noteIndexes = annotations.flatMap((a) =>
-                  a.location.type === "pdf" &&
-                  a.location.translation?.blockId === block.id &&
-                  a.location.translation.sourceHash === translated?.sourceHash
-                    ? a.location.translation.sentenceIndexes
-                    : [],
-                );
+                noteIndexes = annotations.flatMap((a) => {
+                  const mark =
+                    a.location.type === "pdf"
+                      ? a.location.translation
+                      : undefined;
+                  return mark
+                    ? (mark.ranges ?? [mark])
+                        .filter(
+                          (r) =>
+                            r.blockId === block.id &&
+                            r.sourceHash === translated?.sourceHash,
+                        )
+                        .flatMap((r) => r.sentenceIndexes)
+                    : [];
+                });
               return (
                 <section
                   key={block.id}
@@ -564,7 +561,7 @@ export function PDFReadingView({
                     translation={translated}
                     documentId={doc.id}
                     retry={() => void translate(block.id)}
-                    linked={linked?.blockId === block.id ? linked.indexes : []}
+                    linked={linked?.[block.id] ?? []}
                   />
                   {noteIndexes.length > 0 && (
                     <span

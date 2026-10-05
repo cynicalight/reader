@@ -240,7 +240,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
           }
         : {}),
     });
+    this.navigation.relocated();
     this.location = { ...location, page };
+    if (this.navigation.fitted) await this.navigation.fit();
     this.events.location(this.location, page / this.pdf.numPages);
   }
   async next() {
@@ -501,6 +503,15 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.navigation.focusSentences(blockId, sources, scroll);
+  }
+  focusPassages(passages: import("@reader/core").PDFPassage[], scroll = false) {
+    return this.navigation.focusPassages(passages, scroll);
+  }
+  matchSentences(
+    location: PDFLocation,
+    translations: import("@reader/core").TranslationBlock[],
+  ) {
+    return this.navigation.matchSentences(location, translations);
   }
   async renderBlockImage(blockId: string, signal: AbortSignal): Promise<Blob> {
     const block = this.blockData.find((item) => item.id === blockId);

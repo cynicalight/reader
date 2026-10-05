@@ -70,3 +70,25 @@ it("bounds sentence matching to the source paragraph and falls back when no exac
   expect(sentenceBoxes(block, ["Second."], runs)).toEqual([second]);
   expect(sentenceBoxes(block, ["Missing."], runs)).toEqual([bounds]);
 });
+it("locates the second identical sentence using its source offset", () => {
+  const first = { x: 0.1, y: 0.2, width: 0.3, height: 0.02 },
+    second = { ...first, y: 0.24 };
+  const block = {
+    id: "a",
+    page: 1,
+    label: "text",
+    text: "Same. Same.",
+    bounds: { ...first, height: 0.1 },
+  };
+  expect(
+    sentenceBoxes(
+      block,
+      ["Same."],
+      [
+        { text: "Same.", bounds: first },
+        { text: "Same.", bounds: second },
+      ],
+      5,
+    ),
+  ).toEqual([second]);
+});

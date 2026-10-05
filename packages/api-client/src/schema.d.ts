@@ -1024,6 +1024,14 @@ export interface components {
             sentenceIndexes: number[];
             start: number;
             end: number;
+            ranges?: {
+              blockId: string;
+              sourceHash: string;
+              sentenceIndexes: number[];
+              start: number;
+              end: number;
+              quote: string;
+            }[];
           };
         }
       | {

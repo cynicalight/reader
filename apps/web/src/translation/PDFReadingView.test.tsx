@@ -188,3 +188,24 @@ it("keeps the translated selection as the quote and anchors its counterpart to o
   await act(async () => fixture.ready!.clearSelection());
   expect(events.selection).toHaveBeenLastCalledWith(null);
 });
+it("restores the translated reading position before fitting the original on mode change", async () => {
+  await click("仅译文");
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
+  pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  block.getBoundingClientRect = () => new DOMRect(0, 80, 600, 400);
+  await act(async () => {
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 100 }));
+    pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(adapter.followBlock).not.toHaveBeenCalled();
+  await click("原文译文");
+  expect(adapter.followBlock).toHaveBeenLastCalledWith({
+    blockId: "p1-b1",
+    fraction: 0.25,
+  });
+  expect(
+    vi.mocked(adapter.followBlock!).mock.invocationCallOrder[0],
+  ).toBeLessThan(vi.mocked(adapter.fitColumn!).mock.invocationCallOrder[0]);
+});

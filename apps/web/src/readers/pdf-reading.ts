@@ -102,6 +102,7 @@ export function sentenceBoxes(
   block: PDFBlock,
   sources: string[],
   runs: TextRun[],
+  sourceOffset = 0,
 ): Box[] {
   const selected = runs
     .filter(
@@ -118,7 +119,7 @@ export function sentenceBoxes(
     );
   const text = selected.map((r) => normalized(r.text)).join("");
   const result: Box[] = [];
-  let cursor = 0;
+  let cursor = sourceOffset;
   for (const source of sources) {
     const needle = normalized(source);
     if (!needle) continue;

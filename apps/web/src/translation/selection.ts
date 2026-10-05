@@ -1,0 +1,96 @@
+import type {
+  PDFBlock,
+  PDFPassage,
+  PDFSentenceLink,
+  ReaderSelection,
+  TranslationBlock,
+} from "@reader/core";
+
+export function translatedSelection(
+  host: HTMLElement,
+  range: Range,
+  blocks: PDFBlock[],
+  translations: TranslationBlock[],
+) {
+  const ranges: NonNullable<
+    NonNullable<
+      Extract<ReaderSelection["location"], { type: "pdf" }>["translation"]
+    >["ranges"]
+  > = [];
+  const passages: PDFPassage[] = [],
+    links: PDFSentenceLink[] = [];
+  for (const node of host.querySelectorAll<HTMLElement>(
+    "[data-translation-block]",
+  )) {
+    if (!range.intersectsNode(node)) continue;
+    const block = blocks.find((b) => b.id === node.dataset.translationBlock),
+      translation = translations.find(
+        (t) => t.blockId === block?.id && t.status === "complete",
+      );
+    if (!block || !translation) continue;
+    const clipped = document.createRange();
+    clipped.selectNodeContents(node);
+    if (range.compareBoundaryPoints(Range.START_TO_START, clipped) > 0)
+      clipped.setStart(range.startContainer, range.startOffset);
+    if (range.compareBoundaryPoints(Range.END_TO_END, clipped) < 0)
+      clipped.setEnd(range.endContainer, range.endOffset);
+    const quote = clipped.toString().trim();
+    if (!quote) continue;
+    const sentenceIndexes = Array.from(
+      node.querySelectorAll<HTMLElement>("[data-sentence]"),
+    )
+      .filter((n) => clipped.intersectsNode(n))
+      .map((n) => Number(n.dataset.sentence));
+    if (!sentenceIndexes.length) continue;
+    const before = clipped.cloneRange();
+    before.selectNodeContents(node);
+    before.setEnd(clipped.startContainer, clipped.startOffset);
+    const start = before.toString().length;
+    ranges.push({
+      blockId: block.id,
+      sourceHash: translation.sourceHash,
+      sentenceIndexes,
+      start,
+      end: start + clipped.toString().length,
+      quote,
+    });
+    passages.push({
+      blockId: block.id,
+      sources: sentenceIndexes.map((i) => translation.sentences[i].source),
+      sourceOffset: translation.sentences
+        .slice(0, sentenceIndexes[0])
+        .map((s) => s.source)
+        .join("")
+        .toLowerCase()
+        .replace(/[\s\u00ad]/g, "").length,
+    });
+    links.push({ blockId: block.id, sentenceIndexes });
+  }
+  if (!ranges.length) return;
+  const first = ranges[0],
+    block = blocks.find((b) => b.id === first.blockId)!,
+    rect = range.getBoundingClientRect();
+  const selection: ReaderSelection = {
+    text: range.toString().trim(),
+    anchor: {
+      x: (rect.left + rect.right) / 2,
+      top: rect.top,
+      bottom: rect.bottom,
+    },
+    location: {
+      type: "pdf",
+      page: block.page,
+      quote: passages.flatMap((p) => p.sources).join(" "),
+      rects: [block.bounds],
+      translation: {
+        blockId: first.blockId,
+        sourceHash: first.sourceHash,
+        sentenceIndexes: first.sentenceIndexes,
+        start: first.start,
+        end: first.end,
+        ranges,
+      },
+    },
+  };
+  return { selection, passages, links };
+}

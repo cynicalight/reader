@@ -12,6 +12,14 @@ export type PDFLocation = {
     sentenceIndexes: number[];
     start: number;
     end: number;
+    ranges?: {
+      blockId: string;
+      sourceHash: string;
+      sentenceIndexes: number[];
+      start: number;
+      end: number;
+      quote: string;
+    }[];
   };
   rects?: { x: number; y: number; width: number; height: number }[];
 };
@@ -99,6 +107,16 @@ export interface PDFReadingAnchor {
   blockId: string;
   fraction: number;
 }
+export interface PDFPassage {
+  blockId: string;
+  sources: string[];
+  /** Offset in source text after removing whitespace and soft hyphens. */
+  sourceOffset?: number;
+}
+export interface PDFSentenceLink {
+  blockId: string;
+  sentenceIndexes: number[];
+}
 export interface ReaderEvents {
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   readingAnchor?: (anchor: PDFReadingAnchor) => void;
@@ -128,6 +146,11 @@ export interface ReaderAdapter {
     sources: string[],
     scroll?: boolean,
   ): Promise<void>;
+  focusPassages?(passages: PDFPassage[], scroll?: boolean): Promise<void>;
+  matchSentences?(
+    location: PDFLocation,
+    translations: TranslationBlock[],
+  ): Promise<PDFSentenceLink[]>;
   fitColumn?(): Promise<void>;
   stopColumnFit?(): void;
   destroy(): Promise<void>;
