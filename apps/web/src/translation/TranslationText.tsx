@@ -76,18 +76,13 @@ export function TranslationText({
           <span>
             {translation?.status === "failed"
               ? translation.error || "此段翻译失败"
-              : translation?.status === "running"
-                ? "正在翻译…"
-                : "等待翻译…"}
+              : "正在翻译中…"}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={translation?.status === "running"}
-            onClick={retry}
-          >
-            {translation?.status === "failed" ? "重试此段" : "优先翻译"}
-          </Button>
+          {translation?.status === "failed" && (
+            <Button variant="ghost" size="sm" onClick={retry}>
+              重试此段
+            </Button>
+          )}
         </div>
       )}
     </>

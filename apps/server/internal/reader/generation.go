@@ -66,6 +66,7 @@ type generationConnection struct {
 	Incremental                  bool
 }
 type GenerationService struct {
+	timeout       time.Duration // Zero keeps the normal three-minute request limit.
 	primary       string
 	connections   map[string]generationConnection
 	attemptFailed func(string, bool, error)
@@ -215,7 +216,11 @@ func (g *GenerationService) attempt(ctx context.Context, provider string, in AII
 	return result, err
 }
 func (g *GenerationService) generate(ctx context.Context, in AIInput, interactive, exposeText bool, emit func(ProviderEvent) error) (AIResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	timeout := g.timeout
+	if timeout <= 0 {
+		timeout = 3 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if !validAgent(g.primary) {
 		return AIResult{}, generationError(ErrorConfiguration, "请在设置中指定主 Agent 并测试")

@@ -68,46 +68,50 @@ export function PDFReadingView({
     () => new Map(translations.map((t) => [t.blockId, t])),
     [translations],
   );
-  const initialRequest = useRef(false),
-    selecting = useRef(false),
+  const selecting = useRef(false),
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
   const visibleBlocks = blocks.filter(
     (b) => !["header", "footer", "number"].includes(b.label),
   );
   useEffect(() => {
-    let alive = true,
-      timer: ReturnType<typeof setTimeout>;
-    const refresh = async () => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 500;
+    const subscribe = async () => {
       try {
-        const result = await api.translations(doc.id);
-        if (!alive) return;
-        setTranslations(result);
-        setError("");
-        if (
-          !initialRequest.current &&
-          processing?.status === "complete" &&
-          result.some((t) => t.status === "pending")
-        ) {
-          initialRequest.current = true;
-          await api.translate(doc.id);
-        }
+        await api.translationStream(doc.id, controller.signal, (event) => {
+          if (controller.signal.aborted) return;
+          retryDelay = 500;
+          setError("");
+          if (event.event === "snapshot") setTranslations(event.data);
+          else
+            setTranslations((current) => {
+              const index = current.findIndex(
+                (b) => b.blockId === event.data.blockId,
+              );
+              if (index < 0) return [...current, event.data];
+              return current.map((b, i) => (i === index ? event.data : b));
+            });
+        });
       } catch (e) {
-        if (alive) setError((e as Error).message);
+        if (!controller.signal.aborted) setError((e as Error).message);
       } finally {
-        if (alive) timer = setTimeout(() => void refresh(), 1500);
+        if (!controller.signal.aborted) {
+          timer = setTimeout(() => void subscribe(), retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 5000);
+        }
       }
     };
-    void refresh();
+    void subscribe();
     return () => {
-      alive = false;
+      controller.abort();
       clearTimeout(timer);
     };
-  }, [doc.id, processing?.status]);
+  }, [doc.id]);
   const translate = async (blockId = "") => {
     try {
       await api.translate(doc.id, blockId);
-      setTranslations(await api.translations(doc.id));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -486,8 +490,6 @@ export function PDFReadingView({
                     button?.getBoundingClientRect() ??
                     root.current!.getBoundingClientRect(),
                 });
-                if (byId.get(block.id)?.status !== "complete")
-                  void translate(block.id);
               },
             }}
           />

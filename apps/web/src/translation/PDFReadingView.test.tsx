@@ -13,10 +13,31 @@ const fixture = vi.hoisted(() => ({
   events: undefined as ReaderEvents | undefined,
   ready: undefined as ReaderAdapter | undefined,
   translations: [] as TranslationBlock[],
+  push: undefined as
+    | ((
+        event:
+          | { event: "snapshot"; data: TranslationBlock[] }
+          | { event: "translation"; data: TranslationBlock },
+      ) => void)
+    | undefined,
+  signal: undefined as AbortSignal | undefined,
 }));
 vi.mock("@reader/api", () => ({
   api: {
-    translations: vi.fn(async () => fixture.translations),
+    translationStream: vi.fn(
+      async (
+        _id: string,
+        signal: AbortSignal,
+        onEvent: NonNullable<typeof fixture.push>,
+      ) => {
+        fixture.push = onEvent;
+        fixture.signal = signal;
+        onEvent({ event: "snapshot", data: fixture.translations });
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+      },
+    ),
     translate: vi.fn(async () => ({ queued: true })),
   },
   blockImageURL: () => "",
@@ -208,4 +229,20 @@ it("restores the translated reading position before fitting the original on mode
   expect(
     vi.mocked(adapter.followBlock!).mock.invocationCallOrder[0],
   ).toBeLessThan(vi.mocked(adapter.fitColumn!).mock.invocationCallOrder[0]);
+});
+
+it("renders an incoming paragraph while the subscription remains open", async () => {
+  await click("原文译文");
+  const block = fixture.translations[0];
+  await act(async () =>
+    fixture.push!({
+      event: "snapshot",
+      data: [{ ...block, status: "pending", sentences: [] }],
+    }),
+  );
+  expect(host.textContent).toContain("正在翻译中");
+  expect(host.textContent).not.toContain("优先翻译");
+  await act(async () => fixture.push!({ event: "translation", data: block }));
+  expect(host.textContent).toContain("第一句。");
+  expect(fixture.signal!.aborted).toBe(false);
 });

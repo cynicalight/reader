@@ -59,13 +59,11 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
-		text := `{"sentences":[{"source":"Another paragraph.","target":"另一段。"}]}`
+		text := translationLine(m.Blocks[1])
 		if n == 1 {
-			text = `{"sentences":[{"source":"First sentence.","target":"第一句。"},{"source":"Second sentence.","target":"第二句。"}]}`
+			text = translationLine(m.Blocks[0]) + strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Wrong paragraph.", 1)
 		}
-		if n == 2 {
-			text = `{"sentences":[{"source":"Wrong paragraph.","target":"错误段落。"}]}`
-		}
+
 		writeAPIReply(w, text)
 	}))
 	defer provider.Close()
@@ -94,7 +92,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	if err := s.settlePDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 3 || p.Status != "complete" {
+	if calls.Load() != 2 || p.Status != "complete" {
 		t.Fatalf("completed paragraph regenerated or job not complete: calls=%d %+v", calls.Load(), p)
 	}
 	// A changed source must never silently reuse the old translated text.
@@ -104,7 +102,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 		t.Fatalf("stale source reused: %+v %v", items, err)
 	}
 }
-func TestTranslationResumesInterruptedAndPrioritizesRequestedParagraph(t *testing.T) {
+func TestTranslationResumesInterruptedWithoutPrioritizingRequestedParagraph(t *testing.T) {
 	s, p, m := translationFixture(t)
 	first := newTranslation(m.Blocks[0])
 	first.Status = "running"
@@ -115,29 +113,20 @@ func TestTranslationResumesInterruptedAndPrioritizesRequestedParagraph(t *testin
 	}
 	var order []string
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Messages []struct {
-				Content string `json:"content"`
-			} `json:"messages"`
+		batch := readTranslationInput(t, r).Batch
+		var out strings.Builder
+		for _, paragraph := range batch.Paragraphs {
+			order = append(order, paragraph.BlockID)
+			out.WriteString(translationParagraphLine(paragraph))
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		prompt := body.Messages[len(body.Messages)-1].Content
-		source := "First sentence. Second sentence."
-		if strings.Contains(prompt, "Another paragraph.") {
-			source = "Another paragraph."
-		}
-		order = append(order, source)
-		out, _ := json.Marshal(map[string]any{"sentences": []TranslationSentence{{Source: source, Target: "译文。"}}})
-		writeAPIReply(w, string(out))
+		writeAPIReply(w, out.String())
 	}))
 	defer provider.Close()
-	c := AIConfig{Primary: "codex", Models: map[string]string{}, TextAPI: APIConnection{URL: provider.URL, Model: "test"}, Capabilities: map[string]Capability{}}
-	c.Capabilities["text-api"] = Capability{Text: true, Fingerprint: configPrint(c, "text-api")}
-	_ = s.writeAIConfig(c)
+	configureTranslationTest(t, s, provider.URL)
 	if err := s.settlePDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if len(order) != 2 || order[0] != "Another paragraph." {
-		t.Fatalf("priority/resume failed: %v", order)
+	if len(order) != 2 || order[0] != m.Blocks[0].ID {
+		t.Fatalf("unexpected order: %v", order)
 	}
 }

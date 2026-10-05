@@ -23,6 +23,12 @@ func invokeAPI(ctx context.Context, c APIConnection, in AIInput, delta func(stri
 	return r.Text, e
 }
 func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	// Respect the request-specific generation deadline (longer for batches).
+	if _, bounded := ctx.Deadline(); !bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
+	}
 	c, in := a.config, req.Input
 	if e := validateAPI(c); e != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, e.Error())
@@ -51,7 +57,7 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 	if c.Key != "" {
 		request.Header.Set("Authorization", "Bearer "+c.Key)
 	}
-	client := &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error {
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return generationError(ErrorConfiguration, "API 重定向已拒绝")
 	}}
 	response, e := client.Do(request)

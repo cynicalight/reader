@@ -1106,6 +1106,36 @@
                 },
             },
         },
+      "/api/documents/{id}/translations/stream":
+        {
+          "get":
+            {
+              "description": "Authenticated translation subscription. Sends a snapshot on connection, then flushes each persisted translation block immediately. Reconnect obtains a new snapshot. Does not start or cancel generation.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "SSE: snapshot with TranslationBlock[], translation with TranslationBlock. Comment heartbeats; error closes subscription.",
+                      "content":
+                        {
+                          "text/event-stream":
+                            { "schema": { "type": "string" } },
+                        },
+                    },
+                  "401": { "description": "Authentication required" },
+                  "404": { "description": "PDF not found" },
+                },
+            },
+        },
     },
   "components":
     {

@@ -1,3 +1,7 @@
+import {
+  consumeTranslationStream,
+  type TranslationEvent,
+} from "./translation-stream";
 import { consumeChatStream, type ChatStreamEvent } from "./chat-stream";
 export { ChatStreamError, type ChatStreamEvent } from "./chat-stream";
 import createClient from "openapi-fetch";
@@ -55,6 +59,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  translationStream: async (
+    id: string,
+    signal: AbortSignal,
+    onEvent: (event: TranslationEvent) => void,
+  ) => {
+    const response = await fetch(
+      `/api/documents/${encodeURIComponent(id)}/translations/stream`,
+      {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          Accept: "text/event-stream",
+        },
+        signal,
+      },
+    );
+    if (
+      !response.ok ||
+      !response.body ||
+      !response.headers.get("content-type")?.startsWith("text/event-stream")
+    ) {
+      throw new Error(`无法订阅译文 (${response.status})`);
+    }
+    return consumeTranslationStream(response.body, signal, onEvent);
+  },
   translations: (id: string) =>
     request<import("@reader/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,

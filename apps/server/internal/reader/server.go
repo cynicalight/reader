@@ -18,15 +18,17 @@ import (
 )
 
 type Server struct {
-	Store        *Store
-	Token        string
-	Web          string
-	aiMu         sync.Mutex
-	importMu     sync.Mutex
-	configMu     sync.Mutex
-	processingMu sync.Mutex
-	modelMu      sync.Mutex
-	modelCache   map[string]modelCatalogEntry
+	Store                  *Store
+	Token                  string
+	Web                    string
+	aiMu                   sync.Mutex
+	importMu               sync.Mutex
+	configMu               sync.Mutex
+	translationMu          sync.Mutex
+	translationSubscribers map[string]map[chan TranslationBlock]struct{}
+	processingMu           sync.Mutex
+	modelMu                sync.Mutex
+	modelCache             map[string]modelCatalogEntry
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -65,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
+	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
