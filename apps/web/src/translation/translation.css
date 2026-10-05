@@ -124,9 +124,8 @@
   box-shadow: 0 2px 8px #0002;
 }
 .textLayer ::highlight(reader-linked-sentences) {
-  /* Match PDF.js ::selection; the visible glyphs remain on its canvas. */
-  background-color: rgba(0, 0, 255, 0.25);
-  background-color: color-mix(in srgb, AccentColor, transparent 50%);
+  /* A subtle linked-sentence cue; visible glyphs remain on the PDF canvas. */
+  background-color: rgba(128, 128, 128, 0.22);
   color: transparent;
 }
 .textLayer br::highlight(reader-linked-sentences) {
