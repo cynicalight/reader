@@ -32,6 +32,12 @@ export type EPUBLocation = {
 };
 export type DocumentLocation = PDFLocation | EPUBLocation;
 export type DocumentCategory = "book" | "article" | "paper";
+export interface TagBoard {
+  id: string;
+  name: string;
+  tags: string[];
+  match: "all" | "any";
+}
 export interface Document {
   category: DocumentCategory;
   categorySource: "default" | "ai" | "manual";

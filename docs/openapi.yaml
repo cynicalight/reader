@@ -162,8 +162,45 @@
                                       "$ref": "#/components/schemas/DocumentLocation",
                                     },
                                   "percentage": { "type": "number" },
+                                  "title":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 300,
+                                    },
+                                  "author":
+                                    { "type": "string", "maxLength": 200 },
                                 },
                               "required": [],
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Delete a document and its library-owned data after stopping background tasks",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "204": { "description": "Deleted or already absent" },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
                             },
                         },
                     },
@@ -1199,6 +1236,167 @@
                 },
             },
         },
+      "/api/tag-boards":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/TagBoard" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/TagBoardInput" },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "201":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/TagBoard" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/tag-boards/{id}":
+        {
+          "put":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "$ref": "#/components/schemas/TagBoardInput" },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/TagBoard" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "204": { "description": "Deleted; documents are unchanged" },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1759,6 +1957,43 @@
                     },
                   "error": { "type": "string" },
                 },
+            },
+          "TagBoardInput":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                  "tags":
+                    {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items":
+                        { "type": "string", "minLength": 1, "maxLength": 40 },
+                    },
+                  "match": { "type": "string", "enum": ["all", "any"] },
+                },
+              "required": ["name", "tags", "match"],
+            },
+          "TagBoard":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                  "tags":
+                    {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items":
+                        { "type": "string", "minLength": 1, "maxLength": 40 },
+                    },
+                  "match": { "type": "string", "enum": ["all", "any"] },
+                },
+              "required": ["id", "name", "tags", "match"],
             },
         },
     },

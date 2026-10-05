@@ -22,6 +22,9 @@ type Server struct {
 	Token                  string
 	Web                    string
 	aiMu                   sync.Mutex
+	documentMu             sync.Mutex
+	documentTasks          map[string]map[*documentTask]struct{}
+	deletingDocuments      map[string]bool
 	importMu               sync.Mutex
 	configMu               sync.Mutex
 	translationMu          sync.Mutex
@@ -62,6 +65,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		respond(w, 200, v)
 	})
+	mux.HandleFunc("GET /api/tag-boards", s.tagBoards)
+	mux.HandleFunc("POST /api/tag-boards", s.saveTagBoard)
+	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
+	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
@@ -70,6 +77,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
+	mux.HandleFunc("DELETE /api/documents/{id}", s.deleteDocument)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
@@ -302,6 +310,8 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v struct {
+		Title      json.RawMessage `json:"title"`
+		Author     json.RawMessage `json:"author"`
 		Category   json.RawMessage `json:"category"`
 		Tags       json.RawMessage `json:"tags"`
 		Favorite   *bool           `json:"favorite"`
@@ -311,7 +321,21 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &v) {
 		return
 	}
-	var category, tags any
+	var title, author, category, tags any
+	if v.Title != nil {
+		title, err = metadataText(v.Title, 300, false)
+		if err != nil {
+			fail(w, 400, "标题须为 1–300 个字符，不能包含控制字符")
+			return
+		}
+	}
+	if v.Author != nil {
+		author, err = metadataText(v.Author, 200, true)
+		if err != nil {
+			fail(w, 400, "作者最多 200 个字符，不能包含控制字符")
+			return
+		}
+	}
 	if v.Category != nil {
 		var c string
 		if json.Unmarshal(v.Category, &c) != nil || !validCategory(c) {
@@ -348,14 +372,14 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var openedAt any
 	// Organization and favorites must not move a document into recent reading.
-	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil) {
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil) {
 		openedAt = now()
 	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", v.Favorite, progress, v.Percentage, openedAt, category, tags, category, category, category, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return

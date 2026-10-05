@@ -104,3 +104,41 @@ it("keeps an explicit manual choice when a late AI update arrives", async () => 
     tags: ["Web"],
   });
 });
+
+it("preserves concurrent metadata updates when only tags are edited", async () => {
+  await render();
+  doc = { ...doc, title: "New title", author: "New author" };
+  await render();
+  expect(
+    (document.querySelector("#document-title") as HTMLInputElement).value,
+  ).toBe("New title");
+  expect(
+    (document.querySelector("#document-author") as HTMLInputElement).value,
+  ).toBe("New author");
+  await click("保存");
+  expect(api.update).toHaveBeenCalledWith("doc", { tags: ["Web"] });
+});
+
+it("saves an edited title and allows clearing the author", async () => {
+  doc = { ...doc, author: "Original author" };
+  await render();
+  for (const [id, value] of [
+    ["document-title", "Updated title"],
+    ["document-author", ""],
+  ]) {
+    const input = document.getElementById(id) as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  await click("保存");
+  expect(api.update).toHaveBeenCalledWith("doc", {
+    title: "Updated title",
+    author: "",
+    tags: ["Web"],
+  });
+});

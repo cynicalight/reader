@@ -29,8 +29,18 @@ export const useReaderStore = create<{
   setTheme: (patch) =>
     set((state) => ({ theme: { ...state.theme, ...patch } })),
 }));
+let libraryRevision = 0;
+export function forgetLibraryDocuments(ids: string[]) {
+  ++libraryRevision;
+  const state = useReaderStore.getState();
+  state.setDocuments(state.documents.filter((d) => !ids.includes(d.id)));
+  if (state.active && ids.includes(state.active.id)) state.open(null);
+}
 export async function refreshLibrary() {
-  useReaderStore.getState().setDocuments(await api.documents());
+  const revision = ++libraryRevision;
+  const documents = await api.documents();
+  if (revision === libraryRevision)
+    useReaderStore.getState().setDocuments(documents);
 }
 export async function refreshAIConfig() {
   const before = useReaderStore.getState().aiConfig;
