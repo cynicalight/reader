@@ -3,7 +3,6 @@ import {
   BookOpen,
   Library,
   Star,
-  Plus,
   Search,
   Settings2,
   ArrowUpRight,
@@ -15,7 +14,10 @@ import {
   Tags,
   Pencil,
   Check,
+  CirclePlus,
+  Info,
 } from "lucide-react";
+import { version } from "../../desktop/package.json";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -44,6 +46,7 @@ export function App() {
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
+  const [about, setAbout] = useState(false);
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
   const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
@@ -298,27 +301,41 @@ export function App() {
                     <span className="nav-count">{item.count}</span>
                   </Button>
                 ))}
+              </nav>
+              <div className="sidebar-bottom">
                 <Button
-                  className="h-[39px] w-full justify-start gap-3 px-3"
+                  variant="ghost"
+                  className="mb-2 h-10 w-full gap-2 rounded-full bg-foreground/7 text-foreground/80 hover:bg-foreground/12 hover:text-foreground dark:hover:bg-foreground/12"
                   onClick={chooseFiles}
                   disabled={busy}
                 >
                   {busy ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <Plus className="size-4" />
+                    <CirclePlus className="size-4" />
                   )}
                   <span>{busy ? "导入中…" : "导入文档"}</span>
                 </Button>
-              </nav>
-              <div className="sidebar-bottom">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start"
+                  className="nav-item"
                   onClick={() => setSettings(true)}
                 >
                   <Settings2 />
                   设置
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="nav-item"
+                  onClick={() => setAbout(true)}
+                >
+                  <Info className="size-4" />
+                  <span>
+                    关于{" "}
+                    <span className="text-muted-foreground/70">
+                      ({version})
+                    </span>
+                  </span>
                 </Button>
               </div>
             </aside>
@@ -484,6 +501,18 @@ export function App() {
           />
         )}
         <Settings open={settings} onOpenChange={setSettings} />
+        <Dialog open={about} onOpenChange={setAbout}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>关于 Reader</DialogTitle>
+              <DialogDescription>EPUB 与 PDF 阅读器</DialogDescription>
+            </DialogHeader>
+            <dl className="flex items-center justify-between text-sm">
+              <dt className="text-muted-foreground">版本</dt>
+              <dd>{version}</dd>
+            </dl>
+          </DialogContent>
+        </Dialog>
         <Dialog open={command} onOpenChange={setCommand}>
           <DialogContent>
             <DialogHeader>
