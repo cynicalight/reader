@@ -645,6 +645,13 @@ kbd {
 .pdfViewer {
   --page-margin: 20px auto;
 }
+/* Insets let edge-column blocks and the first block reach the viewport center. */
+.pdf-block-reading .pdfViewer {
+  width: max-content;
+  min-width: 100%;
+  padding-inline: var(--reading-inset-x);
+  padding-top: var(--reading-inset-y);
+}
 .reader-highlight {
   position: absolute;
   opacity: 0.32;

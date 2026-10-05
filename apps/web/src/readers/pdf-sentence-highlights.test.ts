@@ -62,7 +62,6 @@ beforeEach(() => {
         getViewport: () => ({ width: 1000, height: 1000, transform: [] }),
         getTextContent: async () => ({ items: [], styles: {} }),
       }) as unknown as PDFPageProxy,
-    () => 1,
     () => [currentBlock],
     { location: vi.fn(), selection: vi.fn() },
   );

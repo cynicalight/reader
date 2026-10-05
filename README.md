@@ -138,7 +138,7 @@ The domain model centers on `Document`. PDF positions use page numbers and coord
 
 The current version primarily targets DRM-free reflowable EPUBs and PDFs with text. OCR, password entry for protected PDFs, PDF thumbnails, background PDF full-text indexing, batch translation, cross-document AI retrieval, independent conversation management, Ollama, API-provider settings UI, and reading statistics are not yet supported. Backend API fallback configuration is available through the local API. Highlights are not created for complex PDF selections spanning multiple pages.
 
-Fixed-layout EPUBs, vertical text, RTL, complex footnotes, and large files need more testing with real documents. The desktop app handles macOS file-open events, but system file associations are not registered. Installers, signing, notarization, and automatic updates are not available yet.
+Fixed-layout EPUBs, vertical text, RTL, complex footnotes, and large files need more testing with real documents. The desktop app handles macOS file-open events, but system file associations are not registered. Installers are built by CI; developer certificate signing, notarization, and automatic updates are not provided.
 
 The next priority is improving the reading experience with real documents, followed by search, data export, and AI features. See the [roadmap](docs/roadmap.md) (Chinese).
 

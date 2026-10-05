@@ -36,6 +36,8 @@ export class PDFBlockOverlay {
   private active?: PDFBlock;
   private hovered?: string;
   private linkedId: string | null = null;
+  private focusId: string | null = null;
+  private focus = document.createElement("div");
   private linked = document.createElement("div");
   private pressed?: { id: string; x: number; y: number };
   constructor(
@@ -45,12 +47,18 @@ export class PDFBlockOverlay {
       action: PDFBlockAction,
     ) => void = () => {},
     private onHover: (block: PDFBlock | null) => void = () => {},
+    private onFocus: (block: PDFBlock) => boolean = () => false,
   ) {
     this.overlay = document.createElement("div");
     this.overlay.className = "reader-block-hover";
     this.root = createRoot(this.overlay);
     this.linked.className = "reader-block-hover reader-block-counterpart";
     this.linked.setAttribute("aria-hidden", "true");
+    this.focus.className = "reader-block-hover reader-block-focus";
+    this.focus.setAttribute("aria-hidden", "true");
+    this.focus.addEventListener("animationend", () => {
+      if (!this.focusId) this.focus.remove();
+    });
     host.addEventListener("pointermove", this.move);
     host.addEventListener("pointerleave", this.clear);
     host.addEventListener("pointerdown", this.press);
@@ -70,6 +78,7 @@ export class PDFBlockOverlay {
       this.hovered = undefined;
       this.onHover(null);
     }
+    this.paintReadingFocus();
   };
   private press = (event: PointerEvent) => {
     this.pressed = undefined;
@@ -93,7 +102,16 @@ export class PDFBlockOverlay {
     )
       return;
     const block = this.find(event);
-    if (block?.id !== pressed.id || !block.image) return;
+    if (!block || block.id !== pressed.id) return;
+    if ((event.target as Element)?.closest("a, button, input, [role=button]"))
+      return;
+    if (this.onFocus(block)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clear();
+      return;
+    }
+    if (!block.image) return;
     event.preventDefault();
     event.stopPropagation();
     this.onAction(block, "attach");
@@ -157,13 +175,47 @@ export class PDFBlockOverlay {
       this.hovered = block.id;
       this.onHover(block);
     }
+    this.paintReadingFocus();
   };
   setLinkedBlock(blockId: string | null) {
     if (this.linkedId === blockId) return;
     this.linkedId = blockId;
     this.repaint();
   }
+  setFocusBlock(blockId: string | null) {
+    this.focusId = blockId;
+    if (!blockId) {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+        this.focus.remove();
+      else this.focus.dataset.fading = "";
+      return;
+    }
+    delete this.focus.dataset.fading;
+    this.paintReadingFocus();
+  }
+  private paintReadingFocus() {
+    if (!this.focusId) return;
+    this.focus.remove();
+    if (this.focusId === this.hovered || this.focusId === this.linkedId) return;
+    const block = this.blocks.find((b) => b.id === this.focusId);
+    if (!block) return;
+    const page = this.host.querySelector<HTMLElement>(
+      `.page[data-page-number="${block.page}"]`,
+    );
+    if (!page) return;
+    const b = block.bounds;
+    Object.assign(this.focus.style, {
+      left: `${b.x * 100}%`,
+      top: `${b.y * 100}%`,
+      width: `${b.width * 100}%`,
+      height: `${b.height * 100}%`,
+    });
+    this.focus.dataset.blockId = block.id;
+    this.focus.dataset.blockKind = block.image ? "image" : "text";
+    page.append(this.focus);
+  }
   repaint() {
+    this.paintReadingFocus();
     this.linked.remove();
     const block = this.blocks.find((b) => b.id === this.linkedId);
     if (!block) return;
@@ -183,6 +235,8 @@ export class PDFBlockOverlay {
     page.append(this.linked);
   }
   destroy() {
+    this.focusId = null;
+    this.focus.remove();
     this.clear();
     this.linked.remove();
     this.root.unmount();
