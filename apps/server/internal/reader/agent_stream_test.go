@@ -98,6 +98,9 @@ func runAgentProcess() {
 		reader := bufio.NewReader(os.Stdin)
 		first, _ := reader.ReadString('\n')
 		if strings.Contains(first, `"type":"control_request"`) {
+			if mode == "user-settings" {
+				os.Exit(1)
+			}
 			emit(map[string]any{"type": "control_response", "response": map[string]any{"request_id": "1", "subtype": "success", "response": map[string]any{"models": []any{map[string]any{"value": "test", "resolvedModel": "test-model", "displayName": "Test"}}}}})
 			return
 		}

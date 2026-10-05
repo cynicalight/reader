@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,11 +28,12 @@ type APIConnection struct {
 	HasKey bool   `json:"hasKey"`
 }
 type Capability struct {
-	Text        bool   `json:"text"`
-	Vision      bool   `json:"vision"`
-	CheckedAt   string `json:"checkedAt"`
-	Error       string `json:"error,omitempty"`
-	Fingerprint string `json:"-"`
+	PendingVision bool   `json:"pendingVision,omitempty"`
+	Text          bool   `json:"text"`
+	Vision        bool   `json:"vision"`
+	CheckedAt     string `json:"checkedAt"`
+	Error         string `json:"error,omitempty"`
+	Fingerprint   string `json:"-"`
 }
 type AIConfig struct {
 	Primary      string                       `json:"primary"`
@@ -187,6 +189,7 @@ func (s *Server) recordCapabilityFailure(snapshot AIConfig, provider string, vis
 		return nil
 	}
 	cap.Vision = false
+	cap.PendingVision = false
 	if !vision {
 		cap.Text = false
 	}
@@ -256,29 +259,43 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "未知连接")
 		return
 	}
+	mode := r.URL.Query().Get("capability")
+	if mode != "" && mode != "text" && mode != "vision" || mode == "vision" && p == "text-api" {
+		fail(w, 400, "无效的检测能力")
+		return
+	}
 	c := s.aiConfig()
 	fingerprint := configPrint(c, p)
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
-	defer cancel()
 	cap := Capability{CheckedAt: now(), Fingerprint: fingerprint}
-	answer, e := s.invoke(ctx, c, p, AIInput{Prompt: "Reply with exactly READER_OK. Do not use any tools."}, nil)
-	if e != nil {
-		cap.Error = e.Error()
-	} else if strings.TrimSpace(answer) != "READER_OK" {
-		cap.Error = "测试响应不符合预期"
-	} else {
+	if mode == "vision" {
+		if !capable(c, p, false) {
+			fail(w, 409, "请先完成文本检测")
+			return
+		}
 		cap.Text = true
+	} else {
+		// A completed, nonempty model response establishes text availability.
+		// Formatting and CLI subscription-login metadata are not capability gates.
+		answer, err := s.probeConnection(r.Context(), c, p, AIInput{Prompt: "Reply with exactly READER_OK. Do not use any tools."}, 45*time.Second)
+		if err != nil {
+			cap.Error = err.Error()
+		} else if strings.TrimSpace(answer) == "" {
+			cap.Error = "测试未返回文字"
+		} else {
+			cap.Text = true
+		}
 	}
-	if cap.Text && p != "text-api" {
-		// Random challenge answers exist only in the pixels; guessing all 8 has probability 1/65536.
+	cap.PendingVision = mode == "text" && cap.Text && p != "text-api"
+	if cap.Text && p != "text-api" && mode != "text" {
+		// The challenge still requires evidence from pixels; tolerate prose/formatting.
 		data, expected, probeErr := visionProbe()
 		if probeErr != nil {
 			cap.Error = "无法生成图片测试"
 		} else {
-			answer, e = s.invoke(ctx, c, p, AIInput{Prompt: visionPrompt, Image: data}, nil)
-			if e != nil {
-				cap.Error = "文字可用；识图测试失败：" + e.Error()
-			} else if strings.ToUpper(strings.Join(strings.Fields(answer), " ")) != expected {
+			answer, err := s.probeConnection(r.Context(), c, p, AIInput{Prompt: visionPrompt, Image: data}, 90*time.Second)
+			if err != nil {
+				cap.Error = "文字可用；识图测试失败：" + err.Error()
+			} else if !matchesVisionProbe(answer, expected) {
 				cap.Error = "文字可用；识图测试未通过"
 			} else {
 				cap.Vision = true
@@ -305,6 +322,32 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, cap)
 	s.wakeProcessing()
 }
+
+// Probes use the selected model with CLI defaults. Listing models or mapping
+// chat effort is optional metadata and must not block a real capability check.
+func (s *Server) probeConnection(parent context.Context, c AIConfig, p string, in AIInput, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	var adapter Adapter = cliAdapter{s.Store.Root, p, c.Models[p]}
+	if p == "text-api" {
+		adapter = apiAdapter{c.TextAPI}
+	}
+	if p == "image-api" {
+		adapter = apiAdapter{c.ImageAPI}
+	}
+	result, err := adapter.Stream(ctx, GenerateRequest{Input: in}, nil)
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", errors.New("检测超时，请检查网络或模型后重试")
+	}
+	return result.Text, err
+}
+
+var visionColorNames = regexp.MustCompile(`(?i)\b(?:red|blue|green|yellow)\b`)
+
+func matchesVisionProbe(answer, expected string) bool {
+	return strings.Join(visionColorNames.FindAllString(strings.ToUpper(answer), -1), " ") == expected
+}
+
 func (s *Server) generate(ctx context.Context, in AIInput, delta func(string), fallback func(string)) (AIResult, error) {
 	return s.generateWithConfig(ctx, s.aiConfig(), in, delta, fallback)
 }

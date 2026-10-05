@@ -168,6 +168,7 @@ export interface PDFBlock {
   caption?: string;
 }
 export interface AICapability {
+  pendingVision?: boolean;
   text: boolean;
   vision: boolean;
   checkedAt: string;

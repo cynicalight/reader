@@ -70,8 +70,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(config),
     }),
-  testAI: (provider: string) =>
-    request<AICapability>(`/api/ai/test/${provider}`, { method: "POST" }),
+  testAI: (provider: string, capability?: "text" | "vision") =>
+    request<AICapability>(
+      `/api/ai/test/${provider}${capability ? `?capability=${capability}` : ""}`,
+      { method: "POST" },
+    ),
   documents: async (): Promise<Document[]> => {
     const { data, error } = await client.GET("/api/documents");
     if (error) throw new Error(error.error);
@@ -123,7 +126,8 @@ export const api = {
     ),
   messages: (id: string, signal?: AbortSignal) =>
     request<Message[]>(`/api/documents/${id}/messages`, { signal }),
-  providers: () => request<Provider[]>("/api/providers"),
+  providers: (checkAuth = true) =>
+    request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
   settings: () => request<Partial<ReaderTheme>>("/api/settings"),
   saveSettings: (theme: ReaderTheme) =>
     request<ReaderTheme>("/api/settings", {

@@ -42,7 +42,9 @@ export function Settings({
   onOpenChange: (value: boolean) => void;
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [testing, setTesting] = useState<Set<string>>(new Set());
+  const [testing, setTesting] = useState<Map<string, "text" | "vision">>(
+    new Map(),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const checked = useRef(new Set<string>());
   const refreshing = useRef(false);
@@ -61,7 +63,7 @@ export function Settings({
     setLoading(true);
     try {
       const [providers, config] = await Promise.all([
-        api.providers(),
+        api.providers(false),
         api.aiConfig(),
       ]);
       setProviders(providers);
@@ -70,43 +72,61 @@ export function Settings({
         if (!provider.installed) return false;
         // Saved results survive dialog remounts and application restarts.
         // Only an explicit retry replaces an existing result, including failures.
-        if (!force && config.capabilities[provider.id]) return false;
-        const key = JSON.stringify([
-          provider.id,
-          provider.authenticated,
-          config.models[provider.id],
-        ]);
+        if (
+          !force &&
+          config.capabilities[provider.id] &&
+          !config.capabilities[provider.id].pendingVision
+        )
+          return false;
+        const key = JSON.stringify([provider.id, config.models[provider.id]]);
         if (!force && checked.current.has(key)) return false;
         checked.current.add(key);
         return true;
       });
-      setTesting(new Set(pending.map((provider) => provider.id)));
+      const firstStage = (id: string): "text" | "vision" =>
+        !force && config.capabilities[id]?.pendingVision ? "vision" : "text";
+      setTesting(new Map(pending.map(({ id }) => [id, firstStage(id)])));
       setErrors((current) =>
         Object.fromEntries(
           Object.entries(current).filter(
-            ([id]) => !pending.some((provider) => provider.id === id),
+            ([key]) =>
+              !pending.some((provider) => key.startsWith(`${provider.id}:`)),
           ),
         ),
       );
       setLoading(false);
       await Promise.all(
         pending.map(async ({ id }) => {
-          try {
-            const capability = await api.testAI(id);
+          let stage = firstStage(id);
+          const update = (
+            capability: NonNullable<typeof config>["capabilities"][string],
+          ) => {
             const current = useReaderStore.getState().aiConfig;
-            if (current && current.models[id] === config.models[id])
-              setAIConfig({
-                ...current,
-                capabilities: { ...current.capabilities, [id]: capability },
-              });
+            if (!current || current.models[id] !== config.models[id])
+              return false;
+            setAIConfig({
+              ...current,
+              capabilities: { ...current.capabilities, [id]: capability },
+            });
+            return true;
+          };
+          try {
+            if (stage === "text") {
+              const capability = await api.testAI(id, "text");
+              if (!update(capability) || !capability.text) return;
+              stage = "vision";
+              setTesting((current) => new Map(current).set(id, "vision"));
+            }
+            const capability = await api.testAI(id, "vision");
+            update(capability);
           } catch (error) {
             setErrors((current) => ({
               ...current,
-              [id]: (error as Error).message,
+              [`${id}:${stage}`]: (error as Error).message,
             }));
           } finally {
             setTesting((current) => {
-              const next = new Set(current);
+              const next = new Map(current);
               next.delete(id);
               return next;
             });
@@ -163,7 +183,7 @@ export function Settings({
           <Separator />
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-medium">订阅账号连接</h3>
+              <h3 className="text-sm font-medium">Agent 连接</h3>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -234,7 +254,7 @@ export function Settings({
                 const p = providers.find((p) => p.id === name);
                 const capability = config?.capabilities[name];
                 const pending = testing.has(name);
-                const error = errors[name] || capability?.error;
+
                 return (
                   <div key={name} className="min-w-0 rounded-xl border p-4">
                     <div className="flex items-center gap-3">
@@ -253,7 +273,16 @@ export function Settings({
                             ["vision", "图片理解"],
                           ] as const
                         ).map(([kind, label]) => {
-                          const ready = !errors[name] && !!capability?.[kind];
+                          const stage = testing.get(name);
+                          const pending =
+                            stage === "text" ||
+                            (stage === "vision" && kind === "vision");
+                          const error =
+                            errors[`${name}:${kind}`] || capability?.error;
+                          const ready =
+                            !errors[`${name}:text`] &&
+                            !errors[`${name}:${kind}`] &&
+                            !!capability?.[kind];
                           const state = pending
                             ? "pending"
                             : ready
@@ -292,22 +321,14 @@ export function Settings({
                                         {error ||
                                           (capability?.text
                                             ? "文本推理可用，图片理解未通过检测。"
-                                            : "检测未通过，请确认 Agent 已完成登录。")}
+                                            : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
                                       </p>
-                                      {!p?.authenticated &&
-                                        !capability?.text && (
-                                          <p>
-                                            在终端运行{" "}
-                                            <code>
-                                              {name === "codex"
-                                                ? "codex login"
-                                                : name === "claude"
-                                                  ? "claude auth login"
-                                                  : "kimi login"}
-                                            </code>{" "}
-                                            完成官方登录，然后重新检测。
-                                          </p>
-                                        )}
+                                      {!capability?.text && (
+                                        <p>
+                                          支持 CLI 当前使用的订阅登录或 API Key
+                                          配置；以实际调用结果为准。
+                                        </p>
+                                      )}
                                     </TooltipContent>
                                   </Tooltip>
                                 )}

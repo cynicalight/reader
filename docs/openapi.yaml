@@ -594,6 +594,15 @@
         {
           "get":
             {
+              "parameters":
+                [
+                  {
+                    "name": "auth",
+                    "in": "query",
+                    "description": "Use skip for fast installation discovery; authentication is not a capability test.",
+                    "schema": { "type": "string", "enum": ["skip"] },
+                  },
+                ],
               "responses":
                 {
                   "200":
@@ -948,6 +957,12 @@
             {
               "parameters":
                 [
+                  {
+                    "name": "capability",
+                    "in": "query",
+                    "description": "Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration.",
+                    "schema": { "type": "string", "enum": ["text", "vision"] },
+                  },
                   {
                     "name": "provider",
                     "in": "path",
@@ -1358,6 +1373,11 @@
               "properties":
                 {
                   "text": { "type": "boolean" },
+                  "pendingVision":
+                    {
+                      "type": "boolean",
+                      "description": "Text passed; vision has not finished. Resume vision on the next check.",
+                    },
                   "vision": { "type": "boolean" },
                   "checkedAt": { "type": "string" },
                   "error": { "type": "string" },

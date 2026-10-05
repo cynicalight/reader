@@ -489,7 +489,10 @@ export interface paths {
     };
     get: {
       parameters: {
-        query?: never;
+        query?: {
+          /** @description Use skip for fast installation discovery; authentication is not a capability test. */
+          auth?: "skip";
+        };
         header?: never;
         path?: never;
         cookie?: never;
@@ -875,7 +878,10 @@ export interface paths {
     put?: never;
     post: {
       parameters: {
-        query?: never;
+        query?: {
+          /** @description Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration. */
+          capability?: "text" | "vision";
+        };
         header?: never;
         path: {
           provider: string;
@@ -1080,6 +1086,8 @@ export interface components {
     };
     AICapability: {
       text: boolean;
+      /** @description Text passed; vision has not finished. Resume vision on the next check. */
+      pendingVision?: boolean;
       vision: boolean;
       checkedAt: string;
       error?: string;

@@ -47,14 +47,23 @@ func providerStatus(ctx context.Context, name string) Provider {
 	if p.Authenticated {
 		p.Status = "已登录"
 	} else {
-		p.Status = "请在终端登录"
+		p.Status = "登录状态未确认，请测试实际可用性"
 	}
 	return p
 }
 func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
 	out := []Provider{}
 	for _, name := range []string{"codex", "claude", "kimi"} {
-		out = append(out, providerStatus(r.Context(), name))
+		if r.URL.Query().Get("auth") == "skip" {
+			_, err := exec.LookPath(name)
+			status := "未安装"
+			if err == nil {
+				status = "待检测"
+			}
+			out = append(out, Provider{ID: name, Installed: err == nil, Status: status})
+		} else {
+			out = append(out, providerStatus(r.Context(), name))
+		}
 	}
 	respond(w, 200, out)
 }

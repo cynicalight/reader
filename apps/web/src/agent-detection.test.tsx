@@ -49,15 +49,15 @@ beforeEach(() => {
     { id: "claude", installed: false, authenticated: false, status: "未安装" },
   ]);
   vi.mocked(api.aiConfig).mockImplementation(async () => config);
-  vi.mocked(api.testAI).mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        complete = (capability) => {
-          config = { ...config, capabilities: { codex: capability } };
-          resolve(capability);
-        };
-      }),
-  );
+  vi.mocked(api.testAI).mockImplementation((_id, stage) => {
+    if (stage === "vision") return Promise.resolve(config.capabilities.codex);
+    return new Promise((resolve) => {
+      complete = (capability) => {
+        config = { ...config, capabilities: { codex: capability } };
+        resolve(capability);
+      };
+    });
+  });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -69,7 +69,7 @@ afterEach(async () => {
 });
 it("automatically checks installed agents once, even when settings reopen during a check", async () => {
   await render();
-  expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex");
+  expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex", "text");
   expect(host.querySelector('[aria-label="文本推理：检测中"]')).not.toBeNull();
   expect(host.textContent).not.toContain("测试可用性与识图");
   expect(host.querySelector('[aria-label="图片理解：检测中"]')).not.toBeNull();
@@ -80,7 +80,7 @@ it("automatically checks installed agents once, even when settings reopen during
   expect(host.querySelector('[data-state="passed"]')).not.toBeNull();
   await render(false);
   await render();
-  expect(api.testAI).toHaveBeenCalledTimes(1);
+  expect(api.testAI).toHaveBeenCalledTimes(2);
   expect(host.querySelector('[data-state="passed"]')).not.toBeNull();
 });
 it("shows independent text and image results and allows an explicit retry", async () => {
@@ -99,7 +99,7 @@ it("shows independent text and image results and allows an explicit retry", asyn
       host.querySelector('[aria-label="重新检测 Agent"]') as HTMLButtonElement
     ).click(),
   );
-  expect(api.testAI).toHaveBeenCalledTimes(2);
+  expect(api.testAI).toHaveBeenCalledTimes(3);
   expect(host.querySelector('[data-state="pending"]')).not.toBeNull();
   await act(async () => complete(passed));
   expect(host.querySelector('[data-state="passed"]')).not.toBeNull();
@@ -122,7 +122,7 @@ it.each([passed, { ...passed, vision: false, error: "识图失败" }])(
         host.querySelector('[aria-label="重新检测 Agent"]') as HTMLButtonElement
       ).click(),
     );
-    expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex");
+    expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex", "text");
     await act(async () => complete(passed));
     expect(useReaderStore.getState().aiConfig?.capabilities.codex).toEqual(
       passed,
@@ -142,15 +142,72 @@ it("keeps a saved check visible while metadata loads and reflects global failure
   expect(host.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
   await act(async () => finish(config));
   await act(async () =>
-    useReaderStore
-      .getState()
-      .setAIConfig({
-        ...config,
-        capabilities: {
-          codex: { ...passed, text: false, vision: false, error: "调用失败" },
-        },
-      }),
+    useReaderStore.getState().setAIConfig({
+      ...config,
+      capabilities: {
+        codex: { ...passed, text: false, vision: false, error: "调用失败" },
+      },
+    }),
   );
   expect(host.querySelector('[aria-label="文本推理：未通过"]')).not.toBeNull();
   expect(api.testAI).not.toHaveBeenCalled();
+});
+
+it("publishes text while vision is still running, even without a subscription login", async () => {
+  vi.mocked(api.providers).mockResolvedValue([
+    {
+      id: "codex",
+      installed: true,
+      authenticated: false,
+      status: "登录状态未确认",
+    },
+  ]);
+  let finishVision!: (capability: AICapability) => void;
+  vi.mocked(api.testAI).mockImplementation((_id, stage) => {
+    if (stage === "text")
+      return Promise.resolve({ ...passed, vision: false, pendingVision: true });
+    return new Promise((resolve) => {
+      finishVision = resolve;
+    });
+  });
+  await render();
+  expect(api.providers).toHaveBeenCalledWith(false);
+  expect(api.testAI).toHaveBeenNthCalledWith(1, "codex", "text");
+  expect(api.testAI).toHaveBeenNthCalledWith(2, "codex", "vision");
+  expect(host.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="图片理解：检测中"]')).not.toBeNull();
+  await act(async () => finishVision(passed));
+  expect(host.querySelector('[aria-label="图片理解：已通过"]')).not.toBeNull();
+});
+
+it("keeps successful text when the vision request disconnects", async () => {
+  vi.mocked(api.testAI).mockImplementation(async (_id, stage) => {
+    if (stage === "text")
+      return { ...passed, vision: false, pendingVision: true };
+    throw new Error("connection interrupted");
+  });
+  await render();
+  expect(host.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="图片理解：未通过"]')).not.toBeNull();
+});
+
+it("resumes an interrupted vision check without repeating text", async () => {
+  config.capabilities.codex = { ...passed, vision: false, pendingVision: true };
+  vi.mocked(api.testAI).mockResolvedValue(passed);
+  await render();
+  expect(api.testAI).toHaveBeenCalledExactlyOnceWith("codex", "vision");
+  expect(host.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
+});
+
+it("does not show old green checks after a text retry disconnects", async () => {
+  config.capabilities.codex = passed;
+  await render();
+  vi.mocked(api.testAI).mockRejectedValue(new Error("connection interrupted"));
+  await act(async () =>
+    (
+      host.querySelector('[aria-label="重新检测 Agent"]') as HTMLButtonElement
+    ).click(),
+  );
+  expect(host.querySelector('[aria-label="文本推理：未通过"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="图片理解：已通过"]')).toBeNull();
 });
