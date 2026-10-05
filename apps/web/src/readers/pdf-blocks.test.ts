@@ -189,3 +189,77 @@ it("excludes page furniture from hover while keeping footnotes interactive", () 
   };
   expect(hitBlock([pageNumber], 2, 0.5, 0.96)).toBeUndefined();
 });
+
+it("retains only a passive focus outline during scroll and leave, with actions appearing on hover", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="2"><span>Text</span></div>';
+  const page = host.firstElementChild as HTMLElement;
+  page.getBoundingClientRect = () => new DOMRect(10, 20, 1000, 1400);
+  const text = { ...block, image: undefined, label: "text", text: "Paragraph" };
+  const layer = new PDFBlockOverlay(host);
+  layer.setBlocks([text]);
+  layer.setFocusBlock(text.id);
+  const outline = () => page.querySelector<HTMLElement>(".reader-block-focus");
+  expect(outline()?.dataset.blockId).toBe(text.id);
+  expect(outline()?.children).toHaveLength(0);
+  expect(page.querySelector("[data-block-action]")).toBeNull();
+  await act(async () =>
+    page.firstElementChild!.dispatchEvent(
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 210,
+        clientY: 440,
+      }),
+    ),
+  );
+  expect(page.querySelector('[data-block-action="explain"]')).not.toBeNull();
+  expect(page.querySelector('[data-block-action="translate"]')).not.toBeNull();
+  expect(outline()).toBeNull(); // no double tint on the same block
+  host.dispatchEvent(new Event("scroll"));
+  expect(outline()?.children).toHaveLength(0);
+  expect(page.querySelector("[data-block-action]")).toBeNull();
+  host.dispatchEvent(new Event("pointerleave"));
+  expect(outline()?.dataset.blockId).toBe(text.id);
+  layer.setFocusBlock(null);
+  expect(outline()).toBeNull();
+  await act(async () => layer.destroy());
+  vi.unstubAllGlobals();
+});
+
+it("focuses text and image clicks without attaching images, and leaves drags and links alone", async () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="2"><span>Text</span><a href="#note">Link</a></div>';
+  const page = host.firstElementChild as HTMLElement;
+  page.getBoundingClientRect = () => new DOMRect(10, 20, 1000, 1400);
+  const focus = vi.fn(() => true),
+    action = vi.fn();
+  const layer = new PDFBlockOverlay(host, action, vi.fn(), focus);
+  const target = page.firstElementChild!;
+  const click = (target: Element, endX = 210) => {
+    target.dispatchEvent(
+      new MouseEvent("pointerdown", {
+        bubbles: true,
+        clientX: 210,
+        clientY: 440,
+      }),
+    );
+    target.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, clientX: endX, clientY: 440 }),
+    );
+  };
+  layer.setBlocks([block]);
+  click(target);
+  expect(focus).toHaveBeenLastCalledWith(block);
+  expect(action).not.toHaveBeenCalled();
+  const text = { ...block, image: undefined, label: "text", text: "Paragraph" };
+  layer.setBlocks([text]);
+  click(target);
+  expect(focus).toHaveBeenLastCalledWith(text);
+  click(target, 250);
+  click(page.querySelector("a")!);
+  expect(focus).toHaveBeenCalledTimes(2);
+  layer.destroy();
+});

@@ -287,10 +287,11 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
       bounds: { x: 0.1, y: 0.04, width: 0.8, height: 0.02 },
     });
     await nav.fit(false);
+    await new Promise((r) => setTimeout(r, 200)); // a new wheel gesture
     host.dispatchEvent(
       new WheelEvent("wheel", { deltaY: 100, cancelable: true }),
     );
-    await vi.waitFor(() => expect(host.scrollLeft).toBeGreaterThan(500));
+    await vi.waitFor(() => expect(host.scrollLeft).toBeCloseTo(435));
     expect(currentPage()).toBe(1);
     await new Promise((r) => setTimeout(r, 200));
     await nav.follow({ blockId: "right", fraction: 1 });

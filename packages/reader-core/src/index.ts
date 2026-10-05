@@ -166,6 +166,7 @@ export interface ReaderAdapter {
     location: PDFLocation,
     translations: TranslationBlock[],
   ): Promise<PDFSentenceLink[]>;
+  stepBlock?(direction: number): Promise<void>;
   fitColumn?(): Promise<void>;
   stopColumnFit?(): void;
   destroy(): Promise<void>;

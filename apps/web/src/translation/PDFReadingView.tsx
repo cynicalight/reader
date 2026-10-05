@@ -16,7 +16,7 @@ import type {
 } from "@reader/core";
 import { isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
-import { Columns2 } from "lucide-react";
+import { Columns2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { Popover, PopoverContent } from "@reader/ui/components/popover";
@@ -512,6 +512,36 @@ export function PDFReadingView({
             {mode !== "translation" && (
               <div className="pdf-reading-controls">
                 <div className="pdf-page-navigation">{pageNavigation}</div>
+                {fitted && (
+                  <div className="pdf-block-navigation flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="上一段"
+                      onClick={() =>
+                        void engine
+                          ?.stepBlock?.(-1)
+                          .catch((e) => toast.error(e.message))
+                      }
+                    >
+                      <ChevronLeft />
+                      上一段
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="下一段"
+                      onClick={() =>
+                        void engine
+                          ?.stepBlock?.(1)
+                          .catch((e) => toast.error(e.message))
+                      }
+                    >
+                      下一段
+                      <ChevronRight />
+                    </Button>
+                  </div>
+                )}
                 {theme.pdfColumnReading && (
                   <Button
                     className="fit-column"

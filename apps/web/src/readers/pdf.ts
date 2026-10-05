@@ -61,6 +61,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       container,
       (block, action) => this.events.blockAction?.(block, action),
       (block) => this.events.blockHover?.(block),
+      (block) => this.navigation.focusBlock(block.id),
     );
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
@@ -88,6 +89,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       () => this.pdf?.numPages ?? 0,
       () => this.blockData,
       this.events,
+      (blockId) => this.blocks.setFocusBlock(blockId),
     );
     this.bus.on("pagechanging", ({ pageNumber }: { pageNumber: number }) => {
       this.location = { type: "pdf", page: pageNumber };
@@ -470,6 +472,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.events.zoom?.(this.appliedZoom);
     }
   }
+  stepBlock(direction: number) {
+    this.clearSelection();
+    return this.navigation.stepBlock(direction);
+  }
   stopColumnFit() {
     this.navigation.stop();
   }
@@ -539,8 +545,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async destroy() {
     if (this.disposed) return;
-    this.blocks.destroy();
     this.navigation.destroy();
+    this.blocks.destroy();
     this.annotationLayer.destroy();
     this.disposed = true;
     this.resize.disconnect();

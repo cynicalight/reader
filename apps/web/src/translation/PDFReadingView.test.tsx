@@ -61,6 +61,7 @@ const adapter = {
   getContext: vi.fn(async () => ""),
   destroy: vi.fn(async () => {}),
   fitColumn: vi.fn(async () => {}),
+  stepBlock: vi.fn(async () => {}),
   stopColumnFit: vi.fn(),
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
@@ -382,4 +383,15 @@ it("always follows scrolling in either pane without an unlink control", async ()
     blockId: "p1-b1",
     fraction: 0.25,
   });
+});
+
+it("shows block navigation only while fitted and delegates next/previous paragraphs", async () => {
+  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
+  await act(async () => fixture.events!.columnFit?.(true));
+  await click("下一段");
+  expect(adapter.stepBlock).toHaveBeenLastCalledWith(1);
+  await click("上一段");
+  expect(adapter.stepBlock).toHaveBeenLastCalledWith(-1);
+  await act(async () => fixture.events!.columnFit?.(false));
+  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
 });

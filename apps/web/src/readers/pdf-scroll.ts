@@ -5,6 +5,7 @@ export function animatePDFScroll(
   top: number,
   cancelled: () => boolean,
   moved: () => void,
+  immediate = false,
 ): Promise<void> {
   const fromLeft = host.scrollLeft,
     fromTop = host.scrollTop;
@@ -21,6 +22,7 @@ export function animatePDFScroll(
   };
   if (cancelled()) return Promise.resolve();
   if (
+    immediate ||
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
     Math.hypot(left - fromLeft, top - fromTop) < 1
   ) {
