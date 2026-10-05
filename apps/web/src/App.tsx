@@ -50,6 +50,7 @@ export function App() {
   const [editingLibrary, setEditingLibrary] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [commandQuery, setCommandQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -164,7 +165,18 @@ export function App() {
     open(doc);
     void api.update(doc.id, {}).catch((e) => toast.error(e.message));
   };
-  const filtered = filterDocuments(documents, filter, query, filters);
+  const filtered = filterDocuments(
+    documents,
+    filter,
+    filter === "all" ? "" : query,
+    filters,
+  );
+  const searchResults = filterDocuments(
+    documents,
+    "all",
+    commandQuery,
+    initialFilters,
+  );
   const editing = documents.find((d) => d.id === editingId);
   const awaitingClassification = documents.some(
     (d) =>
@@ -353,7 +365,7 @@ export function App() {
                 )}
               </header>
               <div className="library-content">
-                {filter !== "tags" && (
+                {filter === "favorites" && (
                   <div className="library-controls">
                     <div className="search-field">
                       <Search className="size-4" />
@@ -483,12 +495,12 @@ export function App() {
             </DialogHeader>
             <Input
               autoFocus
-              placeholder="输入文档标题…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索标题、作者、标签…"
+              value={commandQuery}
+              onChange={(e) => setCommandQuery(e.target.value)}
             />
             <div className="min-w-0 max-h-72 space-y-1 overflow-auto">
-              {filtered.map((d) => (
+              {searchResults.map((d) => (
                 <Button
                   key={d.id}
                   variant="ghost"
