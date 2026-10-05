@@ -8,6 +8,7 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
 import type {
   Document,
+  TagBoard,
   DocumentLocation,
   Annotation,
   SearchResult,
@@ -59,6 +60,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  tagBoards: () => request<TagBoard[]>("/api/tag-boards"),
+  createTagBoard: (board: Omit<TagBoard, "id">) =>
+    request<TagBoard>("/api/tag-boards", {
+      method: "POST",
+      body: JSON.stringify(board),
+    }),
+  updateTagBoard: (id: string, board: Omit<TagBoard, "id">) =>
+    request<TagBoard>(`/api/tag-boards/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(board),
+    }),
+  removeTagBoard: (id: string) =>
+    request<void>(`/api/tag-boards/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
   translationStream: async (
     id: string,
     signal: AbortSignal,

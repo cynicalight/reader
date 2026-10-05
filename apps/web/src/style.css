@@ -1733,3 +1733,61 @@ kbd {
 [data-slot="context-menu-content"] {
   scrollbar-width: none;
 }
+
+.tag-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.tag-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.tag-board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 2px 5px #00000005;
+}
+.tag-board-title {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  padding-inline: 0;
+}
+.tag-board-title > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.tag-board-preview {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.9;
+}
+.tag-board-preview > li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-board-heading,
+.tag-board-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}

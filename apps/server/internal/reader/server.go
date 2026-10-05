@@ -65,6 +65,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		respond(w, 200, v)
 	})
+	mux.HandleFunc("GET /api/tag-boards", s.tagBoards)
+	mux.HandleFunc("POST /api/tag-boards", s.saveTagBoard)
+	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
+	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)

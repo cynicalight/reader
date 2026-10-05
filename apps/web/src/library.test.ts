@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 import type { Document } from "@reader/core";
-import { filterDocuments, initialFilters, libraryTags } from "./library";
+import {
+  filterDocuments,
+  initialFilters,
+  libraryTags,
+  matchTagBoard,
+} from "./library";
 const makeDoc = (patch: Partial<Document>): Document => ({
   id: "1",
   type: "pdf",
@@ -83,4 +88,23 @@ it("supports unread/finished boundaries and title/tag search without mutating th
   expect(
     libraryTags(documents).filter((tag) => tag.toLowerCase() === "web"),
   ).toEqual(["Web"]);
+});
+
+it("matches saved tag combinations in all/any mode and updates when document tags change", () => {
+  const board = { tags: ["WEB", "安全"], match: "all" as const };
+  expect(matchTagBoard(documents, board).map((d) => d.id)).toEqual(["paper"]);
+  expect(
+    matchTagBoard(documents, { ...board, match: "any" }).map((d) => d.id),
+  ).toEqual(["paper", "article", "book"]);
+  const updated = documents.map((d) =>
+    d.id === "article" ? { ...d, tags: ["web", "安全"] } : d,
+  );
+  expect(matchTagBoard(updated, board).map((d) => d.id)).toEqual([
+    "paper",
+    "article",
+  ]);
+  expect(
+    matchTagBoard(documents, { tags: ["deleted-tag"], match: "all" }),
+  ).toEqual([]);
+  expect(board.tags).toEqual(["WEB", "安全"]);
 });

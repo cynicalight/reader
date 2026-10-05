@@ -14,6 +14,7 @@ import {
   PanelLeft,
   Command,
   X,
+  Tags,
 } from "lucide-react";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
@@ -35,6 +36,7 @@ import { useProcessing } from "./ProcessingStatus";
 import { useResolvedTheme } from "./appearance";
 import { flushProgress } from "./progress";
 import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
+import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
 export function App() {
@@ -256,6 +258,12 @@ export function App() {
                     count: documents.length,
                   },
                   {
+                    id: "tags",
+                    label: "标签看板",
+                    icon: Tags,
+                    count: undefined,
+                  },
+                  {
                     id: "recent",
                     label: "最近阅读",
                     icon: Clock3,
@@ -304,11 +312,13 @@ export function App() {
                     <PanelLeft />
                   </Button>
                   <h1 className="library-title">
-                    {filter === "favorites"
-                      ? "收藏"
-                      : filter === "recent"
-                        ? "最近阅读"
-                        : "我的文档"}
+                    {filter === "tags"
+                      ? "标签看板"
+                      : filter === "favorites"
+                        ? "收藏"
+                        : filter === "recent"
+                          ? "最近阅读"
+                          : "我的文档"}
                   </h1>
                 </div>
                 <Button onClick={chooseFiles} disabled={busy}>
@@ -328,14 +338,16 @@ export function App() {
                     />
                   </div>
                 </div>
-                <LibraryFilterBar
-                  documents={documents}
-                  filters={filters}
-                  onChange={setFilters}
-                  view={libraryView}
-                  onViewChange={setLibraryView}
-                  count={filtered.length}
-                />
+                {filter !== "tags" && (
+                  <LibraryFilterBar
+                    documents={documents}
+                    filters={filters}
+                    onChange={setFilters}
+                    view={libraryView}
+                    onViewChange={setLibraryView}
+                    count={filtered.length}
+                  />
+                )}
                 {processingError && (
                   <p className="processing-warning" role="status">
                     解析进度暂时不可用：{processingError}
@@ -354,6 +366,17 @@ export function App() {
                     <Loader2 className="animate-spin text-muted-foreground" />
                     <p>正在打开本地书库</p>
                   </div>
+                ) : filter === "tags" ? (
+                  <TagBoards
+                    documents={documents}
+                    query={query}
+                    jobs={jobs}
+                    processingError={processingError}
+                    openDocument={openDocument}
+                    favorite={favorite}
+                    onEdit={setEditingId}
+                    onSettings={() => setSettings(true)}
+                  />
                 ) : filtered.length ? (
                   <LibraryDocuments
                     key={JSON.stringify([filter, query, filters])}

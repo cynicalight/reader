@@ -1,4 +1,4 @@
-import type { Document, DocumentCategory } from "@reader/core";
+import type { Document, DocumentCategory, TagBoard } from "@reader/core";
 export const categoryLabels: Record<DocumentCategory, string> = {
   book: "书籍",
   article: "文章",
@@ -59,4 +59,18 @@ export function filterDocuments(
           ? b.createdAt.localeCompare(a.createdAt)
           : b.lastOpenedAt.localeCompare(a.lastOpenedAt),
     );
+}
+
+export function matchTagBoard(
+  documents: Document[],
+  board: Pick<TagBoard, "tags" | "match">,
+) {
+  if (!board.tags.length) return documents;
+  return documents.filter((document) => {
+    const tags = new Set(document.tags.map((tag) => tag.toLowerCase()));
+    const matches = (tag: string) => tags.has(tag.toLowerCase());
+    return board.match === "any"
+      ? board.tags.some(matches)
+      : board.tags.every(matches);
+  });
 }
