@@ -287,8 +287,7 @@ export function App() {
                   </Button>
                 ))}
                 <Button
-                  variant="ghost"
-                  className="nav-item"
+                  className="h-[39px] w-full justify-start gap-3 px-3"
                   onClick={chooseFiles}
                   disabled={busy}
                 >
