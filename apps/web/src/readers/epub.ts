@@ -1,3 +1,5 @@
+import { installEPUBScroll, type EPUBScrollState } from "./epub-scroll";
+import { toast } from "sonner";
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import {
   selectionLocator,
@@ -54,6 +56,12 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private annotationId(id: string) {
     return this.decorationAnnotations.get(id) ?? id;
   }
+  private scrollState: EPUBScrollState = {
+    busy: false,
+    locked: false,
+    lastInput: 0,
+    direction: 0,
+  };
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
@@ -245,6 +253,18 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.clearAnnotationHover();
     };
     const removeScrollbars = installScrollbars(doc);
+    const removeContinuousScroll = installEPUBScroll(
+      wnd,
+      this.scrollState,
+      () =>
+        !this.disposed &&
+        !!this.navigator?._cframes.some((f) => f?.iframe.contentWindow === wnd),
+      (direction) => (direction > 0 ? this.next() : this.previous()),
+      (reason) =>
+        toast.error(
+          reason instanceof Error ? reason.message : "无法读取相邻章节",
+        ),
+    );
     const changed = () => {
       const selected = wnd.getSelection();
       if (
@@ -308,6 +328,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     };
     const cleanup = () => {
       removeScrollbars();
+      removeContinuousScroll();
       doc.removeEventListener("pointerdown", annotationPress, true);
       doc.removeEventListener("pointerup", annotationRelease, true);
       doc.removeEventListener("pointermove", annotationMove, true);
@@ -483,8 +504,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.events.location(this.location, percent);
       },
       timelineItemChanged: () => {},
-      tap: () => false,
-      click: () => false,
+      // Consume edge taps so Readium never turns a chapter horizontally.
+      tap: () => true,
+      click: () => true,
       zoom: () => {},
       miscPointer: () => {},
       scroll: this.clearSelection,
@@ -552,7 +574,12 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       positions,
       initial,
       {
-        preferences: { fontSize: 1.15, lineHeight: 1.8, columnCount: 1 },
+        preferences: {
+          fontSize: 1.15,
+          lineHeight: 1.8,
+          columnCount: 1,
+          scroll: true,
+        },
         defaults: {},
       },
     );
@@ -721,7 +748,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         pageGutter: theme.margin,
         scrollPaddingLeft: theme.margin,
         scrollPaddingRight: theme.margin,
-        scroll: theme.scroll,
+        scroll: true,
         backgroundColor: palette[0],
         textColor: palette[1],
         columnCount: 1,

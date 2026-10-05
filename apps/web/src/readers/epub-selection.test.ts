@@ -5,7 +5,11 @@ import type {
   DecorationObserver,
   EpubNavigatorListeners,
 } from "@readium/navigator";
-import type { Annotation, Document as ReaderDocument } from "@reader/core";
+import {
+  defaultTheme,
+  type Annotation,
+  type Document as ReaderDocument,
+} from "@reader/core";
 import { Locator, Publication } from "@readium/shared";
 
 const bridge = vi.hoisted(() => ({
@@ -14,8 +18,10 @@ const bridge = vi.hoisted(() => ({
   apply: vi.fn(),
   go: vi.fn(),
   load: vi.fn(),
+  preferences: vi.fn(),
 }));
-vi.mock("@readium/navigator", () => ({
+vi.mock("@readium/navigator", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@readium/navigator")>()),
   DecorationLayout: { Boxes: "boxes" },
   DecorationWidth: { Wrap: "wrap" },
   EpubNavigator: class {
@@ -23,7 +29,11 @@ vi.mock("@readium/navigator", () => ({
       _container: HTMLElement,
       _publication: unknown,
       listeners: EpubNavigatorListeners,
+      _positions: unknown,
+      _initial: unknown,
+      options: { preferences: unknown },
     ) {
+      bridge.preferences(options.preferences);
       bridge.listeners = listeners;
     }
     go(locator: Locator, _animated: boolean, callback: (ok: boolean) => void) {
@@ -45,6 +55,9 @@ vi.mock("@readium/navigator", () => ({
       return bridge.load();
     }
     async destroy() {}
+    async submitPreferences(preferences: unknown) {
+      bridge.preferences(preferences);
+    }
     registerDecorationObserver(_group: string, observer: DecorationObserver) {
       bridge.observer = observer;
     }
@@ -82,6 +95,7 @@ beforeEach(async () => {
   bridge.apply.mockClear();
   bridge.go.mockClear();
   bridge.load.mockReturnValue(true);
+  bridge.preferences.mockClear();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -479,4 +493,16 @@ it("restores each translated source slice and maps decoration clicks to the save
   );
   await adapter.highlight([]);
   expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
+});
+
+it("always uses Readium scrolling even when an old saved theme requested pagination", async () => {
+  expect(bridge.preferences).toHaveBeenCalledWith(
+    expect.objectContaining({ scroll: true }),
+  );
+  await adapter.setTheme({ ...defaultTheme, scroll: false });
+  expect(bridge.preferences).toHaveBeenLastCalledWith(
+    expect.objectContaining({ scroll: true }),
+  );
+  expect(bridge.listeners!.click({} as never)).toBe(true);
+  expect(bridge.listeners!.tap({} as never)).toBe(true);
 });

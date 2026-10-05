@@ -243,3 +243,93 @@ it("keeps the translation subscription alive across modes and aborts on close", 
   await act(async () => root.unmount());
   expect(fixture.signal?.aborted).toBe(true);
 });
+
+it("renders successive chapters together without chapter-turn buttons", async () => {
+  await click("仅译文");
+  expect(
+    Array.from(host.querySelectorAll("[data-chapter]")).map((n) =>
+      n.getAttribute("data-chapter"),
+    ),
+  ).toEqual(["a.xhtml", "b.xhtml"]);
+  expect(host.textContent).not.toContain("下一章");
+  expect(host.textContent).not.toContain("上一章");
+});
+
+it("retains both original chapter locations when selecting across a chapter boundary", async () => {
+  await act(async () =>
+    fixture.push!({
+      event: "snapshot",
+      data: [
+        ...fixture.translations,
+        { ...fixture.translations[0], blockId: "e-b" },
+      ],
+    }),
+  );
+  await click("仅译文");
+  const start = host.querySelector(
+    '[data-chapter="a.xhtml"] [data-sentence="1"]',
+  )!;
+  const end = host.querySelector(
+    '[data-chapter="b.xhtml"] [data-sentence="0"]',
+  )!;
+  const range = document.createRange();
+  range.setStart(start, 0);
+  range.setEnd(end, end.childNodes.length);
+  Object.assign(range, {
+    getBoundingClientRect: () => new DOMRect(0, 0, 100, 60),
+  });
+  window.getSelection()!.addRange(range);
+  await act(async () =>
+    end.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
+  );
+  expect(
+    fixture
+      .ready!.getSelection()
+      ?.location.translation?.ranges?.map((r) => r.location?.href),
+  ).toEqual(["a.xhtml", "b.xhtml"]);
+});
+
+it("follows the latest translated position after an earlier chapter navigation finishes", async () => {
+  await act(async () =>
+    fixture.push!({
+      event: "snapshot",
+      data: [
+        ...fixture.translations,
+        { ...fixture.translations[0], blockId: "e-b" },
+      ],
+    }),
+  );
+  await click("原文译文");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  vi.mocked(adapter.goTo).mockClear();
+  let release!: () => void;
+  vi.mocked(adapter.goTo).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const select = async (href: string) => {
+    const node = host.querySelector(
+      `[data-chapter="${href}"] [data-sentence="0"]`,
+    )!;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    Object.assign(range, {
+      getBoundingClientRect: () => new DOMRect(0, 0, 100, 20),
+    });
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    await act(async () =>
+      node.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
+    );
+  };
+  await select("a.xhtml");
+  await select("b.xhtml");
+  expect(adapter.goTo).toHaveBeenCalledTimes(1);
+  await act(async () => release());
+  expect(adapter.goTo).toHaveBeenCalledTimes(2);
+  expect(adapter.goTo).toHaveBeenLastCalledWith(
+    expect.objectContaining({ href: "b.xhtml" }),
+  );
+});

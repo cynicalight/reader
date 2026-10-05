@@ -56,6 +56,7 @@ export function EPUBReadingView({
   );
   const side = useRef<"source" | "translation">("source");
   const navigating = useRef(false);
+  const syncTarget = useRef<EPUBLocation | undefined>(undefined);
   const pendingFollow = useRef<string | undefined>(undefined);
   const scrollFrame = useRef(0);
   const modeFrame = useRef(0);
@@ -69,8 +70,7 @@ export function EPUBReadingView({
     chapter,
   });
   live.current = { mode, blocks, translations, events, annotations, chapter };
-  const chapters = [...new Set(blocks.map((b) => b.location.href))];
-  const visible = blocks.filter((b) => b.location.href === chapter);
+  const visible = blocks;
   const targetNode = (id: string) =>
     Array.from(
       pane.current?.querySelectorAll<HTMLElement>("[data-translation-block]") ??
@@ -96,6 +96,7 @@ export function EPUBReadingView({
   };
   const updateLocation = (location: EPUBLocation) => {
     position.current = location;
+    setChapter(location.href.split("#")[0]);
     const all = live.current.blocks;
     const block = epubBlocksAt(location, all)[0];
     live.current.events.location(
@@ -129,6 +130,7 @@ export function EPUBReadingView({
     if (block) await go(block.location);
   };
   const clear = () => {
+    syncTarget.current = undefined;
     selection.current = null;
     engine.current?.clearSelection();
     window.getSelection()?.removeAllRanges();
@@ -137,10 +139,20 @@ export function EPUBReadingView({
     void engine.current?.focusEPUBLocations?.([]);
   };
   const syncSource = async (location: EPUBLocation) => {
-    if (navigating.current || live.current.mode !== "parallel") return;
+    if (live.current.mode !== "parallel") return;
+    syncTarget.current = location;
+    if (navigating.current) return;
     navigating.current = true;
     try {
-      await engine.current?.goTo(location);
+      while (
+        syncTarget.current &&
+        live.current.mode === "parallel" &&
+        side.current === "translation"
+      ) {
+        const target = syncTarget.current;
+        syncTarget.current = undefined;
+        await engine.current?.goTo(target);
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -166,6 +178,7 @@ export function EPUBReadingView({
       });
     return () => {
       controller.abort();
+      syncTarget.current = undefined;
       cancelAnimationFrame(scrollFrame.current);
       cancelAnimationFrame(modeFrame.current);
     };
@@ -369,6 +382,7 @@ export function EPUBReadingView({
                 ...events,
                 epubInteraction: () => {
                   side.current = "source";
+                  syncTarget.current = undefined;
                   void engine.current?.focusEPUBLocations?.([]);
                   if (selection.current?.location.translation) {
                     selection.current = null;
@@ -511,14 +525,12 @@ export function EPUBReadingView({
                     : "正在读取正文段落…")}
               </p>
             )}
-            {!!blocks.length && !visible.length && (
-              <p className="translation-warning">本章没有可翻译的正文</p>
-            )}
             {visible.map((block) => (
               <section
                 key={block.id}
                 data-translation-block={block.id}
                 data-label={block.label}
+                data-chapter={block.location.href}
               >
                 <TranslationText
                   block={block}
@@ -534,32 +546,6 @@ export function EPUBReadingView({
                 />
               </section>
             ))}
-            {!!blocks.length && (
-              <div className="flex justify-between gap-4">
-                <Button
-                  variant="ghost"
-                  disabled={chapters.indexOf(chapter) <= 0}
-                  onClick={() => {
-                    const href = chapters[chapters.indexOf(chapter) - 1];
-                    const b = blocks.find((b) => b.location.href === href);
-                    if (b) void go(b.location);
-                  }}
-                >
-                  上一章
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={chapters.indexOf(chapter) >= chapters.length - 1}
-                  onClick={() => {
-                    const href = chapters[chapters.indexOf(chapter) + 1];
-                    const b = blocks.find((b) => b.location.href === href);
-                    if (b) void go(b.location);
-                  }}
-                >
-                  下一章
-                </Button>
-              </div>
-            )}
           </div>
         }
       />

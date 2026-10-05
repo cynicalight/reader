@@ -31,7 +31,6 @@ import {
   Type,
   Sun,
   Moon,
-  AlignJustify,
   Check,
   CircleHelp,
 } from "lucide-react";
@@ -887,7 +886,6 @@ export function Workspace({
             </Button>
           )}
           <div ref={setReadingToolbar} />
-          {doc.type !== "pdf" && pageNavigation}
           <span className="toolbar-divider" />
           <IconButton
             label="添加书签"
@@ -992,14 +990,6 @@ export function Workspace({
                         {theme.fontFamily === "serif"
                           ? "宋体 / 衬线"
                           : "黑体 / 无衬线"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTheme({ scroll: !theme.scroll })}
-                      >
-                        <AlignJustify />
-                        {theme.scroll ? "滚动阅读" : "分页阅读"}
                       </Button>
                     </div>
                   </>
