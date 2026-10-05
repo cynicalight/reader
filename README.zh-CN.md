@@ -6,7 +6,7 @@
 
 Reader 以 EPUB 和 PDF 为两种核心文档格式。它使用统一的书库、目录、批注与对话界面，并分别通过 Readium 和 PDF.js 提供阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code 或 Codex CLI 调用，无需在 Reader 中另填 API Key。
 
-支持从源码运行；发布 Release 后，CI 会构建 macOS（Apple Silicon / Intel）的 DMG 和 Windows x64 的 EXE。安装包没有开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。尚未完成 Windows 安装后的人工验收，Linux 不提供安装包。
+支持从源码运行；发布 Release 后，CI 会构建 macOS（Apple Silicon）的 DMG 和 Windows x64 的 EXE。安装包没有开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。尚未完成 Windows 安装后的人工验收，Linux 不提供安装包。
 
 ## 功能
 
