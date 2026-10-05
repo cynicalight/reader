@@ -64,6 +64,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
     );
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
+    // Let even the last page's column end reach the viewport midpoint.
+    viewer.style.paddingBottom = `${container.clientHeight / 2}px`;
     container.append(viewer);
     this.links = new PDFLinkService({
       eventBus: this.bus,
@@ -109,6 +111,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
       passive: true,
     });
     this.resize = new ResizeObserver(() => {
+      viewer.style.paddingBottom = `${container.clientHeight / 2}px`;
       this.clearSelection();
       clearTimeout(this.resizeTimer);
       const fit = () => {

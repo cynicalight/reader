@@ -314,7 +314,10 @@ export class PDFReadingNavigation {
     const bottom = r.top + (b.y + b.height) * r.height,
       top = r.top + b.y * r.height;
     const down = event.deltaY > 0;
-    if ((down && bottom <= v.bottom + 26) || (!down && top >= v.top + 22)) {
+    if (
+      (down && bottom <= v.top + v.height / 2 + 1) ||
+      (!down && top >= v.top + 22)
+    ) {
       event.preventDefault();
       if (!fresh || event.deltaY === 0) return;
       this.gesture.transition();

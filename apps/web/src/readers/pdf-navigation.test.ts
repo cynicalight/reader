@@ -263,6 +263,21 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
   try {
     await nav.fit();
     expect(scaleWrites).toEqual([1.5]);
+    // Seeing the end near the viewport bottom must not advance the column.
+    host.scrollTop = 80; // column bottom: 660 - 80 = 580, viewport midpoint: 300
+    const earlyWheel = new WheelEvent("wheel", {
+      deltaY: 100,
+      cancelable: true,
+    });
+    host.dispatchEvent(earlyWheel);
+    expect(earlyWheel.defaultPrevented).toBe(false);
+    host.scrollTop = 360; // column bottom now reaches the midpoint
+    const boundaryWheel = new WheelEvent("wheel", {
+      deltaY: 100,
+      cancelable: true,
+    });
+    host.dispatchEvent(boundaryWheel);
+    expect(boundaryWheel.defaultPrevented).toBe(true);
     await nav.follow({ blockId: "left", fraction: 1 });
     // Classification arrives after the initial header/left/right geometry.
     blocks.push({
