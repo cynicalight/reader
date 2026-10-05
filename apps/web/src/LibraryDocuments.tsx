@@ -308,12 +308,9 @@ export function LibraryDocuments({
                 </Button>
               </div>
               {doc.categorySource !== "manual" &&
-                (doc.classificationStatus === "failed" ||
-                  doc.classificationStatus === "running") && (
+                doc.classificationStatus === "failed" && (
                   <p className="classification-status">
-                    {doc.classificationStatus === "failed"
-                      ? "AI 分类失败 · 可手动修改或重试"
-                      : "AI 分类中"}
+                    AI 分类失败 · 可手动修改或重试
                   </p>
                 )}
               <div className="book-progress">

@@ -263,16 +263,6 @@ export function DocumentEditor({
       setBusy(false);
     }
   };
-  const status =
-    d.categorySource === "manual"
-      ? "手动设置"
-      : d.classificationStatus === "done"
-        ? "AI 已分类"
-        : d.classificationStatus === "failed"
-          ? d.classificationError
-          : d.classificationStatus === "running"
-            ? "AI 正在分类"
-            : "暂定类型，等待正文解析和可用 AI 连接";
   return (
     <Dialog
       open
@@ -327,9 +317,16 @@ export function DocumentEditor({
                 setCategoryChanged(true);
               }}
             />
-            <p className="text-xs text-muted-foreground" role="status">
-              {categoryChanged ? "保存后采用手动类型" : status}
-            </p>
+            {d.classificationStatus === "failed" &&
+              d.categorySource !== "manual" &&
+              !categoryChanged && (
+                <p
+                  className="text-xs text-muted-foreground [overflow-wrap:anywhere]"
+                  role="status"
+                >
+                  {d.classificationError || "分类失败，可手动选择类型或重试。"}
+                </p>
+              )}
             {!categoryChanged && d.categorySource !== "manual" && (
               <Button
                 size="sm"
