@@ -55,6 +55,9 @@ export function ReaderView({
         columnFit: (active) => {
           if (!disposed) latest.current.events.columnFit?.(active);
         },
+        annotation: (target) => {
+          if (!disposed) latest.current.events.annotation?.(target);
+        },
         zoom: (zoom) => {
           if (!disposed) latest.current.events.zoom?.(zoom);
         },

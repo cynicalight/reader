@@ -642,8 +642,21 @@ kbd {
   position: absolute;
   opacity: 0.32;
   pointer-events: none;
-  z-index: 5;
+  /* Keep annotation feedback above both local and linked block hover. */
+  z-index: 7;
   mix-blend-mode: multiply;
+  background: var(--annotation-color);
+}
+.reader-highlight[data-kind="underline"] {
+  background: transparent;
+  border-bottom: 2px solid var(--annotation-color);
+}
+.reader-highlight[data-hovered] {
+  background: var(--annotation-color);
+  opacity: 0.48;
+}
+.reader-highlight[data-kind="underline"][data-hovered] {
+  background: color-mix(in srgb, var(--annotation-color) 30%, transparent);
 }
 .reader-loading {
   position: absolute;

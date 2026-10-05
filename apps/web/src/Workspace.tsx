@@ -38,6 +38,7 @@ import {
   type SourceReference,
   type ReaderAdapter,
   type ReaderSelection,
+  type ReaderAnnotationTarget,
   type TOCItem,
   type SearchResult,
   type ReaderTheme,
@@ -89,6 +90,10 @@ import { ImagePreview, imageLabel } from "./ImagePreview";
 import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
+import { useAnnotationDeletion } from "./useAnnotationDeletion";
+import { activeAnnotation, applySavedAnnotation } from "./annotations";
+import { copyText } from "./chat/clipboard";
 import { ReaderView } from "./ReaderView";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
@@ -233,6 +238,22 @@ export function Workspace({
   );
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const annotationSaving = useRef(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const lastCopiedSelection = useRef<string | null>(null);
+  const [annotationTarget, setAnnotationTarget] =
+    useState<ReaderAnnotationTarget | null>(null);
+  const { deleting, remove: removeAnnotation } = useAnnotationDeletion(
+    doc.id,
+    (id) => {
+      setAnnotations((items) => items.filter((item) => item.id !== id));
+      setAnnotationTarget((target) => {
+        if (!target) return null;
+        const ids = target.ids.filter((item) => item !== id);
+        return ids.length ? { ...target, ids } : null;
+      });
+    },
+  );
   const [left, setLeft] = useState(true);
   const [right, setRight] = useState(true);
   const leftPanel = usePanelRef();
@@ -269,6 +290,9 @@ export function Workspace({
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
+  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
+    null,
+  );
   const [noteSelection, setNoteSelection] = useState<ReaderSelection | null>(
     null,
   );
@@ -347,23 +371,88 @@ export function Workspace({
   const annotate = async (kind: Annotation["kind"], noteText = "") => {
     const source = kind === "note" ? noteSelection : selection;
     const target = kind === "bookmark" ? location : source?.location;
-    if (!target) return;
+    if (!target || annotationSaving.current) return;
+    annotationSaving.current = true;
+    setNoteSaving(kind === "note");
+    // Start clipboard access inside the user's click, before network awaits.
+    const copying =
+      kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
-      const a = await api.annotate(doc.id, {
-        kind,
-        location: target,
-        quote: kind === "bookmark" ? "" : source?.text || "",
-        note: noteText,
-        color: "#e6b94c",
-      });
-      setAnnotations((items) => [...items, a]);
-      toast.success(kind === "bookmark" ? "已添加书签" : "批注已保存");
+      const a =
+        kind === "note" && editingAnnotation
+          ? await api.updateAnnotationNote(
+              doc.id,
+              editingAnnotation.id,
+              noteText,
+            )
+          : await api.annotate(doc.id, {
+              kind,
+              location: target,
+              quote: kind === "bookmark" ? "" : source?.text || "",
+              note: noteText,
+              color: "#e6b94c",
+            });
+      setAnnotations((items) => applySavedAnnotation(items, a));
+      adapter?.clearSelection();
+      const copied = await copying;
+      toast.success(
+        kind === "bookmark"
+          ? "已添加书签"
+          : copied
+            ? "已保存，原文已复制"
+            : "已保存",
+        { id: "reader-annotation-save" },
+      );
       setNoteOpen(false);
       setNoteSelection(null);
+      setEditingAnnotation(null);
       setNote("");
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      annotationSaving.current = false;
+      setNoteSaving(false);
     }
+  };
+  const selectedAnnotation = annotationTarget
+    ? activeAnnotation(annotations, annotationTarget.ids)
+    : undefined;
+  const selectAnnotation = (target: ReaderAnnotationTarget | null) => {
+    setAnnotationTarget(target);
+    const annotation = target
+      ? activeAnnotation(annotations, target.ids)
+      : undefined;
+    if (annotation?.quote) void copyText(annotation.quote, "原文已复制");
+  };
+  const selectText = (next: ReaderSelection | null) => {
+    setSelection(next);
+    const key = next ? JSON.stringify([next.text, next.location]) : null;
+    if (next?.text && key !== lastCopiedSelection.current)
+      void copyText(next.text, "原文已复制");
+    lastCopiedSelection.current = key;
+  };
+  const editAnnotationNote = (annotation: Annotation) => {
+    setEditingAnnotation(annotation);
+    setNoteSelection({ text: annotation.quote, location: annotation.location });
+    setNote(annotation.note);
+    setNoteOpen(true);
+    adapter?.clearSelection();
+  };
+  const askAnnotationAI = (annotation: Annotation) => {
+    const quote = { text: annotation.quote, location: annotation.location };
+    setQuotes((items) =>
+      [
+        ...items.filter(
+          (item) =>
+            JSON.stringify(item.location) !== JSON.stringify(quote.location),
+        ),
+        quote,
+      ].slice(-6),
+    );
+    setRight(true);
+    setRightTab("ai");
+    adapter?.clearSelection();
+    requestAnimationFrame(() => composeInput.current?.focus());
   };
   const search = async () => {
     if (!adapter) return;
@@ -919,12 +1008,25 @@ export function Workspace({
                   events={{
                     zoom: (zoom) => setTheme({ zoom }),
                     location: saveLocation,
-                    selection: setSelection,
+                    selection: selectText,
+                    annotation: selectAnnotation,
                     blockAction,
                   }}
                 />
               );
             })()}
+            {!selection && annotationTarget && selectedAnnotation && (
+              <AnnotationToolbar
+                annotation={selectedAnnotation}
+                anchor={annotationTarget.anchor}
+                pane={readingPane}
+                deleting={deleting.has(selectedAnnotation.id)}
+                onDelete={(id) => void removeAnnotation(id)}
+                onNote={editAnnotationNote}
+                onAskAI={askAnnotationAI}
+              />
+            )}
+
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
                 <Badge variant="secondary">
@@ -945,6 +1047,7 @@ export function Workspace({
                 <IconButton
                   label="记笔记"
                   onClick={() => {
+                    setEditingAnnotation(null);
                     setNoteSelection(selection);
                     setNote("");
                     setNoteOpen(true);
@@ -962,7 +1065,7 @@ export function Workspace({
                   <Languages />
                 </IconButton>
                 <IconButton
-                  label="解释选区"
+                  label="问 AI"
                   onClick={() =>
                     void send(
                       "请解释这段文字的含义，区分原文结论与你的补充说明。",
@@ -1184,29 +1287,14 @@ export function Workspace({
                       <article className="note-card" key={a.id}>
                         <div>
                           <Badge variant="outline">
-                            {
-                              {
-                                highlight: "高亮",
-                                underline: "下划线",
-                                note: "笔记",
-                                bookmark: "书签",
-                              }[a.kind]
-                            }
+                            {annotationLabels[a.kind]}
                           </Badge>
                           <Button
                             size="icon-xs"
                             variant="ghost"
                             aria-label="删除记录"
-                            onClick={() => {
-                              void api
-                                .removeAnnotation(doc.id, a.id)
-                                .then(() =>
-                                  setAnnotations((items) =>
-                                    items.filter((i) => i.id !== a.id),
-                                  ),
-                                )
-                                .catch((e) => toast.error(e.message));
-                            }}
+                            disabled={deleting.has(a.id)}
+                            onClick={() => void removeAnnotation(a.id)}
                           >
                             <Trash2 />
                           </Button>
@@ -1241,13 +1329,19 @@ export function Workspace({
       <Dialog
         open={noteOpen}
         onOpenChange={(open) => {
+          if (noteSaving) return;
           setNoteOpen(open);
-          if (!open) setNoteSelection(null);
+          if (!open) {
+            setNoteSelection(null);
+            setEditingAnnotation(null);
+          }
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>添加笔记</DialogTitle>
+            <DialogTitle>
+              {editingAnnotation?.note.trim() ? "编辑笔记" : "添加笔记"}
+            </DialogTitle>
             <DialogDescription className="sr-only">
               为当前选区添加笔记
             </DialogDescription>
@@ -1263,7 +1357,9 @@ export function Workspace({
           />
           <Button
             onClick={() => void annotate("note", note)}
-            disabled={!note.trim()}
+            disabled={
+              noteSaving || (!note.trim() && !editingAnnotation?.note.trim())
+            }
           >
             <Check />
             保存笔记

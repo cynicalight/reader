@@ -81,6 +81,10 @@ export interface ReaderSelection {
   text: string;
   location: DocumentLocation;
 }
+export interface ReaderAnnotationTarget {
+  ids: string[];
+  anchor: SelectionAnchor;
+}
 export type Appearance = "light" | "dark" | "system";
 export interface ReaderTheme {
   appearance?: Appearance;
@@ -119,6 +123,7 @@ export interface PDFSentenceLink {
 }
 export interface ReaderEvents {
   blockHover?: (block: PDFBlock | null) => void;
+  annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   readingAnchor?: (anchor: PDFReadingAnchor) => void;
   columnFit?: (active: boolean) => void;

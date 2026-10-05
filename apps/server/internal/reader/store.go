@@ -79,6 +79,10 @@ func OpenStore(root string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err = store.compactUnderlines(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return store, nil
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }

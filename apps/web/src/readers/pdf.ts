@@ -2,6 +2,7 @@ import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import { pdfQuotePoint } from "./pdf-reference-location";
 import { PDFBlockOverlay } from "./pdf-blocks";
 import { PDFReadingNavigation } from "./pdf-navigation";
+import { PDFAnnotationLayer } from "./pdf-annotations";
 import * as pdfjs from "pdfjs-dist";
 import {
   EventBus,
@@ -34,7 +35,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private links: PDFLinkService;
   private location: PDFLocation = { type: "pdf", page: 1 };
   private selection: ReaderSelection | null = null;
-  private annotations: Annotation[] = [];
+  private annotationLayer: PDFAnnotationLayer;
   private texts = new Map<number, string>();
   private resize: ResizeObserver;
   private resizeTimer?: ReturnType<typeof setTimeout>;
@@ -52,6 +53,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
     private events: ReaderEvents,
   ) {
     container.classList.add("pdf-container");
+    this.annotationLayer = new PDFAnnotationLayer(container, (target) =>
+      this.events.annotation?.(target),
+    );
     this.blocks = new PDFBlockOverlay(
       container,
       (block, action) => this.events.blockAction?.(block, action),
@@ -290,6 +294,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.events.selection(null);
   };
   clearSelection = () => {
+    this.events.annotation?.(null);
+    this.annotationLayer.clear();
     const sel = window.getSelection();
     if (sel?.anchorNode && this.container.contains(sel.anchorNode))
       sel.removeAllRanges();
@@ -297,6 +303,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   };
   private onPointerDown = (event: PointerEvent) => {
     if (isSelectionToolbar(event.target)) return;
+    this.events.annotation?.(null);
     this.pointer = undefined;
     this.selecting =
       event.target instanceof Node && this.container.contains(event.target);
@@ -443,37 +450,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
     return this.selection;
   }
   async highlight(annotations: Annotation[]) {
-    this.annotations = annotations;
-    this.paintHighlights();
+    this.annotationLayer.setAnnotations(annotations);
   }
   private paintHighlights() {
-    this.container
-      .querySelectorAll(".reader-highlight")
-      .forEach((el) => el.remove());
-    for (const a of this.annotations) {
-      if (a.location.type !== "pdf" || a.kind === "bookmark") continue;
-      const page = this.container.querySelector<HTMLElement>(
-        `.page[data-page-number="${a.location.page}"]`,
-      );
-      if (!page) continue;
-      for (const r of a.location.rects || []) {
-        const el = document.createElement("div");
-        el.className = "reader-highlight";
-        Object.assign(el.style, {
-          left: `${r.x * 100}%`,
-          top: `${r.y * 100}%`,
-          width: `${r.width * 100}%`,
-          height: `${r.height * 100}%`,
-          background:
-            a.kind === "underline" ? "transparent" : a.color || "#facc15",
-          borderBottom:
-            a.kind === "underline"
-              ? `2px solid ${a.color || "#eab308"}`
-              : "none",
-        });
-        page.append(el);
-      }
-    }
+    this.annotationLayer.paint();
   }
   async setTheme(theme: ReaderTheme) {
     if (this.pdf && this.appliedZoom !== theme.zoom) {
@@ -569,6 +549,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     if (this.disposed) return;
     this.blocks.destroy();
     this.navigation.destroy();
+    this.annotationLayer.destroy();
     this.disposed = true;
     this.resize.disconnect();
     clearTimeout(this.resizeTimer);

@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
+	mux.HandleFunc("PATCH /api/documents/{id}/annotations/{annotation}", s.updateAnnotationNote)
 	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", func(w http.ResponseWriter, r *http.Request) {
 		_, err := s.Store.DB.Exec("DELETE FROM annotations WHERE id=? AND document_id=?", r.PathValue("annotation"), r.PathValue("id"))
 		if err != nil {
@@ -401,13 +402,12 @@ func (s *Server) saveAnnotation(w http.ResponseWriter, r *http.Request) {
 	a.ID = id()
 	a.DocumentID = d.ID
 	a.CreatedAt = now()
-	b, _ := json.Marshal(a)
-	_, err = s.Store.DB.Exec("INSERT INTO annotations VALUES(?,?,?)", a.ID, a.DocumentID, string(b))
+	result, err := s.Store.saveAnnotation(a)
 	if err != nil {
 		fail(w, 500, "批注保存失败")
 		return
 	}
-	respond(w, 201, a)
+	respond(w, 201, result)
 }
 func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 	if subtle.ConstantTimeCompare([]byte(r.PathValue("cap")), []byte(s.Token)) != 1 {

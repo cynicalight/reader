@@ -4,7 +4,10 @@ import { installScrollbars } from "../scrollbars";
 import {
   EpubNavigator,
   EpubPreferences,
+  DecorationLayout,
+  DecorationWidth,
   type Decoration,
+  type DecorationObserver,
   type EpubNavigatorListeners,
 } from "@readium/navigator";
 import {
@@ -24,6 +27,7 @@ import type {
   ReaderEvents,
   ReaderSelection,
   ReaderTheme,
+  SelectionAnchor,
   SearchResult,
   TOCItem,
 } from "@reader/core";
@@ -37,6 +41,66 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
+  private annotations: Annotation[] = [];
+  private annotationAnchor?: SelectionAnchor;
+  private hoverAllowed = false;
+  private hoveredAnnotation?: string;
+  private clearAnnotationHover = () => {
+    if (!this.hoveredAnnotation) return;
+    this.hoveredAnnotation = undefined;
+    this.navigator?.applyDecorations([], "annotation-hover");
+  };
+  private annotationObserver: DecorationObserver = {
+    onDecorationActivated: ({ decoration }) => {
+      if (
+        this.disposed ||
+        !this.annotationAnchor ||
+        this.hasTextSelection() ||
+        !this.annotations.some((a) => a.id === decoration.id)
+      )
+        return false;
+      this.events.annotation?.({
+        ids: [decoration.id],
+        anchor: this.annotationAnchor,
+      });
+      this.annotationAnchor = undefined;
+      return true;
+    },
+    onDecorationPointerEnter: ({ decoration }) => {
+      if (
+        this.disposed ||
+        !this.hoverAllowed ||
+        this.hasTextSelection() ||
+        !this.annotations.some((a) => a.id === decoration.id)
+      )
+        return;
+      this.hoveredAnnotation = decoration.id;
+      this.navigator?.applyDecorations(
+        [
+          {
+            id: decoration.id,
+            locator: decoration.locator,
+            style: {
+              type: "template",
+              layout: DecorationLayout.Boxes,
+              width: DecorationWidth.Wrap,
+              element: () =>
+                '<div style="background:rgba(230,185,76,0.18);border-radius:2px;"></div>',
+            },
+          },
+        ],
+        "annotation-hover",
+      );
+    },
+    onDecorationPointerLeave: ({ decoration }) => {
+      if (this.hoveredAnnotation === decoration.id) this.clearAnnotationHover();
+    },
+  };
+  private hasTextSelection() {
+    return Array.from(this.container.querySelectorAll("iframe")).some((frame) =>
+      frame.contentWindow?.getSelection()?.toString().trim(),
+    );
+  }
   private resize: ResizeObserver;
   constructor(
     private container: HTMLElement,
@@ -54,6 +118,10 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     this.events.selection(null);
   };
   clearSelection = () => {
+    this.annotationAnchor = undefined;
+    this.hoverAllowed = false;
+    this.clearAnnotationHover();
+    this.events.annotation?.(null);
     for (const frame of this.container.querySelectorAll("iframe"))
       frame.contentWindow?.getSelection()?.removeAllRanges();
     this.clearState();
@@ -67,6 +135,54 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private bindFrame = (wnd: Window) => {
     this.frameCleanups.get(wnd)?.();
     const doc = wnd.document;
+    let pressed: { x: number; y: number } | undefined;
+    const annotationPress = (event: PointerEvent) => {
+      this.annotationAnchor = undefined;
+      this.hoverAllowed = false;
+      this.clearAnnotationHover();
+      this.events.annotation?.(null);
+      pressed =
+        event.button === 0 &&
+        !(event.target as Element | null)?.closest?.(
+          "a, button, input, textarea, select",
+        )
+          ? { x: event.clientX, y: event.clientY }
+          : undefined;
+    };
+    const annotationRelease = (event: PointerEvent) => {
+      this.annotationAnchor = undefined;
+      if (
+        pressed &&
+        event.button === 0 &&
+        Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) <= 5 &&
+        !this.hasTextSelection()
+      ) {
+        const frame = Array.from(
+          this.container.querySelectorAll("iframe"),
+        ).find((f) => f.contentWindow === wnd);
+        if (frame) {
+          const bounds = frame.getBoundingClientRect();
+          const sx = frame.offsetWidth ? bounds.width / frame.offsetWidth : 1;
+          const sy = frame.offsetHeight
+            ? bounds.height / frame.offsetHeight
+            : 1;
+          this.annotationAnchor = {
+            x: bounds.left + (frame.clientLeft + event.clientX) * sx,
+            top: bounds.top + (frame.clientTop + event.clientY - 8) * sy,
+            bottom: bounds.top + (frame.clientTop + event.clientY + 8) * sy,
+          };
+        }
+      }
+      pressed = undefined;
+    };
+    const annotationMove = (event: PointerEvent) => {
+      this.hoverAllowed = !event.buttons && !this.hasTextSelection();
+      if (!this.hoverAllowed) this.clearAnnotationHover();
+    };
+    const annotationLeave = () => {
+      this.hoverAllowed = false;
+      this.clearAnnotationHover();
+    };
     const removeScrollbars = installScrollbars(doc);
     const changed = () => {
       const selected = wnd.getSelection();
@@ -91,12 +207,17 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.onKeyDown(event);
     };
     const unload = () => {
+      this.clearSelection();
       if (this.selectedWindow === wnd) this.clearState();
       cleanup();
       this.frameCleanups.delete(wnd);
     };
     const cleanup = () => {
       removeScrollbars();
+      doc.removeEventListener("pointerdown", annotationPress, true);
+      doc.removeEventListener("pointerup", annotationRelease, true);
+      doc.removeEventListener("pointermove", annotationMove, true);
+      doc.removeEventListener("pointerleave", annotationLeave);
       doc.removeEventListener("selectionchange", changed);
       doc.removeEventListener("pointerdown", start);
       doc.removeEventListener("mouseup", released);
@@ -105,6 +226,10 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       wnd.removeEventListener("pagehide", unload);
     };
     doc.addEventListener("selectionchange", changed);
+    doc.addEventListener("pointerdown", annotationPress, true);
+    doc.addEventListener("pointerup", annotationRelease, true);
+    doc.addEventListener("pointermove", annotationMove, true);
+    doc.addEventListener("pointerleave", annotationLeave);
     doc.addEventListener("pointerdown", start);
     doc.addEventListener("mouseup", released);
     doc.addEventListener("keydown", key);
@@ -239,6 +364,10 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         defaults: {},
       },
     );
+    this.navigator.registerDecorationObserver(
+      "annotations",
+      this.annotationObserver,
+    );
     await this.navigator.load();
   }
   async getTOC(): Promise<TOCItem[]> {
@@ -286,6 +415,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     return this.selection;
   }
   async highlight(annotations: Annotation[]) {
+    this.annotations = annotations;
+    this.clearAnnotationHover();
     const decorations: Decoration[] = annotations
       .filter(
         (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
@@ -336,6 +467,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     return html.body.textContent?.trim().slice(0, 24000) || "";
   }
   async destroy() {
+    if (this.disposed) return;
     this.disposed = true;
     this.resize.disconnect();
     document.removeEventListener("pointerdown", this.onOutsidePointer);
@@ -343,6 +475,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     for (const cleanup of this.frameCleanups.values()) cleanup();
     this.frameCleanups.clear();
     this.clearSelection();
+    this.navigator?.unregisterDecorationObserver(this.annotationObserver);
     await this.navigator?.destroy();
     this.container.replaceChildren();
   }

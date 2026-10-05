@@ -43,7 +43,14 @@ export function selectionLocator(
   after.setStart(range.endContainer, range.endOffset);
   return Locator.deserialize({
     ...base.serialize(),
-    locations: { ...base.locations.serialize(), domRange: { start, end } },
+    locations: {
+      ...base.locations.serialize(),
+      domRange: { start, end },
+      textRange: {
+        start: before.toString().length,
+        end: before.toString().length + range.toString().length,
+      },
+    },
     text: {
       highlight: range.toString(),
       before: before.toString().slice(-64),

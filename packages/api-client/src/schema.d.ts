@@ -257,7 +257,7 @@ export interface paths {
             [name: string]: unknown;
           };
           content: {
-            "application/json": components["schemas"]["Annotation"];
+            "application/json": components["schemas"]["SavedAnnotation"];
           };
         };
         /** @description Error */
@@ -321,7 +321,44 @@ export interface paths {
     };
     options?: never;
     head?: never;
-    patch?: never;
+    patch: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          annotation: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            note: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Updated note; annotation identity, kind and location are preserved. */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Annotation"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
     trace?: never;
   };
   "/api/documents/{id}/search": {
@@ -1125,6 +1162,10 @@ export interface components {
       note: string;
       color: string;
       createdAt: string;
+    };
+    SavedAnnotation: components["schemas"]["Annotation"] & {
+      /** @description IDs removed when overlapping underlines were merged into the returned annotation. */
+      replacedIds?: string[];
     };
     SearchResult: {
       id: string;
