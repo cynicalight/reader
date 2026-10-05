@@ -190,7 +190,7 @@ it("excludes page furniture from hover while keeping footnotes interactive", () 
   expect(hitBlock([pageNumber], 2, 0.5, 0.96)).toBeUndefined();
 });
 
-it("retains only a passive focus outline during scroll and leave, with actions appearing on hover", async () => {
+it("shows passive feedback during positioning, fades it on completion and keeps hover actions separate", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.createElement("div");
   host.innerHTML =
@@ -223,6 +223,8 @@ it("retains only a passive focus outline during scroll and leave, with actions a
   host.dispatchEvent(new Event("pointerleave"));
   expect(outline()?.dataset.blockId).toBe(text.id);
   layer.setFocusBlock(null);
+  expect(outline()?.hasAttribute("data-fading")).toBe(true);
+  outline()!.dispatchEvent(new Event("animationend"));
   expect(outline()).toBeNull();
   await act(async () => layer.destroy());
   vi.unstubAllGlobals();

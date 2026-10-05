@@ -132,7 +132,7 @@ export interface ReaderEvents {
   annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   readingAnchor?: (anchor: PDFReadingAnchor) => void;
-  blockFocus?: (block: PDFBlock, reason?: "advance") => void;
+  blockFocus?: (block: PDFBlock) => void;
   blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;
   selection: (selection: ReaderSelection | null) => void;
@@ -164,7 +164,6 @@ export interface ReaderAdapter {
     location: PDFLocation,
     translations: TranslationBlock[],
   ): Promise<PDFSentenceLink[]>;
-  stepBlock?(direction: number): Promise<void>;
   focusBlock?(blockId: string, layout: "source" | "parallel"): Promise<void>;
   cancelBlockFocus?(): void;
   destroy(): Promise<void>;

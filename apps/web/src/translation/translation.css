@@ -25,7 +25,6 @@
   min-width: 0;
 }
 .translation-source {
-  container: pdf-source / inline-size;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -67,6 +66,12 @@
   margin: 0 auto 1.25em;
   max-width: 44rem;
   overflow-wrap: anywhere;
+  outline: 0.5px solid transparent;
+  border-radius: 4px;
+  transition:
+    background-color 180ms ease-out,
+    outline-color 180ms ease-out,
+    box-shadow 180ms ease-out;
 }
 .translation-document [data-label="doc_title"] {
   font-size: 1.45em;
@@ -133,8 +138,8 @@
   right: 16px;
   bottom: 16px;
   z-index: 10;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  justify-content: center;
   align-items: center;
   gap: 8px;
   pointer-events: none;
@@ -143,24 +148,7 @@
 .pdf-reading-controls > * {
   pointer-events: auto;
 }
-@container pdf-source (max-width: 520px) {
-  .pdf-reading-controls {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-}
-.pdf-block-navigation {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: start;
-  border-radius: 10px;
-  background: var(--background);
-  box-shadow: 0 2px 8px #0002;
-}
 .pdf-page-navigation {
-  grid-row: 1;
-  grid-column: 2;
   height: 32px;
   border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: 10px;
@@ -246,4 +234,25 @@
 .translation-document [data-translation-block][data-focused],
 .translation-document [data-block-kind="text"][data-hovered] {
   outline: 0.5px solid rgb(128 128 128 / 22%);
+}
+
+.reader-block-focus[data-fading] {
+  animation: block-focus-fade 180ms ease-out forwards;
+}
+@keyframes block-focus-fade {
+  to {
+    opacity: 0;
+  }
+}
+.translation-document [data-focused],
+.translation-document [data-hovered] {
+  transition-duration: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .translation-document section {
+    transition: none;
+  }
+  .reader-block-focus[data-fading] {
+    animation-duration: 0s;
+  }
 }

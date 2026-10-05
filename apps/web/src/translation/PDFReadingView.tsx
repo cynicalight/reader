@@ -23,7 +23,6 @@ import type {
 } from "@reader/core";
 import { isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { Popover, PopoverContent } from "@reader/ui/components/popover";
@@ -84,7 +83,6 @@ export function PDFReadingView({
   const explicitFocus = useRef({
     operation: 0,
     moving: false,
-    automatic: false,
   });
   const root = useRef<HTMLDivElement>(null),
     pane = useRef<HTMLDivElement>(null),
@@ -93,7 +91,6 @@ export function PDFReadingView({
     reading = useRef<PDFReadingAnchor | undefined>(undefined);
   const recordReading = (anchor: PDFReadingAnchor) => {
     reading.current = anchor;
-    setFocusedBlock(anchor.blockId);
   };
   const translationMotion = useRef({
     operation: 0,
@@ -250,16 +247,12 @@ export function PDFReadingView({
       }
     });
   };
-  const focusBlock = (
-    block: PDFBlock,
-    origin: "source" | "translation",
-    automatic = false,
-  ) => {
+  const focusBlock = (block: PDFBlock, origin: "source" | "translation") => {
     input(origin);
     const motion = explicitFocus.current;
     const operation = motion.operation;
     motion.moving = true;
-    motion.automatic = automatic;
+    setFocusedBlock(block.id);
     const anchor = { blockId: block.id, fraction: 0.5 };
     recordReading(anchor);
     // Both panels center their own geometry; a tall translation must not shift
@@ -275,6 +268,7 @@ export function PDFReadingView({
       .finally(() => {
         if (operation === motion.operation) {
           motion.moving = false;
+          setFocusedBlock(undefined);
           control.current.following(origin);
         }
       });
@@ -285,15 +279,6 @@ export function PDFReadingView({
   };
   const focusTranslation = (block: PDFBlock) =>
     focusBlock(block, "translation");
-  const stepBlock = (direction: number) => {
-    const index = visibleBlocks.findIndex(
-      (b) => b.id === reading.current?.blockId,
-    );
-    const next = visibleBlocks[index + direction];
-    if (index >= 0 && next)
-      focusBlock(next, mode === "translation" ? "translation" : "source");
-  };
-
   const go = async (location: DocumentLocation) => {
     input(mode === "translation" ? "translation" : "source");
     await engine?.goTo(location);
@@ -434,6 +419,7 @@ export function PDFReadingView({
       engine?.cancelBlockFocus?.();
     explicitFocus.current.operation++;
     explicitFocus.current.moving = false;
+    setFocusedBlock(undefined);
     side.current = active;
     control.current.input(active);
   };
@@ -585,21 +571,7 @@ export function PDFReadingView({
           <div
             className="translation-source"
             inert={mode === "translation"}
-            onWheelCapture={(event) => {
-              // Inertia from the gesture that advanced a block must not cancel
-              // the centering animation it just started. New pointer input can.
-              const motion = explicitFocus.current;
-              if (
-                motion.moving &&
-                motion.automatic &&
-                !event.ctrlKey &&
-                !event.metaKey &&
-                !event.shiftKey &&
-                Math.abs(event.deltaY) >= Math.abs(event.deltaX)
-              )
-                return;
-              input("source");
-            }}
+            onWheelCapture={() => input("source")}
             onPointerDownCapture={() => input("source")}
             onKeyDownCapture={() => input("source")}
           >
@@ -614,8 +586,7 @@ export function PDFReadingView({
               events={{
                 ...events,
                 selection: sourceSelection,
-                blockFocus: (block, reason) =>
-                  focusBlock(block, "source", reason === "advance"),
+                blockFocus: (block) => focusBlock(block, "source"),
                 location: (location, percentage) => {
                   if (
                     state.current.mode !== "translation" &&
@@ -630,13 +601,9 @@ export function PDFReadingView({
                     selecting.current
                   )
                     return;
-                  const changed = reading.current?.blockId !== anchor.blockId;
                   recordReading(anchor);
                   if (state.current.mode === "parallel")
-                    followTranslation(anchor, undefined, {
-                      smooth: changed,
-                      center: changed,
-                    });
+                    followTranslation(anchor);
                 },
                 blockHover: (block) => {
                   if (mode === "parallel") hover("source", block?.id);
@@ -661,28 +628,6 @@ export function PDFReadingView({
             {mode !== "translation" && (
               <div className="pdf-reading-controls">
                 <div className="pdf-page-navigation">{pageNavigation}</div>
-                {focusedBlock && (
-                  <div className="pdf-block-navigation flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="上一段"
-                      onClick={() => stepBlock(-1)}
-                    >
-                      <ChevronLeft />
-                      上一段
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="下一段"
-                      onClick={() => stepBlock(1)}
-                    >
-                      下一段
-                      <ChevronRight />
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
           </div>

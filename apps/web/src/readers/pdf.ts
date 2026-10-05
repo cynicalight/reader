@@ -90,7 +90,6 @@ export class PDFReaderAdapter implements ReaderAdapter {
       container,
       this.viewer,
       (n) => this.pdf!.getPage(n),
-      () => this.pdf?.numPages ?? 0,
       () => this.blockData,
       this.events,
       (blockId) => this.blocks.setFocusBlock(blockId),
@@ -470,10 +469,6 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.appliedZoom = this.viewer.currentScale;
       this.events.zoom?.(this.appliedZoom);
     }
-  }
-  stepBlock(direction: number) {
-    this.clearSelection();
-    return this.navigation.stepBlock(direction);
   }
   cancelBlockFocus() {
     this.navigation.cancelMotion();

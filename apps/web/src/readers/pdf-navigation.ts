@@ -12,43 +12,31 @@ import type {
   PDFSentenceLink,
   TranslationBlock,
 } from "@reader/core";
-import { ColumnGesture, overlap, type Box } from "./pdf-reading";
+import { overlap, type Box } from "./pdf-reading";
 
 export class PDFReadingNavigation {
-  private active = false;
   private moving = false;
   private disposed = false;
   private frame = 0;
   private operation = 0;
-  private lastLeft = 0;
-  private lastTop = 0;
-  private scrollDelta = 0;
-  private readingBlock?: string;
-  private wheelDirection = 0;
-  private wheelFresh = false;
-  private gesture = new ColumnGesture();
   private focus: PDFPassage[] = [];
   private linkedRanges: Range[] = [];
   constructor(
     private host: HTMLElement,
     private viewer: PDFViewer,
     private page: (n: number) => Promise<pdfjs.PDFPageProxy>,
-    private count: () => number,
     private blocks: () => PDFBlock[],
     private events: ReaderEvents,
     private onFocus: (blockId: string | null) => void = () => {},
   ) {
     host.addEventListener("pointerdown", this.interrupt);
     host.addEventListener("scroll", this.scrolled, { passive: true });
-    host.addEventListener("wheel", this.wheel, { passive: false });
-  }
-  get hasFocus() {
-    return this.active;
+    host.addEventListener("wheel", this.interrupt, { passive: true });
   }
   private interrupt = () => {
     this.operation++;
     this.moving = false;
-    this.wheelDirection = 0;
+    this.onFocus(null);
   };
   private async moveTo(left: number, top: number, operation: number) {
     this.moving = true;
@@ -58,10 +46,7 @@ export class PDFReadingNavigation {
         left,
         top,
         () => this.disposed || operation !== this.operation,
-        () => {
-          this.lastLeft = this.host.scrollLeft;
-          this.lastTop = this.host.scrollTop;
-        },
+        () => {},
       );
     } finally {
       if (operation === this.operation) {
@@ -72,30 +57,9 @@ export class PDFReadingNavigation {
   }
   async goTo(page: number, point?: { x: number; y: number }) {
     const operation = ++this.operation;
-    if (this.active) {
-      const blocks = this.readableBlocks().filter((b) => b.page === page);
-      const target = point
-        ? (blocks.find(
-            (b) =>
-              point.x >= b.bounds.x &&
-              point.x <= b.bounds.x + b.bounds.width &&
-              point.y >= b.bounds.y &&
-              point.y <= b.bounds.y + b.bounds.height,
-          ) ??
-          blocks.reduce<PDFBlock | undefined>(
-            (best, b) =>
-              !best ||
-              Math.abs(b.bounds.y - point.y) < Math.abs(best.bounds.y - point.y)
-                ? b
-                : best,
-            undefined,
-          ))
-        : blocks[0];
-      if (target) return this.placeBlock(target);
-    }
     const node = this.pageNode(page);
     if (!node || this.disposed || operation !== this.operation) return false;
-    this.setReadingBlock(undefined);
+    this.onFocus(null);
     const r = node.getBoundingClientRect(),
       v = this.host.getBoundingClientRect();
     await this.moveTo(
@@ -109,46 +73,25 @@ export class PDFReadingNavigation {
     return this.viewer.getPageView(n - 1)?.div as HTMLElement | undefined;
   }
   private scrolled = () => {
-    if (!this.moving && Math.abs(this.host.scrollLeft - this.lastLeft) > 3)
-      this.stop();
-    this.lastLeft = this.host.scrollLeft;
-    this.scrollDelta += this.host.scrollTop - this.lastTop;
-    this.lastTop = this.host.scrollTop;
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => {
-      const delta = this.scrollDelta;
-      this.scrollDelta = 0;
       if (this.disposed || this.moving) return;
-      if (this.active && delta) {
-        if (this.wheelDirection && this.wheelFresh) {
-          if (this.advanceAtBoundary(this.wheelDirection)) return;
-        } else if (!this.wheelDirection) {
-          // Scrollbar / keyboard scrolling changes focus without snapping back.
-          const nearest = this.anchor(false);
-          if (nearest) this.setReadingBlock(nearest.blockId);
-        }
-      }
       const anchor = this.anchor();
       if (anchor) this.events.readingAnchor?.(anchor);
     });
   };
-  anchor(useFocus = true): PDFReadingAnchor | undefined {
+  anchor(): PDFReadingAnchor | undefined {
     const viewport = this.host.getBoundingClientRect(),
-      y = viewport.top + viewport.height * (this.active ? 0.5 : 0.3),
+      y = viewport.top + viewport.height * 0.5,
       x = viewport.left + viewport.width / 2;
     let best: PDFBlock | undefined,
       distance = Infinity,
       fraction = 0;
-    const focused =
-      useFocus && this.active
-        ? this.readableBlocks().find((b) => b.id === this.readingBlock)
-        : undefined;
-    for (const b of focused ? [focused] : this.readableBlocks()) {
+    for (const b of this.readableBlocks()) {
       const node = this.pageNode(b.page);
       if (!node) continue;
       const r = node.getBoundingClientRect();
-      if (!focused && (r.bottom < viewport.top || r.top > viewport.bottom))
-        continue;
+      if (r.bottom < viewport.top || r.top > viewport.bottom) continue;
       const bx = r.left + b.bounds.x * r.width,
         by = r.top + b.bounds.y * r.height,
         bw = b.bounds.width * r.width,
@@ -164,14 +107,8 @@ export class PDFReadingNavigation {
     return best ? { blockId: best.id, fraction } : undefined;
   }
   stop() {
-    this.operation++;
-    this.moving = false;
-    const wasActive = this.active;
-    this.active = false;
-    this.wheelDirection = 0;
-    this.setReadingBlock(undefined);
-    if (!wasActive && !this.host.classList.contains("pdf-block-reading"))
-      return;
+    this.interrupt();
+    if (!this.host.classList.contains("pdf-block-reading")) return;
     const page = this.pageNode(this.viewer.currentPageNumber);
     const before = page?.getBoundingClientRect();
     this.host.classList.remove("pdf-block-reading");
@@ -180,18 +117,12 @@ export class PDFReadingNavigation {
       this.host.scrollLeft += after.left - before.left;
       this.host.scrollTop += after.top - before.top;
     }
-    this.lastLeft = this.host.scrollLeft;
-    this.lastTop = this.host.scrollTop;
   }
   private readableBlocks() {
     // The parser supplies reading order within each page, including figures.
     return this.blocks()
       .filter((b) => !isPDFPageDecoration(b) && (b.image || b.text.trim()))
       .sort((a, b) => a.page - b.page);
-  }
-  private setReadingBlock(id?: string) {
-    this.readingBlock = id;
-    this.onFocus(id ?? null);
   }
   cancelMotion() {
     this.interrupt();
@@ -212,9 +143,6 @@ export class PDFReadingNavigation {
     if (!block || this.disposed) return false;
     const operation = ++this.operation;
     this.moving = true;
-    this.gesture = new ColumnGesture();
-    this.wheelDirection = 0;
-    this.scrollDelta = 0;
     try {
       const page =
         layout === "parallel" ? await this.page(block.page) : undefined;
@@ -244,8 +172,7 @@ export class PDFReadingNavigation {
         view.left +
         (block.bounds.x + block.bounds.width / 2) * initial.width;
       const fromY = initial.top - view.top + block.bounds.y * initial.height;
-      this.active = true;
-      this.setReadingBlock(block.id);
+      this.onFocus(block.id);
       const reduced = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches;
@@ -287,8 +214,6 @@ export class PDFReadingNavigation {
             v.top +
             block.bounds.y * r.height -
             (fromY + (targetY - fromY) * ease);
-          this.lastLeft = this.host.scrollLeft;
-          this.lastTop = this.host.scrollTop;
           if (progress < 1) requestAnimationFrame(frame);
           else resolve();
         };
@@ -299,119 +224,33 @@ export class PDFReadingNavigation {
       if (anchor) this.events.readingAnchor?.(anchor);
       return true;
     } finally {
-      if (operation === this.operation) this.moving = false;
+      if (operation === this.operation) {
+        this.moving = false;
+        this.onFocus(null);
+      }
     }
   }
-  private async placeBlock(block: PDFBlock, fraction?: number) {
-    const operation = ++this.operation;
-    this.moving = true;
-    this.wheelDirection = 0;
-    this.scrollDelta = 0;
-    try {
-      if (this.disposed || operation !== this.operation) return false;
-      const node = this.pageNode(block.page);
-      if (!node) return false;
-      this.active = true;
-      this.setReadingBlock(block.id);
-      const r = node.getBoundingClientRect(),
-        v = this.host.getBoundingClientRect();
-      const height = block.bounds.height * r.height;
-      const top =
-        this.host.scrollTop + r.top - v.top + block.bounds.y * r.height;
-      await this.moveTo(
-        this.host.scrollLeft +
-          r.left -
-          v.left +
-          (block.bounds.x + block.bounds.width / 2) * r.width -
-          this.host.clientWidth / 2,
-        fraction === undefined
-          ? top - Math.max(0, (this.host.clientHeight - height) / 2)
-          : top + fraction * height - this.host.clientHeight / 2,
-        operation,
-      );
-      if (this.disposed || operation !== this.operation) return false;
-      const anchor = this.anchor();
-      if (anchor) this.events.readingAnchor?.(anchor);
-      return true;
-    } finally {
-      if (operation === this.operation) this.moving = false;
-    }
-  }
-  async stepBlock(direction: number) {
-    if (!this.active || this.disposed || !direction) return;
-    const blocks = this.readableBlocks();
-    const index = blocks.findIndex((b) => b.id === this.readingBlock);
-    const next = blocks[index + Math.sign(direction)];
-    if (index < 0 || !next) return;
-    if (this.events.blockFocus) {
-      this.events.blockFocus(next, "advance");
-      this.gesture.transition();
-    } else await this.placeBlock(next);
-  }
-  private advanceAtBoundary(direction: number) {
-    const blocks = this.readableBlocks();
-    const index = blocks.findIndex((b) => b.id === this.readingBlock);
-    const block = blocks[index];
-    if (!block || !blocks[index + direction]) return false;
-    const node = this.pageNode(block.page);
-    if (!node) return false;
-    const r = node.getBoundingClientRect(),
-      v = this.host.getBoundingClientRect();
-    const top = r.top + block.bounds.y * r.height;
-    const bottom = top + block.bounds.height * r.height;
-    if (
-      direction > 0 ? bottom > v.top + v.height / 2 : top < v.top + v.height / 2
-    )
-      return false;
-    this.gesture.transition();
-    this.wheelFresh = false;
-    void this.stepBlock(direction).catch(() => this.stop());
-    return true;
-  }
-  private wheel = (event: WheelEvent) => {
-    if (event.ctrlKey || event.metaKey) return;
-    if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {
-      this.stop();
-      return;
-    }
-    if (!this.active) {
-      this.interrupt();
-      return;
-    }
-    if (!event.deltaY) return;
-    this.wheelFresh = this.gesture.accept(performance.now());
-    if (this.moving || !this.wheelFresh) {
-      event.preventDefault();
-      return;
-    }
-    this.wheelDirection = Math.sign(event.deltaY);
-    if (this.advanceAtBoundary(this.wheelDirection)) event.preventDefault();
-  };
   async follow(anchor: PDFReadingAnchor) {
     const block = this.blocks().find((b) => b.id === anchor.blockId);
     if (!block || isPDFPageDecoration(block)) return;
     const operation = ++this.operation;
-    if (this.active) {
-      await this.placeBlock(block, anchor.fraction);
-    } else {
-      const node = this.pageNode(block.page);
-      if (!node) return;
-      const r = node.getBoundingClientRect(),
-        v = this.host.getBoundingClientRect();
-      let left = this.host.scrollLeft;
-      const x = r.left + block.bounds.x * r.width;
-      if (x > v.right || x + block.bounds.width * r.width < v.left)
-        left += x - v.left - 16;
-      await this.moveTo(
-        left,
-        this.host.scrollTop +
-          r.top -
-          v.top +
-          (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
-          this.host.clientHeight * 0.3,
-        operation,
-      );
-    }
+    const node = this.pageNode(block.page);
+    if (!node) return;
+    const r = node.getBoundingClientRect(),
+      v = this.host.getBoundingClientRect();
+    let left = this.host.scrollLeft;
+    const x = r.left + block.bounds.x * r.width;
+    if (x > v.right || x + block.bounds.width * r.width < v.left)
+      left += x - v.left - 16;
+    await this.moveTo(
+      left,
+      this.host.scrollTop +
+        r.top -
+        v.top +
+        (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
+        this.host.clientHeight * 0.5,
+      operation,
+    );
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.focusPassages(
@@ -635,6 +474,6 @@ export class PDFReadingNavigation {
     cancelAnimationFrame(this.frame);
     this.host.removeEventListener("pointerdown", this.interrupt);
     this.host.removeEventListener("scroll", this.scrolled);
-    this.host.removeEventListener("wheel", this.wheel);
+    this.host.removeEventListener("wheel", this.interrupt);
   }
 }

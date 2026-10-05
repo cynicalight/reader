@@ -56,6 +56,9 @@ export class PDFBlockOverlay {
     this.linked.setAttribute("aria-hidden", "true");
     this.focus.className = "reader-block-hover reader-block-focus";
     this.focus.setAttribute("aria-hidden", "true");
+    this.focus.addEventListener("animationend", () => {
+      if (!this.focusId) this.focus.remove();
+    });
     host.addEventListener("pointermove", this.move);
     host.addEventListener("pointerleave", this.clear);
     host.addEventListener("pointerdown", this.press);
@@ -181,9 +184,17 @@ export class PDFBlockOverlay {
   }
   setFocusBlock(blockId: string | null) {
     this.focusId = blockId;
+    if (!blockId) {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+        this.focus.remove();
+      else this.focus.dataset.fading = "";
+      return;
+    }
+    delete this.focus.dataset.fading;
     this.paintReadingFocus();
   }
   private paintReadingFocus() {
+    if (!this.focusId) return;
     this.focus.remove();
     if (this.focusId === this.hovered || this.focusId === this.linkedId) return;
     const block = this.blocks.find((b) => b.id === this.focusId);
@@ -225,6 +236,7 @@ export class PDFBlockOverlay {
   }
   destroy() {
     this.focusId = null;
+    this.focus.remove();
     this.clear();
     this.linked.remove();
     this.root.unmount();

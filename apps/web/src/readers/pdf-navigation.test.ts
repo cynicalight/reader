@@ -70,7 +70,6 @@ it("uses selected glyph positions to distinguish repeated words and includes bot
           getViewport: () => ({ width: 1000, height: 1000, transform: [] }),
           getTextContent: async () => ({ items: [], styles: {} }),
         }) as unknown as PDFPageProxy,
-      () => 1,
       () => blocks,
       { location: vi.fn(), selection: vi.fn() },
     );
@@ -122,7 +121,6 @@ it("cancels an in-flight page move on pointer input without reporting the destin
     host,
     { getPageView: () => ({ div: node }) } as unknown as PDFViewer,
     vi.fn(),
-    () => 2,
     () => [],
     { location: vi.fn(), selection: vi.fn() },
   );

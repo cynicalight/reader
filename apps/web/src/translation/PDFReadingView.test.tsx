@@ -62,7 +62,6 @@ const adapter = {
   getContext: vi.fn(async () => ""),
   destroy: vi.fn(async () => {}),
   focusBlock: vi.fn(async () => {}),
-  stepBlock: vi.fn(async () => {}),
   cancelBlockFocus: vi.fn(),
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
@@ -330,6 +329,7 @@ it("provides a resizable divider with the swap action outside the toolbar", asyn
 it("has no single-column mode and only zooms on an explicit block focus", async () => {
   expect(host.textContent).not.toContain("单栏模式");
   expect(host.textContent).not.toContain("普通模式");
+  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
   expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.blockFocus?.({
@@ -360,7 +360,8 @@ it("always follows scrolling in either pane without an unlink control", async ()
   await act(async () =>
     fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
   );
-  expect(pane.scrollTop).toBe(0);
+  expect(pane.scrollTop).toBe(-20);
+  expect(host.querySelector("[data-focused]")).toBeNull();
   await act(async () => {
     pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 100 }));
     pane.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -385,21 +386,6 @@ function translationGeometry(height = 200) {
     new DOMRect(40, 600 - pane.scrollTop, 520, height);
   return { pane, block };
 }
-it("keeps the source reading focus on its translation after hover leaves", async () => {
-  await click("原文译文");
-  const { block } = translationGeometry();
-  await act(async () =>
-    fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
-  );
-  expect(block.hasAttribute("data-focused")).toBe(true);
-  await act(async () =>
-    block.dispatchEvent(
-      new MouseEvent("pointerout", { bubbles: true, relatedTarget: host }),
-    ),
-  );
-  expect(block.hasAttribute("data-focused")).toBe(true);
-  expect(block.querySelector("[data-block-action]")).toBeNull();
-});
 it("smoothly centers clicked translation blocks and follows their original without scroll feedback", async () => {
   await click("原文译文");
   const { pane, block } = translationGeometry();
@@ -420,6 +406,7 @@ it("smoothly centers clicked translation blocks and follows their original witho
       await vi.advanceTimersByTimeAsync(400);
     });
     expect(pane.scrollTop).toBe(400);
+    expect(block.hasAttribute("data-focused")).toBe(false);
     expect(adapter.focusBlock).toHaveBeenCalledTimes(calls);
     expect(adapter.followBlock).not.toHaveBeenCalled();
   } finally {
@@ -490,7 +477,7 @@ it("does not treat drags, native selections or interactive controls as block nav
   expect(pane.scrollTop).toBe(0);
 });
 
-it("moves persistent focus between paragraphs and images, including source-driven changes", async () => {
+it("replaces an unfinished click with an image focus and does not re-highlight on scroll", async () => {
   await renderView(defaultTheme, [
     {
       id: "p1-image",
@@ -530,13 +517,13 @@ it("moves persistent focus between paragraphs and images, including source-drive
         .dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 1 }));
       fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 });
     });
-    expect(block.hasAttribute("data-focused")).toBe(true);
+    expect(block.hasAttribute("data-focused")).toBe(false);
     expect(image.hasAttribute("data-focused")).toBe(false);
   } finally {
     vi.useRealTimers();
   }
 });
-it("updates translation focus during manual scrolling and cancels animation when the pane closes", async () => {
+it("does not focus during manual scrolling and cancels keyboard focus when the pane closes", async () => {
   await click("仅译文");
   const { pane, block } = translationGeometry();
   vi.useFakeTimers();
@@ -548,7 +535,7 @@ it("updates translation focus during manual scrolling and cancels animation when
       pane.dispatchEvent(new Event("scroll", { bubbles: true }));
       await vi.advanceTimersByTimeAsync(32);
     });
-    expect(block.hasAttribute("data-focused")).toBe(true);
+    expect(block.hasAttribute("data-focused")).toBe(false);
     await act(async () =>
       block.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
@@ -614,45 +601,6 @@ it("centers both panels from a source click and recalculates a focused translati
     expect(pane.scrollLeft).toBe(100);
     expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
     expect(adapter.followBlock).not.toHaveBeenCalled();
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
-it("lets automatic block advance finish through wheel inertia while a new pointer cancels it", async () => {
-  await click("原文译文");
-  const { pane } = translationGeometry();
-  const source = host.querySelector(".translation-source")!;
-  vi.useFakeTimers();
-  try {
-    await act(async () =>
-      fixture.events!.blockFocus?.(
-        { id: "p1-b1", page: 1, bounds: { x: 0, y: 0 } } as PDFBlock,
-        "advance",
-      ),
-    );
-    vi.mocked(adapter.cancelBlockFocus!).mockClear();
-    await act(async () => {
-      for (let i = 0; i < 10; i++) {
-        source.dispatchEvent(
-          new WheelEvent("wheel", { bubbles: true, deltaY: 20 }),
-        );
-        await vi.advanceTimersByTimeAsync(32);
-      }
-    });
-    expect(pane.scrollTop).toBe(400);
-    expect(adapter.cancelBlockFocus).not.toHaveBeenCalled();
-    pane.scrollTop = 0;
-    await act(async () =>
-      fixture.events!.blockFocus?.(
-        { id: "p1-b1", page: 1, bounds: { x: 0, y: 0 } } as PDFBlock,
-        "advance",
-      ),
-    );
-    await act(async () =>
-      source.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
-    );
-    expect(adapter.cancelBlockFocus).toHaveBeenCalled();
   } finally {
     vi.useRealTimers();
   }

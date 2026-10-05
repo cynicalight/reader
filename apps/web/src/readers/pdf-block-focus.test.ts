@@ -94,7 +94,6 @@ function setup() {
     host,
     viewer,
     page,
-    () => 2,
     () => blocks,
     { location: vi.fn(), selection: vi.fn(), readingAnchor: anchor },
     focus,
@@ -138,7 +137,8 @@ it("smoothly scales and centers from the first click without a mode or an initia
     await finish(pending);
     expect(s.viewer.currentScale).toBe(1.5);
     centered(s, "a");
-    expect(s.focus).toHaveBeenLastCalledWith("a");
+    expect(s.focus).toHaveBeenCalledWith("a");
+    expect(s.focus).toHaveBeenLastCalledWith(null);
   } finally {
     s.nav.destroy();
   }
@@ -176,7 +176,8 @@ it("top-aligns tall images and lets a new click replace an unfinished focus", as
     await first;
     centered(s, "image");
     expect(s.rect("image").top).toBe(50);
-    expect(s.focus).toHaveBeenLastCalledWith("image");
+    expect(s.focus).toHaveBeenCalledWith("image");
+    expect(s.focus).toHaveBeenLastCalledWith(null);
   } finally {
     s.nav.destroy();
   }
@@ -196,7 +197,7 @@ it("cancels pending page geometry on manual zoom and uses fresh dimensions when 
     release({ getViewport: () => ({ width: 750 }) } as PDFPageProxy);
     await pending;
     expect(s.viewer.currentScale).toBe(1);
-    expect(s.nav.hasFocus).toBe(false);
+    expect(s.focus).toHaveBeenLastCalledWith(null);
     s.page.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -213,40 +214,35 @@ it("cancels pending page geometry on manual zoom and uses fresh dimensions when 
     s.nav.destroy();
   }
 });
-it("advances paragraphs at the midpoint including images, skipping footer blocks and inertial repeats", async () => {
+it("leaves scrolling free after focusing, without snapping, zooming or highlighting a successor", async () => {
   const s = setup();
   try {
     await finish(s.nav.focusBlock("a"));
-    s.host.dispatchEvent(
-      new WheelEvent("wheel", { deltaY: 30, cancelable: true }),
-    );
-    s.host.scrollTop += s.rect("a").bottom - 350 + 1;
-    s.host.dispatchEvent(new Event("scroll"));
-    await vi.advanceTimersByTimeAsync(80);
-    for (let i = 0; i < 10; i++) {
-      s.host.dispatchEvent(
-        new WheelEvent("wheel", { deltaY: 20, cancelable: true }),
-      );
-      await vi.advanceTimersByTimeAsync(32);
+    const scale = s.viewer.currentScale;
+    s.focus.mockClear();
+    // Scroll beyond the former midpoint threshold, then across a whole page.
+    for (const top of [700, 2000, 100]) {
+      const wheel = new WheelEvent("wheel", { deltaY: 100, cancelable: true });
+      s.host.dispatchEvent(wheel);
+      expect(wheel.defaultPrevented).toBe(false);
+      s.host.scrollTop = top;
+      s.host.dispatchEvent(new Event("scroll"));
+      await vi.advanceTimersByTimeAsync(500);
+      expect(s.host.scrollTop).toBe(top);
+      expect(s.viewer.currentScale).toBe(scale);
     }
-    expect(s.focus).toHaveBeenLastCalledWith("b");
-    centered(s, "b");
-    await finish(s.nav.stepBlock(1));
-    centered(s, "image");
-    await finish(s.nav.stepBlock(1));
-    expect(s.focus).toHaveBeenLastCalledWith("image");
-    await finish(s.nav.stepBlock(-1));
-    centered(s, "b");
+    expect(s.focus.mock.calls.every(([id]) => id === null)).toBe(true);
+    expect(s.anchor).toHaveBeenCalled(); // position remains available for bilingual sync
   } finally {
     s.nav.destroy();
   }
 });
-it("cancels motion on pointer input and supports clicking again after manual zoom", async () => {
+it("cancels motion on wheel input and supports clicking again after manual zoom", async () => {
   const s = setup();
   try {
     const pending = s.nav.focusBlock("a");
     await vi.advanceTimersByTimeAsync(80);
-    s.host.dispatchEvent(new Event("pointerdown"));
+    s.host.dispatchEvent(new WheelEvent("wheel", { deltaY: 20 }));
     const top = s.host.scrollTop;
     await finish(pending);
     expect(s.host.scrollTop).toBe(top);

@@ -52,8 +52,8 @@ export function ReaderView({
         readingAnchor: (anchor) => {
           if (!disposed) latest.current.events.readingAnchor?.(anchor);
         },
-        blockFocus: (block, reason) => {
-          if (!disposed) latest.current.events.blockFocus?.(block, reason);
+        blockFocus: (block) => {
+          if (!disposed) latest.current.events.blockFocus?.(block);
         },
         annotation: (target) => {
           if (!disposed) latest.current.events.annotation?.(target);
