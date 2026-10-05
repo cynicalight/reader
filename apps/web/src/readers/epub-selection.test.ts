@@ -408,3 +408,75 @@ it.each(["highlight", "underline", "note"] as const)(
     expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
   },
 );
+
+it("restores each translated source slice and maps decoration clicks to the saved annotation", async () => {
+  const source = adapter.getSelection()!.location;
+  if (source.type !== "epub") throw Error("expected EPUB");
+  const loc = JSON.parse(source.locator!);
+  const slices = [
+    { start: 0, end: 8 },
+    { start: 9, end: 16 },
+  ];
+  const ranges = slices.map((slice, index) => ({
+    blockId: `e-${index}`,
+    sourceHash: "hash",
+    sentenceIndexes: [0],
+    start: 0,
+    end: 2,
+    quote: "译文",
+    location: {
+      ...source,
+      locator: JSON.stringify({
+        ...loc,
+        locations: { ...loc.locations, sourceSlice: slice },
+      }),
+    },
+  }));
+  await adapter.focusEPUBLocations(ranges.map((r) => r.location));
+  expect(bridge.apply.mock.calls.at(-1)![1]).toBe("translation-focus");
+  expect(
+    (bridge.apply.mock.calls.at(-1)![0] as Decoration[]).map(
+      (d) => d.locator.text?.highlight,
+    ),
+  ).toEqual(["Selected", "passage"]);
+  await adapter.focusEPUBLocations([]);
+  expect(bridge.apply).toHaveBeenLastCalledWith([], "translation-focus");
+  await adapter.highlight([
+    {
+      id: "translated-note",
+      documentId: "test",
+      kind: "underline",
+      quote: "译文",
+      note: "Keep",
+      color: "#e6b94c",
+      createdAt: "",
+      location: { ...source, translation: { ...ranges[0], ranges } },
+    },
+  ]);
+  const decorations = bridge.apply.mock.calls.at(-1)![0] as Decoration[];
+  expect(decorations.map((d) => d.locator.text?.highlight)).toEqual([
+    "Selected",
+    "passage",
+  ]);
+  expect(decorations.map((d) => d.id)).toEqual([
+    "translated-note:0",
+    "translated-note:1",
+  ]);
+  expect(decorations[1].locator.serialize().locations).not.toHaveProperty(
+    "sourceSlice",
+  );
+  adapter.clearSelection();
+  pointer("pointerdown");
+  pointer("pointerup");
+  bridge.observer!.onDecorationActivated!({
+    decoration: decorations[1],
+    group: "annotations",
+    rect: { top: 100, left: 40, width: 180, height: 20 },
+    point: { x: 210, y: 110 },
+  });
+  expect(activated).toHaveBeenLastCalledWith(
+    expect.objectContaining({ ids: ["translated-note"] }),
+  );
+  await adapter.highlight([]);
+  expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
+});

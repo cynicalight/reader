@@ -109,9 +109,9 @@ import {
 } from "./annotations";
 import { ColorSwatches } from "./ColorSwatches";
 import { copyText } from "./chat/clipboard";
-import { ReaderView } from "./ReaderView";
 import { NotesPanel } from "./NotesPanel";
 import { ExportNotesDialog } from "./ExportNotesDialog";
+import { EPUBReadingView } from "./translation/EPUBReadingView";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -221,7 +221,9 @@ export function Workspace({
   const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
-  const [pdfToolbar, setPDFToolbar] = useState<HTMLDivElement | null>(null);
+  const [readingToolbar, setReadingToolbar] = useState<HTMLDivElement | null>(
+    null,
+  );
   const renderBlockImage = useMemo(
     () => adapter?.renderBlockImage?.bind(adapter),
     [adapter],
@@ -884,7 +886,7 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
-          {doc.type === "pdf" && <div ref={setPDFToolbar} />}
+          <div ref={setReadingToolbar} />
           {doc.type !== "pdf" && pageNavigation}
           <span className="toolbar-divider" />
           <IconButton
@@ -1175,7 +1177,7 @@ export function Workspace({
           <div className="reading-pane" ref={readingPane}>
             {(() => {
               const ReadingView =
-                doc.type === "pdf" ? PDFReadingView : ReaderView;
+                doc.type === "pdf" ? PDFReadingView : EPUBReadingView;
               return (
                 <ReadingView
                   document={doc}
@@ -1183,7 +1185,7 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
-                  toolbarHost={pdfToolbar}
+                  toolbarHost={readingToolbar}
                   pageNavigation={pageNavigation}
                   onReady={(engine, items) => {
                     setAdapter(engine);

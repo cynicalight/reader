@@ -49,6 +49,12 @@ export function ReaderView({
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
       engine = new Engine(container, {
+        epubInteraction: () => {
+          if (!disposed) latest.current.events.epubInteraction?.();
+        },
+        epubReadingAnchor: (id) => {
+          if (!disposed) latest.current.events.epubReadingAnchor?.(id);
+        },
         readingAnchor: (anchor) => {
           if (!disposed) latest.current.events.readingAnchor?.(anchor);
         },

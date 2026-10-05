@@ -192,3 +192,20 @@ export function searchEPUBLocators(
   }
   return results;
 }
+
+export function sliceEPUBRange(range: Range, start: number, end: number) {
+  if (
+    !Number.isInteger(start) ||
+    !Number.isInteger(end) ||
+    start < 0 ||
+    end <= start ||
+    end > range.toString().length
+  )
+    return;
+  const doc = range.startContainer.ownerDocument!;
+  const prefix = doc.createRange();
+  prefix.selectNodeContents(doc.body);
+  prefix.setEnd(range.startContainer, range.startOffset);
+  const offset = prefix.toString().length;
+  return rangeAt(doc, offset + start, offset + end);
+}

@@ -1,4 +1,5 @@
-.pdf-reading {
+.pdf-reading,
+.epub-reading {
   position: relative;
   height: 100%;
   display: flex;
@@ -200,7 +201,8 @@
     scroll-behavior: auto;
   }
 }
-.pdf-reading[data-theme="sepia"] .translation-document {
+.pdf-reading[data-theme="sepia"] .translation-document,
+.epub-reading[data-theme="sepia"] .translation-document {
   background: #f7f6f2;
   color: #1f1e1d;
 }

@@ -1,6 +1,7 @@
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import {
   selectionLocator,
+  sliceEPUBRange,
   resolveEPUBRange,
   searchEPUBLocators,
 } from "./selection-locator";
@@ -27,6 +28,7 @@ import type {
   Document,
   DocumentLocation,
   EPUBLocation,
+  EPUBReadingBlock,
   ReaderAdapter,
   ReaderEvents,
   ReaderSelection,
@@ -46,11 +48,59 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private abort = new AbortController();
   private resourceDocuments = new Map<string, Promise<globalThis.Document>>();
   private highlightRevision = 0;
+  private focusRevision = 0;
   private unresolvedAnnotations = "";
+  private decorationAnnotations = new Map<string, string>();
+  private annotationId(id: string) {
+    return this.decorationAnnotations.get(id) ?? id;
+  }
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
   private annotations: Annotation[] = [];
+  private readingBlocks: EPUBReadingBlock[] = [];
+  private readingFrame = 0;
+  private lastReadingBlock = "";
+  setEPUBBlocks(blocks: EPUBReadingBlock[]) {
+    this.readingBlocks = blocks;
+    this.reportReadingBlock();
+  }
+  private reportReadingBlock = () => {
+    cancelAnimationFrame(this.readingFrame);
+    this.readingFrame = requestAnimationFrame(() => {
+      if (this.disposed) return;
+      const wnd = this.navigator?._cframes[0]?.iframe.contentWindow;
+      if (!wnd) return;
+      const candidates = this.readingBlocks.filter(
+        (b) => b.location.href === this.location.href,
+      );
+      let chosen: string | undefined,
+        distance = Infinity;
+      for (const block of candidates) {
+        const locator = this.toLocator(block.location);
+        const range = resolveEPUBRange(wnd.document, locator);
+        if (!range) continue;
+        for (const rect of Array.from(range.getClientRects())) {
+          if (
+            rect.right <= 0 ||
+            rect.left >= wnd.innerWidth ||
+            rect.bottom <= 0 ||
+            rect.top >= wnd.innerHeight
+          )
+            continue;
+          const delta = Math.abs(rect.top - wnd.innerHeight * 0.25);
+          if (delta < distance) {
+            chosen = block.id;
+            distance = delta;
+          }
+        }
+      }
+      if (chosen && chosen !== this.lastReadingBlock) {
+        this.lastReadingBlock = chosen;
+        this.events.epubReadingAnchor?.(chosen);
+      }
+    });
+  };
   private annotationAnchor?: SelectionAnchor;
   private hoverAllowed = false;
   private hoveredAnnotation?: string;
@@ -65,11 +115,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.disposed ||
         !this.annotationAnchor ||
         this.hasTextSelection() ||
-        !this.annotations.some((a) => a.id === decoration.id)
+        !this.annotations.some((a) => a.id === this.annotationId(decoration.id))
       )
         return false;
       this.events.annotation?.({
-        ids: [decoration.id],
+        ids: [this.annotationId(decoration.id)],
         anchor: this.annotationAnchor,
       });
       this.annotationAnchor = undefined;
@@ -80,7 +130,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.disposed ||
         !this.hoverAllowed ||
         this.hasTextSelection() ||
-        !this.annotations.some((a) => a.id === decoration.id)
+        !this.annotations.some((a) => a.id === this.annotationId(decoration.id))
       )
         return;
       this.hoveredAnnotation = decoration.id;
@@ -144,6 +194,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private bindFrame = (wnd: Window) => {
     this.frameCleanups.get(wnd)?.();
     const doc = wnd.document;
+    const interact = () => this.events.epubInteraction?.();
+    this.reportReadingBlock();
     let pressed: { x: number; y: number } | undefined;
     const annotationPress = (event: PointerEvent) => {
       this.annotationAnchor = undefined;
@@ -266,6 +318,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       doc.removeEventListener("keydown", key);
       doc.removeEventListener("keyup", keyReleased);
       doc.removeEventListener("scroll", this.clearSelection, true);
+      doc.removeEventListener("scroll", this.reportReadingBlock, true);
+      for (const event of ["pointerdown", "wheel", "keydown"])
+        doc.removeEventListener(event, interact, true);
       wnd.removeEventListener("pagehide", unload);
     };
     doc.addEventListener("selectionchange", changed);
@@ -278,6 +333,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     doc.addEventListener("keydown", key);
     doc.addEventListener("keyup", keyReleased);
     doc.addEventListener("scroll", this.clearSelection, true);
+    doc.addEventListener("scroll", this.reportReadingBlock, true);
+    for (const event of ["pointerdown", "wheel", "keydown"])
+      doc.addEventListener(event, interact, { capture: true, passive: true });
     wnd.addEventListener("pagehide", unload);
     this.frameCleanups.set(wnd, cleanup);
   };
@@ -349,8 +407,12 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     const locator = this.toLocator(location);
     if (!locator.text?.highlight) return locator;
     const doc = await this.resourceDocument(locator.href);
-    const range = resolveEPUBRange(doc, locator);
+    let range = resolveEPUBRange(doc, locator);
+    const slice = locator.locations.otherLocations?.get("sourceSlice") as
+      { start: number; end: number } | undefined;
+    if (range && slice) range = sliceEPUBRange(range, slice.start, slice.end);
     const exact = range && selectionLocator(locator, range);
+    exact?.locations.otherLocations?.delete("sourceSlice");
     if (!exact)
       throw new Error("未能唯一定位这段原文，笔记已保留。请使用书内搜索。");
     return exact;
@@ -410,6 +472,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       positionChanged: (locator) => {
         this.clearSelection();
         this.location = this.fromLocator(locator);
+        this.reportReadingBlock();
         const index = this.publication!.readingOrder.items.findIndex(
           (l) => l.href === locator.href,
         );
@@ -470,12 +533,24 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       contextMenu: () => {},
       peripheral: () => {},
     };
+    let initial =
+      doc.progress?.type === "epub" ? this.toLocator(doc.progress) : undefined;
+    if (
+      doc.progress?.type === "epub" &&
+      initial?.locations.otherLocations?.has("sourceSlice")
+    ) {
+      try {
+        initial = await this.exactLocator(doc.progress);
+      } catch {
+        /* Reopen the original paragraph if only the saved sentence slice is stale. */
+      }
+    }
     this.navigator = new EpubNavigator(
       this.container,
       this.publication,
       listeners,
       positions,
-      doc.progress?.type === "epub" ? this.toLocator(doc.progress) : undefined,
+      initial,
       {
         preferences: { fontSize: 1.15, lineHeight: 1.8, columnCount: 1 },
         defaults: {},
@@ -552,16 +627,48 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   getSelection() {
     return this.selection;
   }
+  async focusEPUBLocations(locations: EPUBLocation[]) {
+    const revision = ++this.focusRevision;
+    const decorations = await Promise.all(
+      locations.map(async (location, index): Promise<Decoration> => ({
+        id: `translation-focus-${index}`,
+        locator: await this.exactLocator(location),
+        style: {
+          type: "template",
+          layout: DecorationLayout.Boxes,
+          width: DecorationWidth.Wrap,
+          element: () =>
+            '<div style="background:rgba(59,130,246,0.18);border-radius:2px;pointer-events:none;"></div>',
+        },
+      })),
+    );
+    if (!this.disposed && revision === this.focusRevision)
+      this.navigator?.applyDecorations(decorations, "translation-focus");
+  }
   async highlight(annotations: Annotation[]) {
     const revision = ++this.highlightRevision;
     this.annotations = annotations;
     this.clearAnnotationHover();
     const unresolved: string[] = [];
+    const decorationAnnotations = new Map<string, string>();
     const decorations = await Promise.all(
       annotations
         .filter(
           (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
         )
+        .flatMap((a) => {
+          const locations =
+            a.location.translation?.ranges?.flatMap((r) =>
+              r.location ? [r.location] : [],
+            ) ?? [];
+          return locations.length
+            ? locations.map((location, index) => ({
+                ...a,
+                location,
+                decorationId: `${a.id}:${index}`,
+              }))
+            : [{ ...a, decorationId: a.id }];
+        })
         .map(async (a): Promise<Decoration | undefined> => {
           try {
             const location = a.location as EPUBLocation;
@@ -569,8 +676,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
               ...location,
               quote: location.quote || a.quote,
             });
+            decorationAnnotations.set(a.decorationId, a.id);
             return {
-              id: a.id,
+              id: a.decorationId,
               locator,
               style: {
                 type: a.kind === "underline" ? "underline" : "highlight",
@@ -584,6 +692,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         }),
     );
     if (this.disposed || revision !== this.highlightRevision) return;
+    this.decorationAnnotations = decorationAnnotations;
     this.navigator?.applyDecorations(
       decorations.filter((d): d is Decoration => !!d),
       "annotations",
@@ -638,6 +747,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     this.abort.abort();
     this.resourceDocuments.clear();
     this.highlightRevision++;
+    cancelAnimationFrame(this.readingFrame);
     this.resize.disconnect();
     document.removeEventListener("pointerdown", this.onOutsidePointer);
     document.removeEventListener("keydown", this.onKeyDown);
