@@ -29,14 +29,26 @@
   min-width: 0;
   min-height: 0;
 }
-.translation-panes[data-swapped="true"] {
-  flex-direction: row-reverse;
+.translation-pane-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
 }
-.translation-panes[data-mode="translation"] > .translation-source {
+.translation-divider {
+  z-index: 5;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+}
+.translation-divider[hidden] {
+  display: none;
+}
+.translation-swap {
   position: absolute;
-  inset: 0;
-  visibility: hidden;
-  pointer-events: none;
+  top: 12px;
+  z-index: 6;
+  transform: translateX(-50%);
+  cursor: pointer;
+  color: var(--muted-foreground);
 }
 .translation-document {
   flex: 1;
@@ -44,7 +56,6 @@
   overflow: auto;
   padding: 32px clamp(16px, 3vw, 44px);
   scrollbar-gutter: stable;
-  border-inline-start: 1px solid var(--border);
   background: var(--background);
   color: var(--foreground);
   overflow-anchor: auto;

@@ -282,3 +282,17 @@ it("links block hover in both directions and clears it without changing sentence
   await click("仅原文");
   expect(adapter.hoverBlock).toHaveBeenLastCalledWith(null);
 });
+
+it("provides a resizable divider with the swap action outside the toolbar", async () => {
+  await click("原文译文");
+  const divider = host.querySelector<HTMLElement>('[role="separator"]');
+  expect(divider).not.toBeNull();
+  expect(divider!.getAttribute("aria-orientation")).toBe("vertical");
+  const swap = host.querySelector('[aria-label="交换原文和译文"]')!;
+  expect(swap.closest(".translation-panes")).not.toBeNull();
+  expect(
+    host.querySelector('.translation-toolbar [aria-label="交换原文和译文"]'),
+  ).toBeNull();
+  await click("交换原文和译文");
+  expect(adapter.destroy).not.toHaveBeenCalled();
+});
