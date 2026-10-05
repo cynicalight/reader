@@ -114,3 +114,39 @@ func TestDeleteDocumentRollsBackOnDatabaseFailure(t *testing.T) {
 		t.Fatal("lost search index")
 	}
 }
+
+func TestDeleteSerializesReimportAndRejectsNewBackgroundWork(t *testing.T) {
+	s := testServer(t)
+	d := organizationDoc(t, s)
+	ctx, finish, err := s.beginDocumentTask(context.Background(), d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan int, 1)
+	go func() { done <- request(t, s, "DELETE", "/api/documents/"+d.ID, nil).Code }()
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		finish()
+		t.Fatal("deletion did not cancel work")
+	}
+	if s.importMu.TryLock() {
+		s.importMu.Unlock()
+		t.Error("reimport can race with file cleanup")
+	}
+	if _, end, err := s.beginDocumentTask(context.Background(), d.ID); err == nil {
+		end()
+		t.Error("task started while deleting")
+	}
+	finish()
+	if code := <-done; code != 204 {
+		t.Fatal(code)
+	}
+	restored := organizationDoc(t, s)
+	if restored.ID != d.ID {
+		t.Fatal("document ID should be stable on reimport")
+	}
+	if _, err := os.Stat(s.Store.File(restored)); err != nil {
+		t.Fatal("reimported file lost", err)
+	}
+}

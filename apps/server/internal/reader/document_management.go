@@ -64,6 +64,9 @@ func (s *Server) beginDocumentTask(parent context.Context, id string) (context.C
 }
 
 func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
+	// IDs are content hashes: serialize cleanup with reimporting the same file.
+	s.importMu.Lock()
+	defer s.importMu.Unlock()
 	id := r.PathValue("id")
 	s.documentMu.Lock()
 	if s.deletingDocuments[id] {
