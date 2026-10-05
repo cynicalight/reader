@@ -151,3 +151,15 @@
   outline: 1px solid rgb(88 122 104 / 30%);
   box-shadow: 0 0 0 3px rgb(97 137 113 / 3%);
 }
+
+.reader-block-hover[data-block-kind="text"],
+.translation-document [data-block-kind="text"][data-hovered] {
+  background: rgb(128 128 128 / 3%);
+  box-shadow: none;
+}
+.reader-block-hover[data-block-kind="text"] {
+  border: 0.5px solid rgb(128 128 128 / 18%);
+}
+.translation-document [data-block-kind="text"][data-hovered] {
+  outline: 0.5px solid rgb(128 128 128 / 18%);
+}

@@ -146,6 +146,7 @@ export class PDFBlockOverlay {
       height: `${b.height * 100}%`,
     });
     this.overlay.dataset.blockId = block.id;
+    this.overlay.dataset.blockKind = block.image ? "image" : "text";
     if (this.overlay.parentElement !== page) page.append(this.overlay);
     if (this.hovered !== block.id) {
       this.hovered = block.id;
@@ -173,6 +174,7 @@ export class PDFBlockOverlay {
       height: `${b.height * 100}%`,
     });
     this.linked.dataset.blockId = block.id;
+    this.linked.dataset.blockKind = block.image ? "image" : "text";
     page.append(this.linked);
   }
   destroy() {

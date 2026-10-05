@@ -585,6 +585,7 @@ export function PDFReadingView({
                 <section
                   key={block.id}
                   data-translation-block={block.id}
+                  data-block-kind={block.image ? "image" : "text"}
                   data-label={block.label}
                   data-hovered={hoveredBlock === block.id || undefined}
                   onPointerEnter={(event) => {
