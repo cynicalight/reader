@@ -39,7 +39,16 @@ export function translatedSelection(
     const sentenceIndexes = Array.from(
       node.querySelectorAll<HTMLElement>("[data-sentence]"),
     )
-      .filter((n) => clipped.intersectsNode(n))
+      .filter((n) => {
+        if (!clipped.intersectsNode(n)) return false;
+        const part = document.createRange();
+        part.selectNodeContents(n);
+        if (clipped.compareBoundaryPoints(Range.START_TO_START, part) > 0)
+          part.setStart(clipped.startContainer, clipped.startOffset);
+        if (clipped.compareBoundaryPoints(Range.END_TO_END, part) < 0)
+          part.setEnd(clipped.endContainer, clipped.endOffset);
+        return !!part.toString().trim();
+      })
       .map((n) => Number(n.dataset.sentence));
     if (!sentenceIndexes.length) continue;
     const before = clipped.cloneRange();

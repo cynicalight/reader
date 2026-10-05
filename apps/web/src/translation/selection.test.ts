@@ -3,6 +3,38 @@ import { expect, it } from "vitest";
 import type { Annotation, PDFBlock, TranslationBlock } from "@reader/core";
 import { translatedSelection } from "./selection";
 import { translatedAnnotationRanges } from "./annotations";
+
+it("does not include a sentence merely touched at its start boundary", () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<section data-translation-block="a"><span data-sentence="0">第一句。</span><span data-sentence="1">第二句。</span></section>';
+  const nodes = host.querySelectorAll("span"),
+    range = document.createRange();
+  range.setStart(nodes[0].firstChild!, 1);
+  range.setEnd(nodes[1].firstChild!, 0);
+  Object.assign(range, {
+    getBoundingClientRect: () => new DOMRect(0, 0, 100, 20),
+  });
+  const block: PDFBlock = {
+    id: "a",
+    page: 1,
+    label: "text",
+    text: "First. Second.",
+    bounds: { x: 0, y: 0, width: 1, height: 1 },
+  };
+  const translation: TranslationBlock = {
+    blockId: "a",
+    sourceHash: "hash",
+    status: "complete",
+    sentences: [
+      { source: "First.", target: "第一句。" },
+      { source: "Second.", target: "第二句。" },
+    ],
+  };
+  const value = translatedSelection(host, range, [block], [translation])!;
+  expect(value.links).toEqual([{ blockId: "a", sentenceIndexes: [0] }]);
+  expect(value.passages[0].sources).toEqual(["First."]);
+});
 it("keeps all sentences and annotation ranges when a selection crosses paragraphs", () => {
   const host = document.createElement("div");
   host.innerHTML =

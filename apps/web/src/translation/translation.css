@@ -123,12 +123,14 @@
   z-index: 10;
   box-shadow: 0 2px 8px #0002;
 }
-.reader-linked-highlight {
-  position: absolute;
-  pointer-events: none;
-  z-index: 4;
-  background: color-mix(in srgb, #719fea 24%, transparent);
-  border-radius: 2px;
+.textLayer ::highlight(reader-linked-sentences) {
+  /* Match PDF.js ::selection; the visible glyphs remain on its canvas. */
+  background-color: rgba(0, 0, 255, 0.25);
+  background-color: color-mix(in srgb, AccentColor, transparent 50%);
+  color: transparent;
+}
+.textLayer br::highlight(reader-linked-sentences) {
+  background-color: transparent;
 }
 .translation-note-indicator {
   position: absolute;

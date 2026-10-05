@@ -4,7 +4,6 @@ import {
   columnReadingScale,
   ReadingSync,
   readingColumns,
-  sentenceBoxes,
   type TextRun,
 } from "./pdf-reading";
 
@@ -51,47 +50,6 @@ it("never feeds programmatic scrolling back and transfers control on user input"
   expect(sync.canFollow("translation", 1001)).toBe(true);
   sync.following("source", 1001);
   expect(sync.canFollow("source", 1100)).toBe(false);
-});
-it("bounds sentence matching to the source paragraph and falls back when no exact text exists", () => {
-  const bounds = { x: 0.1, y: 0.2, width: 0.4, height: 0.2 };
-  const block = {
-    id: "p1-b1",
-    page: 1,
-    label: "text",
-    text: "First. Second.",
-    bounds,
-  };
-  const first = { x: 0.1, y: 0.22, width: 0.3, height: 0.02 },
-    second = { x: 0.1, y: 0.25, width: 0.35, height: 0.02 };
-  const runs = [
-    { text: "First.", bounds: first },
-    { text: "Second.", bounds: second },
-    { text: "Second.", bounds: { ...second, x: 0.6 } },
-  ];
-  expect(sentenceBoxes(block, ["Second."], runs)).toEqual([second]);
-  expect(sentenceBoxes(block, ["Missing."], runs)).toEqual([bounds]);
-});
-it("locates the second identical sentence using its source offset", () => {
-  const first = { x: 0.1, y: 0.2, width: 0.3, height: 0.02 },
-    second = { ...first, y: 0.24 };
-  const block = {
-    id: "a",
-    page: 1,
-    label: "text",
-    text: "Same. Same.",
-    bounds: { ...first, height: 0.1 },
-  };
-  expect(
-    sentenceBoxes(
-      block,
-      ["Same."],
-      [
-        { text: "Same.", bounds: first },
-        { text: "Same.", bounds: second },
-      ],
-      5,
-    ),
-  ).toEqual([second]);
 });
 it("excludes labeled page furniture and edge page numbers while keeping footnotes", () => {
   const body = rows(0.15).map((r) => ({

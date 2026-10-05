@@ -154,51 +154,6 @@ export function columnReadingScale(
 function normalized(text: string) {
   return text.toLowerCase().replace(/[\s\u00ad]/g, "");
 }
-// Map sentence text back into text runs inside its paragraph. Repeated phrases
-// outside the block cannot capture an anchor. Low-confidence matches use the block.
-export function sentenceBoxes(
-  block: PDFBlock,
-  sources: string[],
-  runs: TextRun[],
-  sourceOffset = 0,
-): Box[] {
-  const selected = runs
-    .filter(
-      (r) =>
-        overlap(r.bounds, block.bounds) /
-          (r.bounds.width * r.bounds.height || 1) >
-        0.5,
-    )
-    .sort((a, b) =>
-      Math.abs(a.bounds.y - b.bounds.y) <
-      Math.min(a.bounds.height, b.bounds.height) * 0.45
-        ? a.bounds.x - b.bounds.x
-        : a.bounds.y - b.bounds.y,
-    );
-  const text = selected.map((r) => normalized(r.text)).join("");
-  const result: Box[] = [];
-  let cursor = sourceOffset;
-  for (const source of sources) {
-    const needle = normalized(source);
-    if (!needle) continue;
-    const start = text.indexOf(needle, cursor);
-    if (start < 0) return [block.bounds];
-    const end = start + needle.length;
-    cursor = end;
-    let offset = 0;
-    for (const run of selected) {
-      const size = normalized(run.text).length;
-      const a = Math.max(start, offset),
-        b = Math.min(end, offset + size);
-      if (a < b) {
-        // Geometry is deliberately run-level: glyph widths are not uniform.
-        result.push(run.bounds);
-      }
-      offset += size;
-    }
-  }
-  return result.length ? result : [block.bounds];
-}
 export function blockForRects(blocks: PDFBlock[], page: number, rects: Box[]) {
   return blocks
     .filter((b) => b.page === page && !b.image && !isPDFPageDecoration(b))
