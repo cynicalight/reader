@@ -1,6 +1,7 @@
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import { pdfQuotePoint } from "./pdf-reference-location";
 import { PDFBlockOverlay } from "./pdf-blocks";
+import { PDFReadingNavigation } from "./pdf-navigation";
 import * as pdfjs from "pdfjs-dist";
 import {
   EventBus,
@@ -44,6 +45,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private blocks: PDFBlockOverlay;
   private blockData: PDFBlock[] = [];
   private selecting = false;
+  private navigation: PDFReadingNavigation;
   private pointer?: { x: number; y: number };
   constructor(
     private container: HTMLElement,
@@ -70,6 +72,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
       removePageBorders: true,
     });
     this.links.setViewer(this.viewer);
+    this.navigation = new PDFReadingNavigation(
+      container,
+      this.viewer,
+      (n) => this.pdf!.getPage(n),
+      () => this.pdf?.numPages ?? 0,
+      () => this.blockData,
+      this.events,
+    );
     this.bus.on("pagechanging", ({ pageNumber }: { pageNumber: number }) => {
       this.location = { type: "pdf", page: pageNumber };
       this.events.location(
@@ -77,7 +87,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
         pageNumber / (this.pdf?.numPages || 1),
       );
     });
-    this.bus.on("pagerendered", () => this.paintHighlights());
+    this.bus.on("pagerendered", () => {
+      this.paintHighlights();
+      this.navigation.repaint();
+    });
+    this.bus.on("textlayerrendered", () => this.navigation.repaint());
     document.addEventListener("mouseup", this.onMouseUp);
     document.addEventListener("pointerdown", this.onPointerDown);
     document.addEventListener("selectionchange", this.onSelectionChange);
@@ -90,6 +104,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
       this.clearSelection();
       clearTimeout(this.resizeTimer);
       const fit = () => {
+        if (!this.disposed && this.pdf && this.navigation.fitted) {
+          void this.navigation.fit();
+          return;
+        }
         if (!this.disposed && this.pdf && this.fitWidth)
           this.viewer.currentScaleValue = "page-width";
       };
@@ -290,6 +308,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     event.preventDefault();
     this.wheelScale = undefined;
     if (command === "width") {
+      this.navigation.stop();
       this.clearSelection();
       this.fitWidth = true;
       this.appliedZoom = "width";
@@ -300,7 +319,13 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.zoomTo(this.viewer.currentScale * (command === "in" ? 1.1 : 1 / 1.1));
   };
   private canZoom(target: EventTarget | null) {
-    if (!this.pdf || this.disposed || !this.container.isConnected) return false;
+    if (
+      !this.pdf ||
+      this.disposed ||
+      !this.container.isConnected ||
+      this.container.closest("[inert]")
+    )
+      return false;
     if (
       document.querySelector(
         '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
@@ -310,13 +335,14 @@ export class PDFReaderAdapter implements ReaderAdapter {
     return !(
       target instanceof Element &&
       target.closest(
-        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="dialog"], [role="alertdialog"]',
+        'input, textarea, select, .translation-document, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="dialog"], [role="alertdialog"]',
       )
     );
   }
   private zoomTo(scale: number, origin?: number[]) {
     const next = Math.min(5, Math.max(0.25, scale));
     if (!Number.isFinite(next)) return;
+    this.navigation.stop();
     this.clearSelection();
     this.fitWidth = false;
     this.viewer.updateScale({
@@ -463,6 +489,19 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blockData = blocks;
     this.blocks.setBlocks(blocks);
   }
+  fitColumn() {
+    this.fitWidth = false;
+    return this.navigation.fit();
+  }
+  stopColumnFit() {
+    this.navigation.stop();
+  }
+  followBlock(anchor: import("@reader/core").PDFReadingAnchor) {
+    return this.navigation.follow(anchor);
+  }
+  focusSentences(blockId: string, sources: string[], scroll = false) {
+    return this.navigation.focusSentences(blockId, sources, scroll);
+  }
   async renderBlockImage(blockId: string, signal: AbortSignal): Promise<Blob> {
     const block = this.blockData.find((item) => item.id === blockId);
     if (!block || !this.pdf || this.disposed) throw new Error("图片位置不可用");
@@ -512,6 +551,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   async destroy() {
     if (this.disposed) return;
     this.blocks.destroy();
+    this.navigation.destroy();
     this.disposed = true;
     this.resize.disconnect();
     clearTimeout(this.resizeTimer);

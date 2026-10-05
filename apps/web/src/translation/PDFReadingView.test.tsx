@@ -1,0 +1,190 @@
+// @vitest-environment jsdom
+import { act, useEffect } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import {
+  defaultTheme,
+  type Document,
+  type ReaderAdapter,
+  type ReaderEvents,
+  type TranslationBlock,
+} from "@reader/core";
+const fixture = vi.hoisted(() => ({
+  events: undefined as ReaderEvents | undefined,
+  ready: undefined as ReaderAdapter | undefined,
+  translations: [] as TranslationBlock[],
+}));
+vi.mock("@reader/api", () => ({
+  api: {
+    translations: vi.fn(async () => fixture.translations),
+    translate: vi.fn(async () => ({ queued: true })),
+  },
+  blockImageURL: () => "",
+}));
+vi.mock("../chat/MessageMarkdown", () => ({
+  MessageMarkdown: ({ content }: { content: string }) => <p>{content}</p>,
+}));
+const adapter = {
+  open: vi.fn(async () => {}),
+  getTOC: vi.fn(async () => []),
+  getLocation: () => ({ type: "pdf", page: 1 }),
+  goTo: vi.fn(async () => {}),
+  next: vi.fn(async () => {}),
+  previous: vi.fn(async () => {}),
+  search: vi.fn(async () => []),
+  getSelection: () => null,
+  clearSelection: vi.fn(),
+  highlight: vi.fn(async () => {}),
+  setTheme: vi.fn(async () => {}),
+  getContext: vi.fn(async () => ""),
+  destroy: vi.fn(async () => {}),
+  fitColumn: vi.fn(async () => {}),
+  stopColumnFit: vi.fn(),
+  followBlock: vi.fn(async () => {}),
+  focusSentences: vi.fn(async () => {}),
+} as unknown as ReaderAdapter;
+vi.mock("../ReaderView", () => ({
+  ReaderView: ({
+    events,
+    onReady,
+  }: {
+    events: ReaderEvents;
+    onReady: (a: ReaderAdapter, t: []) => void;
+  }) => {
+    fixture.events = events;
+    useEffect(() => onReady(adapter, []), []);
+    return <div>PDF 原文</div>;
+  },
+}));
+import { PDFReadingView } from "./PDFReadingView";
+let root: Root, host: HTMLDivElement;
+const events = { location: vi.fn(), selection: vi.fn() };
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+  fixture.translations = [
+    {
+      blockId: "p1-b1",
+      sourceHash: "hash",
+      status: "complete",
+      sentences: [
+        { source: "First sentence.", target: "第一句。" },
+        { source: "Second sentence.", target: "第二句。" },
+      ],
+    },
+  ];
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <PDFReadingView
+        document={{ id: "doc", type: "pdf" } as Document}
+        theme={defaultTheme}
+        annotations={[]}
+        blocks={[
+          {
+            id: "p1-b1",
+            page: 1,
+            label: "text",
+            text: "First sentence. Second sentence.",
+            bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.3 },
+          },
+        ]}
+        events={events}
+        onReady={(a) => {
+          fixture.ready = a;
+        }}
+      />,
+    ),
+  );
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  window.getSelection()?.removeAllRanges();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+async function click(label: string) {
+  const button = Array.from(
+    host.querySelectorAll<HTMLButtonElement>("button"),
+  ).find(
+    (b) => b.textContent === label || b.getAttribute("aria-label") === label,
+  )!;
+  expect(button).toBeTruthy();
+  await act(async () => button.click());
+}
+it("switches modes without recreating the PDF and links an original selection to its sentence", async () => {
+  await click("原文译文");
+  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    fixture.events!.selection({
+      text: "Second",
+      location: {
+        type: "pdf",
+        page: 1,
+        rects: [{ x: 0.1, y: 0.25, width: 0.2, height: 0.02 }],
+      },
+    }),
+  );
+  const marked = host.querySelector('[data-sentence="1"]');
+  expect(marked?.hasAttribute("data-linked")).toBe(true);
+  expect(
+    host.querySelector('[data-sentence="0"]')?.hasAttribute("data-linked"),
+  ).toBe(false);
+  await click("仅译文");
+  expect(host.querySelector(".translation-source")?.hasAttribute("inert")).toBe(
+    true,
+  );
+  await click("仅原文");
+  expect(host.querySelector(".translation-document")).toBeNull();
+  expect(adapter.destroy).not.toHaveBeenCalled();
+});
+it("keeps the translated selection as the quote and anchors its counterpart to original text", async () => {
+  await click("原文译文");
+  const sentence = host.querySelector('[data-sentence="1"] p')!;
+  await act(async () =>
+    sentence.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
+  );
+  const range = document.createRange();
+  range.selectNodeContents(sentence);
+  Object.assign(range, {
+    getBoundingClientRect: () => new DOMRect(200, 100, 80, 20),
+  });
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  await act(async () =>
+    sentence.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
+  );
+  expect(events.selection).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      text: "第二句。",
+      location: expect.objectContaining({
+        quote: "Second sentence.",
+        translation: expect.objectContaining({
+          blockId: "p1-b1",
+          sentenceIndexes: [1],
+        }),
+      }),
+    }),
+  );
+  expect(adapter.focusSentences).toHaveBeenLastCalledWith(
+    "p1-b1",
+    ["Second sentence."],
+    true,
+  );
+  await act(async () => fixture.ready!.clearSelection());
+  expect(events.selection).toHaveBeenLastCalledWith(null);
+});

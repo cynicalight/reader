@@ -1,4 +1,4 @@
-import { Expand, Sparkles } from "lucide-react";
+import { Expand, Sparkles, Languages } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import type { PDFBlock, PDFBlockAction } from "@reader/core";
 export function BlockActions({
@@ -15,8 +15,8 @@ export function BlockActions({
         data-block-action="explain"
         size="icon-sm"
         variant="secondary"
-        aria-label="AI 解释此图"
-        title="AI 解释此图"
+        aria-label={block.image ? "AI 解释此图" : "询问 AI 此段"}
+        title={block.image ? "AI 解释此图" : "询问 AI 此段"}
         onClick={(event) => {
           event.stopPropagation();
           onAction(block, "explain");
@@ -26,17 +26,17 @@ export function BlockActions({
       </Button>
       <Button
         className="block-preview"
-        data-block-action="preview"
+        data-block-action={block.image ? "preview" : "translate"}
         size="icon-sm"
         variant="secondary"
-        aria-label="放大查看原图"
-        title="放大查看原图"
+        aria-label={block.image ? "放大查看原图" : "翻译整段"}
+        title={block.image ? "放大查看原图" : "翻译整段"}
         onClick={(event) => {
           event.stopPropagation();
-          onAction(block, "preview");
+          onAction(block, block.image ? "preview" : "translate");
         }}
       >
-        <Expand />
+        {block.image ? <Expand /> : <Languages />}
       </Button>
     </>
   );

@@ -1,0 +1,146 @@
+.pdf-reading {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+.translation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  overflow-x: auto;
+}
+.translation-panes {
+  display: flex;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.translation-source {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.translation-panes[data-swapped="true"] {
+  flex-direction: row-reverse;
+}
+.translation-panes[data-mode="translation"] > .translation-source {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.translation-document {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 32px clamp(16px, 3vw, 44px);
+  scrollbar-gutter: stable;
+  border-inline-start: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  overflow-anchor: auto;
+}
+.translation-document section {
+  position: relative;
+  margin: 0 auto 1.25em;
+  max-width: 44rem;
+  overflow-wrap: anywhere;
+}
+.translation-document [data-label="doc_title"] {
+  font-size: 1.45em;
+  font-weight: 600;
+}
+.translation-document [data-label="paragraph_title"] {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin-top: 1.8em;
+}
+.translation-sentence,
+.translation-sentence > .message-markdown,
+.translation-sentence > .message-markdown > p {
+  display: inline;
+  margin: 0;
+}
+.translation-sentence::after {
+  content: " ";
+}
+.translation-sentence[data-linked] {
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  border-radius: 3px;
+}
+.translation-image {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px auto;
+  border-radius: 3px;
+}
+.translation-pending {
+  min-height: 5em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 0.85em;
+}
+.translation-warning {
+  font-size: 0.8em;
+  color: var(--muted-foreground);
+  margin-bottom: 24px;
+}
+.translation-popover {
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(55vh, 500px);
+  overflow: auto;
+  line-height: 1.8;
+  padding: 16px;
+}
+.fit-column {
+  position: absolute;
+  right: 16px;
+  bottom: 20px;
+  z-index: 10;
+  box-shadow: 0 2px 8px #0002;
+}
+.reader-linked-highlight {
+  position: absolute;
+  pointer-events: none;
+  z-index: 4;
+  background: color-mix(in srgb, #719fea 24%, transparent);
+  border-radius: 2px;
+}
+.translation-note-indicator {
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: #e6b94c;
+}
+@media (prefers-reduced-motion: reduce) {
+  .translation-document {
+    scroll-behavior: auto;
+  }
+}
+.pdf-reading[data-theme="sepia"] .translation-document {
+  background: #f5efdf;
+  color: #3e3528;
+}
+::highlight(reader-translation-marks) {
+  background: #e6b94c66;
+  color: inherit;
+}
+::highlight(reader-translation-underlines) {
+  text-decoration: underline 2px #e6b94c;
+}

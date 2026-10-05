@@ -49,6 +49,12 @@ export function ReaderView({
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
       engine = new Engine(container, {
+        readingAnchor: (anchor) => {
+          if (!disposed) latest.current.events.readingAnchor?.(anchor);
+        },
+        columnFit: (active) => {
+          if (!disposed) latest.current.events.columnFit?.(active);
+        },
         zoom: (zoom) => {
           if (!disposed) latest.current.events.zoom?.(zoom);
         },

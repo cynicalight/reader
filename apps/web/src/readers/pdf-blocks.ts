@@ -12,7 +12,7 @@ export function hitBlock(
     .filter(
       (b) =>
         b.page === page &&
-        b.image &&
+        (b.image || b.text.trim()) &&
         x >= b.bounds.x &&
         y >= b.bounds.y &&
         x <= b.bounds.x + b.bounds.width &&
@@ -77,7 +77,7 @@ export class PDFBlockOverlay {
     )
       return;
     const block = this.find(event);
-    if (block?.id !== pressed.id) return;
+    if (block?.id !== pressed.id || !block.image) return;
     event.preventDefault();
     event.stopPropagation();
     this.onAction(block, "attach");

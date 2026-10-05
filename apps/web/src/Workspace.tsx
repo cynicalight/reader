@@ -90,6 +90,7 @@ import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ReaderView } from "./ReaderView";
+import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
 function IconButton({
@@ -465,6 +466,21 @@ export function Workspace({
     }
   };
   const blockAction = (block: PDFBlock, action: PDFBlockAction) => {
+    if (!block.image) {
+      if (action === "explain")
+        void send("请解释这段原文的含义，区分原文结论与你的补充说明。", [
+          {
+            text: block.text,
+            location: {
+              type: "pdf",
+              page: block.page,
+              quote: block.text,
+              rects: [block.bounds],
+            },
+          },
+        ]);
+      return;
+    }
     const image: ImageAttachment = {
       id: block.id,
       page: block.page,
@@ -883,22 +899,29 @@ export function Workspace({
         />
         <ResizablePanel id="reading" minSize="30%">
           <div className="reading-pane" ref={readingPane}>
-            <ReaderView
-              document={doc}
-              theme={theme}
-              annotations={annotations}
-              blocks={blocks}
-              onReady={(engine, items) => {
-                setAdapter(engine);
-                setTOC(items);
-              }}
-              events={{
-                zoom: (zoom) => setTheme({ zoom }),
-                location: saveLocation,
-                selection: setSelection,
-                blockAction,
-              }}
-            />
+            {(() => {
+              const ReadingView =
+                doc.type === "pdf" ? PDFReadingView : ReaderView;
+              return (
+                <ReadingView
+                  document={doc}
+                  theme={theme}
+                  annotations={annotations}
+                  blocks={blocks}
+                  processing={processing}
+                  onReady={(engine, items) => {
+                    setAdapter(engine);
+                    setTOC(items);
+                  }}
+                  events={{
+                    zoom: (zoom) => setTheme({ zoom }),
+                    location: saveLocation,
+                    selection: setSelection,
+                    blockAction,
+                  }}
+                />
+              );
+            })()}
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
                 <Badge variant="secondary">
