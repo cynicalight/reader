@@ -399,7 +399,7 @@ export function Workspace({
         kind === "bookmark"
           ? "已添加书签"
           : copied
-            ? "已保存，原文已复制"
+            ? "已保存，已复制"
             : "已保存",
         { id: "reader-annotation-save" },
       );
@@ -422,13 +422,13 @@ export function Workspace({
     const annotation = target
       ? activeAnnotation(annotations, target.ids)
       : undefined;
-    if (annotation?.quote) void copyText(annotation.quote, "原文已复制");
+    if (annotation?.quote) void copyText(annotation.quote, "已复制");
   };
   const selectText = (next: ReaderSelection | null) => {
     setSelection(next);
     const key = next ? JSON.stringify([next.text, next.location]) : null;
     if (next?.text && key !== lastCopiedSelection.current)
-      void copyText(next.text, "原文已复制");
+      void copyText(next.text, "已复制");
     lastCopiedSelection.current = key;
   };
   const editAnnotationNote = (annotation: Annotation) => {

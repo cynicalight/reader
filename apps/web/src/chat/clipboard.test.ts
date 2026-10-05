@@ -29,17 +29,17 @@ it("reports a clipboard write failure", async () => {
   vi.stubGlobal("navigator", {
     clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
   });
-  expect(await copyText("回答原文", "原文已复制")).toBe(false);
+  expect(await copyText("回答原文", "已复制")).toBe(false);
   expect(toast.error).toHaveBeenCalledOnce();
   expect(toast.success).not.toHaveBeenCalled();
 });
 it("confirms successful copies and writes again when the same passage is clicked again", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { clipboard: { writeText } });
-  await copyText("原文", "原文已复制");
-  await copyText("原文", "原文已复制");
+  await copyText("原文", "已复制");
+  await copyText("原文", "已复制");
   expect(writeText).toHaveBeenCalledTimes(2);
-  expect(toast.success).toHaveBeenLastCalledWith("原文已复制", {
+  expect(toast.success).toHaveBeenLastCalledWith("已复制", {
     id: "reader-clipboard",
   });
 });
