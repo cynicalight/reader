@@ -119,16 +119,22 @@
 }
 .pdf-reading-controls {
   position: absolute;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   bottom: 16px;
-  transform: translateX(-50%);
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  pointer-events: none;
   -webkit-app-region: no-drag;
 }
+.pdf-reading-controls > * {
+  pointer-events: auto;
+}
 .pdf-page-navigation {
+  grid-column: 2;
   height: 32px;
   border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: 10px;
@@ -158,6 +164,8 @@
   color: #3e3528;
 }
 .fit-column {
+  grid-column: 3;
+  justify-self: end;
   height: 32px;
   border-radius: 10px;
   box-shadow: 0 2px 8px #0002;
