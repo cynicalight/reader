@@ -13,21 +13,11 @@ func claudeArgs() []string {
 // snapshot and final result repeat earlier deltas and must not be appended.
 func claudeEvent(line []byte) (text string, completed, failed bool) {
 	var e struct {
-		Type            string  `json:"type"`
-		Subtype         string  `json:"subtype"`
-		IsError         bool    `json:"is_error"`
-		ParentToolUseID *string `json:"parent_tool_use_id"`
-		Event           struct {
-			Type  string `json:"type"`
-			Delta struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"delta"`
-			Block struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"content_block"`
-		} `json:"event"`
+		Type            string          `json:"type"`
+		Subtype         string          `json:"subtype"`
+		IsError         bool            `json:"is_error"`
+		ParentToolUseID *string         `json:"parent_tool_use_id"`
+		Event           json.RawMessage `json:"event"`
 	}
 	if json.Unmarshal(line, &e) != nil {
 		return "", false, true
@@ -39,12 +29,29 @@ func claudeEvent(line []byte) (text string, completed, failed bool) {
 		return "", false, true
 	}
 	if e.Type == "stream_event" {
-		if e.Event.Type == "content_block_delta" && e.Event.Delta.Type == "text_delta" {
-			return e.Event.Delta.Text, false, false
+		// System envelopes also use "event", sometimes as a string. Only stream
+		// envelopes carry the model's content-block schema.
+		var event struct {
+			Type  string `json:"type"`
+			Delta struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"delta"`
+			Block struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content_block"`
 		}
-		if e.Event.Type == "content_block_start" && e.Event.Block.Type == "text" {
-			return e.Event.Block.Text, false, false
+		if json.Unmarshal(e.Event, &event) != nil {
+			return "", false, true
+		}
+		if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
+			return event.Delta.Text, false, false
+		}
+		if event.Type == "content_block_start" && event.Block.Type == "text" {
+			return event.Block.Text, false, false
 		}
 	}
+
 	return "", e.Type == "result" && e.Subtype == "success", false
 }
