@@ -35,10 +35,10 @@ const require = createRequire(import.meta.url),
 const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
 const task = getDocument({
   data: new Uint8Array(await readFile(input)),
-  cMapUrl: join(assets, "cmaps/"),
+  cMapUrl: join(assets, "cmaps") + "/",
   cMapPacked: true,
-  standardFontDataUrl: join(assets, "standard_fonts/"),
-  wasmUrl: join(assets, "wasm/"),
+  standardFontDataUrl: join(assets, "standard_fonts") + "/",
+  wasmUrl: join(assets, "wasm") + "/",
   useSystemFonts: true,
 });
 try {
