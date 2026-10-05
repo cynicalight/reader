@@ -1,7 +1,19 @@
 import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
-import { MessageMarkdown } from "../chat/MessageMarkdown";
+import { lazy, Suspense } from "react";
+const Markdown = lazy(() =>
+  import("../chat/MessageMarkdown").then((module) => ({
+    default: module.MessageMarkdown,
+  })),
+);
+function MessageMarkdown({ content }: { content: string }) {
+  return (
+    <Suspense fallback={<span>{content}</span>}>
+      <Markdown content={content} />
+    </Suspense>
+  );
+}
 
 export function TranslationText({
   block,
