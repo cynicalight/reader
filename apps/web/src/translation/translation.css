@@ -88,6 +88,15 @@
   background: color-mix(in srgb, var(--primary) 13%, transparent);
   border-radius: 3px;
 }
+.translation-document ::highlight(reader-translation-selection) {
+  background-color: rgba(59, 130, 246, 0.3);
+  background-color: color-mix(in srgb, AccentColor 30%, transparent);
+}
+.translation-document[data-compact-selection]::selection,
+.translation-document[data-compact-selection] ::selection {
+  background-color: transparent;
+  color: inherit;
+}
 .translation-image {
   max-width: 100%;
   height: auto;
