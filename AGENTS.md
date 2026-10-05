@@ -20,7 +20,10 @@ Keep the interface restrained, following Claude/Apple app simplicity and shadcn 
 ## Validation
 `pnpm typecheck`, `pnpm test`, `pnpm build`. Do not use browser automation for visual acceptance. Give the user an accessible preview and manual verification steps. Prefer tests for data loss, lifecycle, parser boundaries, and provider protocols.
 
-## Git commits
+## Git workflow and commits
+- Start large tasks in a new Git worktree on a dedicated task branch before editing. This includes substantial features, cross-module changes, and refactors. Keep the main checkout available for small changes.
+- Make very small, localized UI changes directly on `main` and commit them there. Examples include spacing, colors, and minor layout adjustments that do not change application behavior. If the scope grows into a larger task, move the task changes to a dedicated worktree before continuing.
+- Before choosing a worktree or editing, verify the checkout path, branch, and existing changes. Preserve unrelated work. Apply the same commit, review, and validation standards on both `main` and task branches.
 - Commit incrementally as each coherent, independently verifiable change is completed, unless the user explicitly asks to leave changes uncommitted. Each commit should have one clear purpose and be independently reviewable and revertible. Do not accumulate unrelated work into one large commit.
 - Keep tightly coupled implementation, tests, API schemas/generated types, and required dependency/lockfile changes together. Split independent features, bug fixes, UI adjustments, refactors, and documentation/research into separate commits. Do not split mechanically by file or create intermediate commits that leave the project broken.
 - Before each commit, inspect the diff and stage only the relevant files or hunks. Review `git diff --cached` and run `git diff --cached --check`; never use `git add -A` by default or sweep in another task's changes. Include PDFs, research materials, and other assets only when they belong to the requested scope, in a separate commit when independent of the code change.
