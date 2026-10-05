@@ -21,8 +21,8 @@ const task = getDocument({
   data: new Uint8Array(
     await readFile(join(base, "../web/samples/reading-notes.pdf")),
   ),
-  standardFontDataUrl: join(pdfjsRoot, "standard_fonts/"),
-  cMapUrl: join(pdfjsRoot, "cmaps/"),
+  standardFontDataUrl: join(pdfjsRoot, "standard_fonts") + "/",
+  cMapUrl: join(pdfjsRoot, "cmaps") + "/",
   cMapPacked: true,
   useSystemFonts: false,
 });
