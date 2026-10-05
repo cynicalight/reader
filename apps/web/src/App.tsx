@@ -457,13 +457,12 @@ export function App() {
                           </Button>
                         </div>
                         {doc.categorySource !== "manual" &&
-                          doc.classificationStatus !== "done" && (
+                          (doc.classificationStatus === "failed" ||
+                            doc.classificationStatus === "running") && (
                             <p className="classification-status">
                               {doc.classificationStatus === "failed"
                                 ? "AI 分类失败 · 可手动修改或重试"
-                                : doc.classificationStatus === "running"
-                                  ? "AI 分类中"
-                                  : "暂定类型 · 待 AI 分类"}
+                                : "AI 分类中"}
                             </p>
                           )}
                         <div className="book-progress">
