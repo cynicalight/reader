@@ -331,3 +331,25 @@ it("enables column reading with the default settings", async () => {
   await renderView(defaultTheme);
   expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
 });
+
+it("always follows scrolling in either pane without an unlink control", async () => {
+  await click("原文译文");
+  expect(host.querySelector('[aria-label="同步滚动"]')).toBeNull();
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
+  pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  block.getBoundingClientRect = () => new DOMRect(0, 80, 600, 400);
+  await act(async () =>
+    fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
+  );
+  expect(pane.scrollTop).toBe(100);
+  await act(async () => {
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 100 }));
+    pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await new Promise(requestAnimationFrame);
+  });
+  expect(adapter.followBlock).toHaveBeenLastCalledWith({
+    blockId: "p1-b1",
+    fraction: 0.25,
+  });
+});

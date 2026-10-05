@@ -16,7 +16,7 @@ import type {
 } from "@reader/core";
 import { isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
-import { Columns2, Link2, Unlink2 } from "lucide-react";
+import { Columns2 } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { Popover, PopoverContent } from "@reader/ui/components/popover";
@@ -51,7 +51,6 @@ export function PDFReadingView({
 }) {
   const [mode, setMode] = useState<Mode>("source"),
     [swapped, setSwapped] = useState(false),
-    [sync, setSync] = useState(true),
     [fitted, setFitted] = useState(false);
   const [translations, setTranslations] = useState<TranslationBlock[]>([]),
     [error, setError] = useState("");
@@ -77,8 +76,8 @@ export function PDFReadingView({
     control = useRef(new ReadingSync()),
     side = useRef<"source" | "translation">("source"),
     reading = useRef<PDFReadingAnchor | undefined>(undefined);
-  const state = useRef({ mode, sync, blocks, translations, events });
-  state.current = { mode, sync, blocks, translations, events };
+  const state = useRef({ mode, blocks, translations, events });
+  state.current = { mode, blocks, translations, events };
   const byId = useMemo(
     () => new Map(translations.map((t) => [t.blockId, t])),
     [translations],
@@ -416,7 +415,7 @@ export function PDFReadingView({
           },
           block.page / Math.max(1, ...blocks.map((b) => b.page)),
         );
-      if (sync && mode === "parallel") {
+      if (mode === "parallel") {
         control.current.following("source");
         void engine?.followBlock?.(anchor);
       }
@@ -436,18 +435,6 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
-      {mode === "parallel" && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="同步滚动"
-          title="同步滚动"
-          aria-pressed={sync}
-          onClick={() => setSync(!sync)}
-        >
-          {sync ? <Link2 /> : <Unlink2 />}
-        </Button>
-      )}
     </div>
   );
   return (
@@ -488,7 +475,7 @@ export function PDFReadingView({
                   if (!control.current.canFollow("source") || selecting.current)
                     return;
                   reading.current = anchor;
-                  if (state.current.sync && state.current.mode === "parallel")
+                  if (state.current.mode === "parallel")
                     followTranslation(anchor);
                 },
                 blockHover: (block) => {
