@@ -280,8 +280,8 @@ export function DocumentEditor({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto">
+        <DialogHeader className="min-w-0 pr-6">
           <DialogTitle>编辑文档信息</DialogTitle>
           <DialogDescription className="truncate" title={d.title}>
             {d.title}
@@ -411,9 +411,11 @@ export function DocumentEditor({
                     key={tag}
                     variant="ghost"
                     size="xs"
+                    className="min-w-0 max-w-full"
+                    title={tag}
                     onClick={() => addTag(tag)}
                   >
-                    {tag}
+                    <span className="truncate">{tag}</span>
                   </Button>
                 ))}
               </div>
