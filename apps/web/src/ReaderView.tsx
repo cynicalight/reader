@@ -83,7 +83,9 @@ export function ReaderView({
       await engine.open(doc);
       if (disposed) return;
       await engine.setTheme(latest.current.theme);
-      await engine.highlight(latest.current.annotations);
+      await engine.highlight(latest.current.annotations).catch((e) => {
+        if (!disposed) toast.error(e.message);
+      });
       engine.setBlocks?.(latest.current.blocks);
       const toc = await engine.getTOC();
       if (disposed) return;

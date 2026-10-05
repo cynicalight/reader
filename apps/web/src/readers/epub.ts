@@ -1,5 +1,9 @@
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
-import { selectionLocator } from "./selection-locator";
+import {
+  selectionLocator,
+  resolveEPUBRange,
+  searchEPUBLocators,
+} from "./selection-locator";
 import { installScrollbars } from "../scrollbars";
 import {
   EpubNavigator,
@@ -39,6 +43,10 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private selection: ReaderSelection | null = null;
   private doc?: Document;
   private disposed = false;
+  private abort = new AbortController();
+  private resourceDocuments = new Map<string, Promise<globalThis.Document>>();
+  private highlightRevision = 0;
+  private unresolvedAnnotations = "";
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
@@ -213,6 +221,33 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.pointers.delete(wnd);
       this.onKeyDown(event);
     };
+    const keyReleased = (event: KeyboardEvent) => {
+      if (event.key === "Escape" || this.disposed) return;
+      const selection = wnd.getSelection();
+      if (
+        !selection?.rangeCount ||
+        selection.isCollapsed ||
+        !selection.toString().trim()
+      )
+        return;
+      const manager = this.navigator?._cframes.find(
+        (f) => f?.iframe.contentWindow === wnd,
+      );
+      const rect = selection.getRangeAt(0).getClientRects()[0];
+      if (!manager || !rect) return;
+      this.navigator?.eventListener(
+        "text_selected",
+        {
+          text: selection.toString(),
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          targetFrameSrc: manager.iframe.src,
+        },
+        manager,
+      );
+    };
     const unload = () => {
       this.clearSelection();
       if (this.selectedWindow === wnd) this.clearState();
@@ -229,6 +264,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       doc.removeEventListener("pointerdown", start);
       doc.removeEventListener("mouseup", released);
       doc.removeEventListener("keydown", key);
+      doc.removeEventListener("keyup", keyReleased);
       doc.removeEventListener("scroll", this.clearSelection, true);
       wnd.removeEventListener("pagehide", unload);
     };
@@ -240,6 +276,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     doc.addEventListener("pointerdown", start);
     doc.addEventListener("mouseup", released);
     doc.addEventListener("keydown", key);
+    doc.addEventListener("keyup", keyReleased);
     doc.addEventListener("scroll", this.clearSelection, true);
     wnd.addEventListener("pagehide", unload);
     this.frameCleanups.set(wnd, cleanup);
@@ -257,9 +294,19 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     if (location.locator) {
       try {
         const locator = Locator.deserialize(JSON.parse(location.locator));
-        if (locator) return locator;
-      } catch {
-        /* recover from href */
+        if (locator) {
+          if (locator.href.split("#")[0] !== location.href.split("#")[0])
+            throw new Error("批注章节与原文位置不一致");
+          if (!locator.text?.highlight && location.quote)
+            return Locator.deserialize({
+              ...locator.serialize(),
+              text: { ...locator.text?.serialize(), highlight: location.quote },
+            })!;
+          return locator;
+        }
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        /* Legacy malformed locators can still recover from href and quote. */
       }
     }
     return Locator.deserialize({
@@ -274,13 +321,71 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       text: { highlight: location.quote },
     })!;
   }
+  private resourceDocument(href: string): Promise<globalThis.Document> {
+    const resource = href.split("#")[0]!;
+    if (!this.doc || !this.publication?.readingOrder.findWithHref(resource))
+      return Promise.reject(new Error("该章节不属于当前书籍"));
+    let pending = this.resourceDocuments.get(resource);
+    if (!pending) {
+      pending = fetch(publicationURL(this.doc.id, resource), {
+        signal: this.abort.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("无法读取 EPUB 章节");
+          return new DOMParser().parseFromString(
+            await response.text(),
+            "text/html",
+          );
+        })
+        .catch((error) => {
+          this.resourceDocuments.delete(resource);
+          throw error;
+        });
+      this.resourceDocuments.set(resource, pending);
+    }
+    return pending;
+  }
+  private async exactLocator(location: EPUBLocation): Promise<Locator> {
+    const locator = this.toLocator(location);
+    if (!locator.text?.highlight) return locator;
+    const doc = await this.resourceDocument(locator.href);
+    const range = resolveEPUBRange(doc, locator);
+    const exact = range && selectionLocator(locator, range);
+    if (!exact)
+      throw new Error("未能唯一定位这段原文，笔记已保留。请使用书内搜索。");
+    return exact;
+  }
+  private navigate(locator: Locator): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timeout);
+        this.abort.signal.removeEventListener("abort", cancelled);
+        error ? reject(error) : resolve();
+      };
+      const cancelled = () =>
+        finish(new DOMException("阅读器已关闭", "AbortError"));
+      const timeout = setTimeout(
+        () => finish(new Error("章节跳转超时，请重试")),
+        10000,
+      );
+      this.abort.signal.addEventListener("abort", cancelled, { once: true });
+      if (this.disposed) return cancelled();
+      try {
+        this.navigator!.go(locator, false, (ok) =>
+          finish(ok ? undefined : new Error("无法跳转到该位置")),
+        );
+      } catch (error) {
+        finish(error as Error);
+      }
+    });
+  }
   async open(doc: Document) {
     this.doc = doc;
     const url = new URL(
       publicationURL(doc.id, "manifest.json"),
       window.location.origin,
     ).href;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: this.abort.signal });
     if (!response.ok) throw new Error("无法加载 EPUB 目录");
     const json = await response.json();
     json.links = [
@@ -322,6 +427,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       customEvent: () => {},
       handleLocator: (locator) => /^[a-z]+:/i.test(locator.href),
       textSelected: (selection) => {
+        if (this.disposed) return;
         if (!selection.text.trim()) return this.clearState();
         const frame = Array.from(
           this.container.querySelectorAll("iframe"),
@@ -397,11 +503,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   async goTo(location: DocumentLocation) {
     if (location.type !== "epub" || !this.navigator) return;
     this.clearSelection();
-    await new Promise<void>((resolve, reject) =>
-      this.navigator!.go(this.toLocator(location), false, (ok) =>
-        ok ? resolve() : reject(new Error("无法跳转到该位置")),
-      ),
-    );
+    const locator = await this.exactLocator(location);
+    if (this.disposed) return;
+    await this.navigate(locator);
   }
   async next() {
     this.clearSelection();
@@ -416,27 +520,76 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     );
   }
   async search(query: string): Promise<SearchResult[]> {
-    return this.doc ? api.search(this.doc.id, query) : [];
+    if (!this.doc || !query.trim()) return [];
+    const chapters = await api.search(this.doc.id, query);
+    const results: SearchResult[] = [];
+    for (const chapter of chapters) {
+      if (this.disposed || results.length >= 100) break;
+      if (chapter.location.type !== "epub") continue;
+      const doc = await this.resourceDocument(chapter.location.href);
+      const matches = searchEPUBLocators(
+        doc,
+        this.toLocator(chapter.location),
+        query,
+        100 - results.length,
+      );
+      for (const [index, locator] of matches.entries()) {
+        results.push({
+          id: `${chapter.id}:${index}`,
+          excerpt: `${locator.text?.before ?? ""}${locator.text?.highlight ?? ""}${locator.text?.after ?? ""}`,
+          location: this.fromLocator(locator),
+        });
+      }
+    }
+    return results;
   }
   getSelection() {
     return this.selection;
   }
   async highlight(annotations: Annotation[]) {
+    const revision = ++this.highlightRevision;
     this.annotations = annotations;
     this.clearAnnotationHover();
-    const decorations: Decoration[] = annotations
-      .filter(
-        (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
-      )
-      .map((a) => ({
-        id: a.id,
-        locator: this.toLocator(a.location as EPUBLocation),
-        style: {
-          type: a.kind === "underline" ? "underline" : "highlight",
-          tint: a.color || "#facc15",
-        },
-      }));
-    this.navigator?.applyDecorations(decorations, "annotations");
+    const unresolved: string[] = [];
+    const decorations = await Promise.all(
+      annotations
+        .filter(
+          (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
+        )
+        .map(async (a): Promise<Decoration | undefined> => {
+          try {
+            const location = a.location as EPUBLocation;
+            const locator = await this.exactLocator({
+              ...location,
+              quote: location.quote || a.quote,
+            });
+            return {
+              id: a.id,
+              locator,
+              style: {
+                type: a.kind === "underline" ? "underline" : "highlight",
+                tint: a.color || "#facc15",
+              },
+            };
+          } catch {
+            unresolved.push(a.id);
+            return undefined;
+          }
+        }),
+    );
+    if (this.disposed || revision !== this.highlightRevision) return;
+    this.navigator?.applyDecorations(
+      decorations.filter((d): d is Decoration => !!d),
+      "annotations",
+    );
+    const key = unresolved.sort().join(",");
+    if (key !== this.unresolvedAnnotations) {
+      this.unresolvedAnnotations = key;
+      if (unresolved.length)
+        throw new Error(
+          `${unresolved.length} 条批注暂时无法定位，已保留在笔记中。`,
+        );
+    }
   }
   async setTheme(theme: ReaderTheme) {
     this.clearSelection();
@@ -476,6 +629,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   async destroy() {
     if (this.disposed) return;
     this.disposed = true;
+    this.abort.abort();
+    this.resourceDocuments.clear();
+    this.highlightRevision++;
     this.resize.disconnect();
     document.removeEventListener("pointerdown", this.onOutsidePointer);
     document.removeEventListener("keydown", this.onKeyDown);

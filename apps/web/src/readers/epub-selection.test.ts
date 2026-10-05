@@ -12,6 +12,7 @@ const bridge = vi.hoisted(() => ({
   listeners: undefined as EpubNavigatorListeners | undefined,
   observer: undefined as DecorationObserver | undefined,
   apply: vi.fn(),
+  go: vi.fn(),
 }));
 vi.mock("@readium/navigator", () => ({
   DecorationLayout: { Boxes: "boxes" },
@@ -23,6 +24,19 @@ vi.mock("@readium/navigator", () => ({
       listeners: EpubNavigatorListeners,
     ) {
       bridge.listeners = listeners;
+    }
+    go(locator: Locator, _animated: boolean, callback: (ok: boolean) => void) {
+      bridge.go(locator);
+      callback(true);
+    }
+    get _cframes() {
+      return [{ iframe: frame }];
+    }
+    eventListener(_key: string, selection: Record<string, unknown>) {
+      bridge.listeners!.textSelected({
+        ...selection,
+        locator: payload().locator,
+      } as ReturnType<typeof payload>);
     }
     async load() {}
     async destroy() {}
@@ -60,6 +74,7 @@ beforeEach(async () => {
   changed.mockClear();
   activated.mockClear();
   bridge.apply.mockClear();
+  bridge.go.mockClear();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -71,6 +86,7 @@ beforeEach(async () => {
     "fetch",
     vi.fn().mockResolvedValue({
       ok: true,
+      text: async () => "<html><body><p>Selected passage</p></body></html>",
       json: async () => ({
         metadata: { title: "Test book" },
         readingOrder: [
@@ -162,16 +178,14 @@ async function savedAnnotation() {
   };
 }
 function pointer(type: string, extra: MouseEventInit = {}) {
-  frame
-    .contentDocument!.querySelector("p")!
-    .dispatchEvent(
-      new MouseEvent(type, {
-        bubbles: true,
-        clientX: 210,
-        clientY: 110,
-        ...extra,
-      }),
-    );
+  frame.contentDocument!.querySelector("p")!.dispatchEvent(
+    new MouseEvent(type, {
+      bubbles: true,
+      clientX: 210,
+      clientY: 110,
+      ...extra,
+    }),
+  );
 }
 it("uses Readium hover decorations and converts annotation clicks out of the iframe", async () => {
   const event = await savedAnnotation();
@@ -222,4 +236,96 @@ it("preserves native selection and removes the decoration observer on disposal",
   await adapter.destroy();
   expect(bridge.observer).toBeUndefined();
   expect(observer.onDecorationActivated!(event)).toBe(false);
+});
+
+it("preserves the exact saved selection when navigating and rejects ambiguous legacy quotes", async () => {
+  const location = adapter.getSelection()!.location;
+  await adapter.goTo(location);
+  expect(
+    bridge.go.mock.calls[0]![0].serialize().locations.domRange,
+  ).toBeDefined();
+  const ambiguous = {
+    type: "epub" as const,
+    href: "chapter.xhtml",
+    quote: "missing",
+  };
+  await expect(adapter.goTo(ambiguous)).rejects.toThrow("未能唯一定位");
+  expect(bridge.go).toHaveBeenCalledTimes(1);
+});
+it("keeps unresolved notes in storage while removing their obsolete decorations", async () => {
+  const event = await savedAnnotation();
+  const location = {
+    type: "epub" as const,
+    href: "chapter.xhtml",
+    quote: "missing",
+  };
+  await expect(
+    adapter.highlight([
+      {
+        id: "note",
+        documentId: "test",
+        kind: "note",
+        location,
+        quote: "missing",
+        note: "Preserve me",
+        color: "",
+        createdAt: "",
+      },
+    ]),
+  ).rejects.toThrow("已保留在笔记中");
+  expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
+  expect(event.decoration.id).toBe("note");
+});
+it("rejects an inner locator targeting a different chapter", async () => {
+  await expect(
+    adapter.goTo({
+      type: "epub",
+      href: "chapter.xhtml",
+      locator: JSON.stringify({
+        href: "other.xhtml",
+        type: "application/xhtml+xml",
+        text: { highlight: "Selected passage" },
+      }),
+    }),
+  ).rejects.toThrow("不一致");
+  expect(bridge.go).not.toHaveBeenCalled();
+});
+it("does not replay a deleted annotation when its chapter fetch finishes late", async () => {
+  const selected = adapter.getSelection()!;
+  let release!: (response: Response) => void;
+  vi.mocked(fetch).mockReturnValueOnce(
+    new Promise((resolve) => {
+      release = resolve;
+    }),
+  );
+  const pending = adapter.highlight([
+    {
+      id: "note",
+      documentId: "test",
+      kind: "note",
+      location: selected.location,
+      quote: selected.text,
+      note: "",
+      color: "",
+      createdAt: "",
+    },
+  ]);
+  await adapter.highlight([]);
+  release({
+    ok: true,
+    text: async () => "<html><body><p>Selected passage</p></body></html>",
+  } as Response);
+  await pending;
+  expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
+});
+
+it("captures keyboard selections through the Readium frame event path", () => {
+  changed.mockClear();
+  frame.contentDocument!.dispatchEvent(
+    new KeyboardEvent("keyup", { key: "Shift" }),
+  );
+  expect(changed).toHaveBeenLastCalledWith(
+    expect.objectContaining({ text: "Selected passage" }),
+  );
+  expect(adapter.getSelection()?.location.type).toBe("epub");
 });
