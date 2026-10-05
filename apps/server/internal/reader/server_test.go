@@ -388,3 +388,36 @@ func TestSVGRemainsSVG(t *testing.T) {
 		t.Fatal(string(out), e)
 	}
 }
+
+func TestReaderPolicyAllowsReadiumBlobStyles(t *testing.T) {
+	s := testServer(t)
+	w := request(t, s, "GET", "/api/health", nil)
+	directives := map[string][]string{}
+	for _, directive := range strings.Split(w.Header().Get("Content-Security-Policy"), ";") {
+		fields := strings.Fields(directive)
+		if len(fields) > 1 {
+			directives[fields[0]] = fields[1:]
+		}
+	}
+	// Blob chapter frames inherit the creator's policy. Readium's CSS is also
+	// a blob stylesheet, so permitting blob frames alone does not enable it.
+	for _, directive := range []string{"style-src", "frame-src"} {
+		found := false
+		for _, source := range directives[directive] {
+			if source == "blob:" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s blocks Readium blob resources", directive)
+		}
+	}
+	for _, directive := range []string{"default-src", "connect-src"} {
+		if got := strings.Join(directives[directive], " "); got != "'self'" {
+			t.Errorf("%s unexpectedly widened: %s", directive, got)
+		}
+	}
+	if got := strings.Join(directives["object-src"], " "); got != "'none'" {
+		t.Errorf("object-src unexpectedly widened: %s", got)
+	}
+}

@@ -81,3 +81,56 @@ describe("reader sidebar tab layout", () => {
     ).toBe("vertical");
   });
 });
+
+// Reflowable frames are direct children; fixed-layout frames sit in wrappers
+// and receive their dimensions from Readium's fixed-layout manager.
+it("sizes Readium reflowable frames to the reading area", async () => {
+  const { realpathSync } = await import("node:fs");
+  const { FrameManager } = await import(
+    /* @vite-ignore */ realpathSync(
+      "apps/web/node_modules/@readium/navigator",
+    ) + "/dist/epub/frame/FrameManager.js"
+  );
+  const previousDocument = globalThis.document;
+  Object.assign(globalThis, { document: dom.window.document });
+  try {
+    // jsdom does not implement iframe.sandbox's DOMTokenList yet.
+    Object.defineProperty(dom.window.HTMLIFrameElement.prototype, "sandbox", {
+      configurable: true,
+      get() {
+        const frame = this as HTMLIFrameElement;
+        return {
+          set value(value: string) {
+            frame.setAttribute("sandbox", value);
+          },
+        };
+      },
+    });
+    const manager = new FrameManager("about:blank");
+    const host = dom.window.document.createElement("div");
+    host.className = "reader-engine";
+    host.append(manager.iframe);
+    dom.window.document.body.replaceChildren(host);
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) => {
+        try {
+          return manager.iframe.matches(selector!.trim());
+        } catch {
+          return false;
+        }
+      })
+      .map(([, , declarations]) => declarations!)
+      .join(";");
+    expect(rules).toMatch(/(?:^|;)width:100%(?:;|$)/);
+    expect(rules).toMatch(/(?:^|;)height:100%(?:;|$)/);
+    const wrapper = dom.window.document.createElement("div");
+    host.append(wrapper);
+    wrapper.append(manager.iframe);
+    expect(
+      manager.iframe.matches(".reader-engine > .readium-navigator-iframe"),
+    ).toBe(false);
+  } finally {
+    if (previousDocument) globalThis.document = previousDocument;
+    else Reflect.deleteProperty(globalThis, "document");
+  }
+});
