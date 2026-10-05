@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   ColumnGesture,
-  columnReadingScale,
   ReadingSync,
   readingColumns,
   type TextRun,
@@ -90,21 +89,6 @@ it("excludes labeled page furniture and edge page numbers while keeping footnote
   expect(result[0].y + result[0].height).toBeCloseTo(0.885);
 });
 
-it("uses 150% for two columns and fills native single-column content using PDF CSS units", () => {
-  expect(
-    columnReadingScale(
-      readingColumns([...rows(0.08), ...rows(0.55)]),
-      600,
-      600,
-    ),
-  ).toBe(1.5);
-  const regions = readingColumns(
-    rows(0.15).map((r) => ({ ...r, bounds: { ...r.bounds, width: 0.7 } })),
-  );
-  expect(
-    columnReadingScale(regions, 600, 600) * 600 * (96 / 72) * 0.7,
-  ).toBeCloseTo(568);
-});
 it("ignores repeated margin text before parsing and skips decoration-only pages", () => {
   const header = {
     text: "Repeated journal heading",

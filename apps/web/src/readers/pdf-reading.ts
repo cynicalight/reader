@@ -135,22 +135,6 @@ export function hasParallelColumns(regions: Box[]) {
   );
 }
 
-export function columnReadingScale(
-  regions: Box[],
-  viewportWidth: number,
-  pageWidth: number,
-) {
-  if (hasParallelColumns(regions)) return 1.5;
-  // PDFViewer scales PDF points into CSS pixels before applying its zoom.
-  return Math.min(
-    5,
-    Math.max(
-      0.25,
-      (viewportWidth - 32) / (pageWidth * (96 / 72) * union(regions).width),
-    ),
-  );
-}
-
 function normalized(text: string) {
   return text.toLowerCase().replace(/[\s\u00ad]/g, "");
 }

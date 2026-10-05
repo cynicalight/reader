@@ -61,7 +61,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
       container,
       (block, action) => this.events.blockAction?.(block, action),
       (block) => this.events.blockHover?.(block),
-      (block) => this.navigation.focusBlock(block.id),
+      (block) => {
+        if (this.events.blockFocus) this.events.blockFocus(block);
+        else void this.focusBlock(block.id, "source");
+        return true;
+      },
     );
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
@@ -118,10 +122,6 @@ export class PDFReaderAdapter implements ReaderAdapter {
       clearTimeout(this.resizeTimer);
       const fit = () => {
         if (container.closest("[inert]")) return;
-        if (!this.disposed && this.pdf && this.navigation.fitted) {
-          void this.navigation.fit(false);
-          return;
-        }
         if (!this.disposed && this.pdf && this.fitWidth)
           this.viewer.currentScaleValue = "page-width";
       };
@@ -461,13 +461,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
   setBlocks(blocks: PDFBlock[]) {
     this.blockData = blocks;
     this.blocks.setBlocks(blocks);
-    if (this.navigation.fitted && !this.container.closest("[inert]"))
-      void this.navigation.fit(false).catch(() => this.navigation.stop());
   }
-  async fitColumn() {
+  async focusBlock(blockId: string, layout: "source" | "parallel") {
     this.fitWidth = false;
-    await this.navigation.fit();
-    if (this.navigation.fitted) {
+    this.clearSelection();
+    const reached = await this.navigation.focusBlock(blockId, layout);
+    if (reached) {
       this.appliedZoom = this.viewer.currentScale;
       this.events.zoom?.(this.appliedZoom);
     }
@@ -476,8 +475,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.clearSelection();
     return this.navigation.stepBlock(direction);
   }
-  stopColumnFit() {
-    this.navigation.stop();
+  cancelBlockFocus() {
+    this.navigation.cancelMotion();
   }
   followBlock(anchor: import("@reader/core").PDFReadingAnchor) {
     return this.navigation.follow(anchor);

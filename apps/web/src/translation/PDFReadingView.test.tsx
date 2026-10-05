@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   defaultTheme,
   type Document,
+  type PDFBlock,
   type ReaderAdapter,
   type ReaderEvents,
   type ReaderTheme,
@@ -60,9 +61,9 @@ const adapter = {
   setTheme: vi.fn(async () => {}),
   getContext: vi.fn(async () => ""),
   destroy: vi.fn(async () => {}),
-  fitColumn: vi.fn(async () => {}),
+  focusBlock: vi.fn(async () => {}),
   stepBlock: vi.fn(async () => {}),
-  stopColumnFit: vi.fn(),
+  cancelBlockFocus: vi.fn(),
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
   hoverBlock: vi.fn(),
@@ -114,7 +115,8 @@ beforeEach(async () => {
   await renderView();
 });
 async function renderView(
-  theme: ReaderTheme = { ...defaultTheme, pdfColumnReading: false },
+  theme: ReaderTheme = defaultTheme,
+  extraBlocks: PDFBlock[] = [],
 ) {
   await act(async () =>
     root.render(
@@ -130,6 +132,7 @@ async function renderView(
             text: "First sentence. Second sentence.",
             bounds: { x: 0.1, y: 0.2, width: 0.3, height: 0.3 },
           },
+          ...extraBlocks,
         ]}
         events={events}
         onReady={(a) => {
@@ -158,7 +161,7 @@ async function click(label: string) {
 }
 it("switches modes without recreating the PDF and links an original selection to its sentence", async () => {
   await click("原文译文");
-  expect(adapter.fitColumn).not.toHaveBeenCalled();
+  expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.selection({
       text: "Second",
@@ -254,9 +257,9 @@ it("restores the translated reading position without changing zoom on mode chang
   await click("原文译文");
   expect(adapter.followBlock).toHaveBeenLastCalledWith({
     blockId: "p1-b1",
-    fraction: 0.25,
+    fraction: 0.55,
   });
-  expect(adapter.fitColumn).not.toHaveBeenCalled();
+  expect(adapter.focusBlock).not.toHaveBeenCalled();
 });
 
 it("renders an incoming paragraph while the subscription remains open", async () => {
@@ -324,50 +327,27 @@ it("provides a resizable divider with the swap action outside the toolbar", asyn
   expect(adapter.destroy).not.toHaveBeenCalled();
 });
 
-it("enables column reading in original mode and preserves it across mode changes", async () => {
-  await renderView({ ...defaultTheme, pdfColumnReading: true });
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
-  vi.mocked(adapter.stopColumnFit!).mockClear();
+it("has no single-column mode and only zooms on an explicit block focus", async () => {
+  expect(host.textContent).not.toContain("单栏模式");
+  expect(host.textContent).not.toContain("普通模式");
+  expect(adapter.focusBlock).not.toHaveBeenCalled();
+  await act(async () =>
+    fixture.events!.blockFocus?.({
+      id: "p1-b1",
+      page: 1,
+      bounds: { x: 0, y: 0 },
+    } as PDFBlock),
+  );
+  expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "source");
   await click("原文译文");
-  await click("仅译文");
-  await click("仅原文");
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
-  expect(adapter.stopColumnFit).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("普通模式");
-  await act(async () => fixture.events!.columnFit?.(true));
-  expect(host.textContent).toContain("单栏模式");
-  const modeButton = Array.from(host.querySelectorAll("button")).find(
-    (button) => button.textContent?.includes("单栏模式"),
-  )!;
-  expect(modeButton.closest(".translation-toolbar")).not.toBeNull();
-  expect(modeButton.closest(".pdf-reading-controls")).toBeNull();
-  expect(modeButton.getAttribute("aria-pressed")).toBe("true");
-  expect(host.textContent).not.toContain("普通模式");
-  await click("单栏模式");
-  expect(adapter.stopColumnFit).toHaveBeenCalledTimes(1);
-  await act(async () => fixture.events!.columnFit?.(false));
-  await click("普通模式");
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(2);
-  vi.mocked(adapter.stopColumnFit!).mockClear();
-  await renderView({ ...defaultTheme, pdfColumnReading: false });
-  expect(adapter.stopColumnFit).toHaveBeenCalled();
-  expect(host.textContent).not.toContain("普通模式");
-});
-
-it("defers initial fitting while the original pane is hidden", async () => {
-  await click("仅译文");
-  await renderView({ ...defaultTheme, pdfColumnReading: true });
-  expect(adapter.fitColumn).not.toHaveBeenCalled();
-  expect(host.textContent).not.toContain("普通模式");
-  await click("原文译文");
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
-  await click("仅原文");
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
-});
-
-it("enables column reading with the default settings", async () => {
-  await renderView(defaultTheme);
-  expect(adapter.fitColumn).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    fixture.events!.blockFocus?.({
+      id: "p1-b1",
+      page: 1,
+      bounds: { x: 0, y: 0 },
+    } as PDFBlock),
+  );
+  expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "parallel");
 });
 
 it("always follows scrolling in either pane without an unlink control", async () => {
@@ -380,7 +360,7 @@ it("always follows scrolling in either pane without an unlink control", async ()
   await act(async () =>
     fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
   );
-  expect(pane.scrollTop).toBe(100);
+  expect(pane.scrollTop).toBe(0);
   await act(async () => {
     pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 100 }));
     pane.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -388,17 +368,292 @@ it("always follows scrolling in either pane without an unlink control", async ()
   });
   expect(adapter.followBlock).toHaveBeenLastCalledWith({
     blockId: "p1-b1",
-    fraction: 0.25,
+    fraction: 0.55,
   });
 });
 
-it("shows block navigation only while fitted and delegates next/previous paragraphs", async () => {
-  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
-  await act(async () => fixture.events!.columnFit?.(true));
-  await click("下一段");
-  expect(adapter.stepBlock).toHaveBeenLastCalledWith(1);
-  await click("上一段");
-  expect(adapter.stepBlock).toHaveBeenLastCalledWith(-1);
-  await act(async () => fixture.events!.columnFit?.(false));
-  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
+function translationGeometry(height = 200) {
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
+  Object.defineProperties(pane, {
+    clientWidth: { value: 600, configurable: true },
+    clientHeight: { value: 600, configurable: true },
+    scrollHeight: { value: 2400, configurable: true },
+  });
+  pane.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  block.getBoundingClientRect = () =>
+    new DOMRect(40, 600 - pane.scrollTop, 520, height);
+  return { pane, block };
+}
+it("keeps the source reading focus on its translation after hover leaves", async () => {
+  await click("原文译文");
+  const { block } = translationGeometry();
+  await act(async () =>
+    fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 }),
+  );
+  expect(block.hasAttribute("data-focused")).toBe(true);
+  await act(async () =>
+    block.dispatchEvent(
+      new MouseEvent("pointerout", { bubbles: true, relatedTarget: host }),
+    ),
+  );
+  expect(block.hasAttribute("data-focused")).toBe(true);
+  expect(block.querySelector("[data-block-action]")).toBeNull();
+});
+it("smoothly centers clicked translation blocks and follows their original without scroll feedback", async () => {
+  await click("原文译文");
+  const { pane, block } = translationGeometry();
+  vi.useFakeTimers();
+  try {
+    await act(async () => block.click());
+    expect(pane.scrollTop).toBe(0);
+    expect(block.hasAttribute("data-focused")).toBe(true);
+    expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "parallel");
+    const calls = vi.mocked(adapter.focusBlock!).mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120);
+    });
+    expect(pane.scrollTop).toBeGreaterThan(0);
+    expect(pane.scrollTop).toBeLessThan(400);
+    await act(async () => {
+      pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(400);
+    expect(adapter.focusBlock).toHaveBeenCalledTimes(calls);
+    expect(adapter.followBlock).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("top-aligns tall translation blocks and cancels their motion when the user scrolls", async () => {
+  await click("仅译文");
+  const { pane, block } = translationGeometry(800);
+  vi.useFakeTimers();
+  try {
+    await act(async () => block.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(600);
+    expect(adapter.followBlock).not.toHaveBeenCalled();
+    pane.scrollTop = 0;
+    await act(async () => block.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(96);
+    });
+    await act(async () =>
+      pane.dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, deltaY: 30 }),
+      ),
+    );
+    pane.scrollTop = 75;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(75);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("does not treat drags, native selections or interactive controls as block navigation", async () => {
+  await click("原文译文");
+  const { pane, block } = translationGeometry();
+  await act(async () => {
+    block.dispatchEvent(
+      new MouseEvent("pointerdown", {
+        bubbles: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    );
+    block.dispatchEvent(
+      new MouseEvent("pointerup", { bubbles: true, clientX: 40, clientY: 40 }),
+    );
+    block.dispatchEvent(
+      new MouseEvent("click", {
+        bubbles: true,
+        clientX: 40,
+        clientY: 40,
+        detail: 1,
+      }),
+    );
+  });
+  const button = document.createElement("button");
+  block.append(button);
+  await act(async () => button.click());
+  const range = document.createRange();
+  range.selectNodeContents(block.querySelector("p")!);
+  window.getSelection()!.addRange(range);
+  await act(async () => block.click());
+  expect(adapter.followBlock).not.toHaveBeenCalled();
+  expect(pane.scrollTop).toBe(0);
+});
+
+it("moves persistent focus between paragraphs and images, including source-driven changes", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "p1-image",
+      page: 1,
+      label: "chart",
+      text: "",
+      image: "figure.png",
+      bounds: { x: 0.55, y: 0.4, width: 0.3, height: 0.2 },
+    },
+  ]);
+  await click("原文译文");
+  const { pane, block } = translationGeometry();
+  const image = pane.querySelector<HTMLElement>(
+    '[data-translation-block="p1-image"]',
+  )!;
+  image.getBoundingClientRect = () =>
+    new DOMRect(40, 1000 - pane.scrollTop, 520, 200);
+  vi.useFakeTimers();
+  try {
+    await act(async () => block.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(96);
+    });
+    const before = pane.scrollTop;
+    await act(async () => image.querySelector("img")!.click());
+    expect(pane.scrollTop).toBe(before);
+    expect(block.hasAttribute("data-focused")).toBe(false);
+    expect(image.hasAttribute("data-focused")).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(800);
+    expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-image", "parallel");
+    await act(async () => {
+      host
+        .querySelector(".translation-source")!
+        .dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 1 }));
+      fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 });
+    });
+    expect(block.hasAttribute("data-focused")).toBe(true);
+    expect(image.hasAttribute("data-focused")).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("updates translation focus during manual scrolling and cancels animation when the pane closes", async () => {
+  await click("仅译文");
+  const { pane, block } = translationGeometry();
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      pane.dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, deltaY: 30 }),
+      );
+      pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(block.hasAttribute("data-focused")).toBe(true);
+    await act(async () =>
+      block.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(96);
+    });
+    expect(pane.scrollTop).toBeGreaterThan(0);
+    const top = pane.scrollTop;
+    await click("仅原文");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(pane.scrollTop).toBe(top);
+    expect(host.querySelector(".translation-document")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("centers both panels from a source click and recalculates a focused translation after resizing", async () => {
+  await click("原文译文");
+  const { pane, block } = translationGeometry(800);
+  let width = 600,
+    height = 600,
+    blockHeight = 800;
+  Object.defineProperties(pane, {
+    clientWidth: { get: () => width, configurable: true },
+    clientHeight: { get: () => height, configurable: true },
+    scrollWidth: { value: 1600, configurable: true },
+  });
+  pane.getBoundingClientRect = () => new DOMRect(50, 20, width, height);
+  block.getBoundingClientRect = () =>
+    new DOMRect(150 - pane.scrollLeft, 620 - pane.scrollTop, 400, blockHeight);
+  const sourceBlock = {
+    id: "p1-b1",
+    page: 1,
+    bounds: { x: 0.1, y: 0.2, width: 0.4, height: 0.1 },
+  } as PDFBlock;
+  vi.useFakeTimers();
+  try {
+    await act(async () => fixture.events!.blockFocus?.(sourceBlock));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(600); // tall translation top, independent of short original
+    expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "parallel");
+    await act(async () => {
+      fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0.5 });
+      pane.dispatchEvent(new Event("scroll"));
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(pane.scrollTop).toBe(600); // late programmatic events cannot recenter it
+    width = 400;
+    height = 500;
+    blockHeight = 200;
+    await act(async () => block.click());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(pane.scrollTop).toBe(450);
+    expect(pane.scrollLeft).toBe(100);
+    expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
+    expect(adapter.followBlock).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("lets automatic block advance finish through wheel inertia while a new pointer cancels it", async () => {
+  await click("原文译文");
+  const { pane } = translationGeometry();
+  const source = host.querySelector(".translation-source")!;
+  vi.useFakeTimers();
+  try {
+    await act(async () =>
+      fixture.events!.blockFocus?.(
+        { id: "p1-b1", page: 1, bounds: { x: 0, y: 0 } } as PDFBlock,
+        "advance",
+      ),
+    );
+    vi.mocked(adapter.cancelBlockFocus!).mockClear();
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        source.dispatchEvent(
+          new WheelEvent("wheel", { bubbles: true, deltaY: 20 }),
+        );
+        await vi.advanceTimersByTimeAsync(32);
+      }
+    });
+    expect(pane.scrollTop).toBe(400);
+    expect(adapter.cancelBlockFocus).not.toHaveBeenCalled();
+    pane.scrollTop = 0;
+    await act(async () =>
+      fixture.events!.blockFocus?.(
+        { id: "p1-b1", page: 1, bounds: { x: 0, y: 0 } } as PDFBlock,
+        "advance",
+      ),
+    );
+    await act(async () =>
+      source.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })),
+    );
+    expect(adapter.cancelBlockFocus).toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });

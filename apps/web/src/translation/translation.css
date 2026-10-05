@@ -56,7 +56,7 @@
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 32px clamp(16px, 3vw, 44px);
+  padding: max(32px, var(--translation-inset, 32px)) clamp(16px, 3vw, 44px);
   scrollbar-gutter: stable;
   background: var(--background);
   color: var(--foreground);
@@ -224,6 +224,7 @@
   text-decoration: underline 2px #e6b94c;
 }
 
+.translation-document [data-translation-block][data-focused],
 .translation-document [data-translation-block][data-hovered] {
   background: rgb(97 137 113 / 7%);
   border-radius: 4px;
@@ -231,6 +232,7 @@
   box-shadow: 0 0 0 3px rgb(97 137 113 / 3%);
 }
 
+.translation-document [data-translation-block][data-focused],
 .reader-block-hover.reader-block-focus,
 .reader-block-hover[data-block-kind="text"],
 .translation-document [data-block-kind="text"][data-hovered] {
@@ -241,6 +243,7 @@
 .reader-block-hover[data-block-kind="text"] {
   border: 0.5px solid rgb(128 128 128 / 22%);
 }
+.translation-document [data-translation-block][data-focused],
 .translation-document [data-block-kind="text"][data-hovered] {
   outline: 0.5px solid rgb(128 128 128 / 22%);
 }

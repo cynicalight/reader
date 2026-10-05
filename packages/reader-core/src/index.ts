@@ -101,7 +101,6 @@ export interface ReaderTheme {
   margin: number;
   scroll: boolean;
   zoom: number | "width";
-  pdfColumnReading?: boolean;
 }
 export const defaultTheme: ReaderTheme = {
   appearance: "system",
@@ -112,7 +111,6 @@ export const defaultTheme: ReaderTheme = {
   margin: 40,
   scroll: false,
   zoom: "width",
-  pdfColumnReading: true,
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
@@ -134,7 +132,7 @@ export interface ReaderEvents {
   annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   readingAnchor?: (anchor: PDFReadingAnchor) => void;
-  columnFit?: (active: boolean) => void;
+  blockFocus?: (block: PDFBlock, reason?: "advance") => void;
   blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;
   selection: (selection: ReaderSelection | null) => void;
@@ -167,8 +165,8 @@ export interface ReaderAdapter {
     translations: TranslationBlock[],
   ): Promise<PDFSentenceLink[]>;
   stepBlock?(direction: number): Promise<void>;
-  fitColumn?(): Promise<void>;
-  stopColumnFit?(): void;
+  focusBlock?(blockId: string, layout: "source" | "parallel"): Promise<void>;
+  cancelBlockFocus?(): void;
   destroy(): Promise<void>;
 }
 export function locationLabel(location?: DocumentLocation): string {

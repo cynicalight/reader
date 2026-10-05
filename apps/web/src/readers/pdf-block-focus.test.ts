@@ -7,212 +7,257 @@ vi.mock("pdfjs-dist", () => ({
   Util: { transform: (_a: number[], b: number[]) => b },
 }));
 import { PDFReadingNavigation } from "./pdf-navigation";
-
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-const block = (
-  id: string,
-  x: number,
-  y: number,
-  height = 0.2,
-  page = 1,
-): PDFBlock => ({
-  id,
-  page,
-  label: "text",
-  text: id,
-  bounds: { x, y, width: 0.4, height },
-});
 function setup() {
   const host = document.createElement("div");
+  const size = { width: 600, height: 600 };
+  let scale = 1;
   Object.defineProperties(host, {
-    clientWidth: { value: 600 },
-    clientHeight: { value: 600 },
-    scrollWidth: { value: 1600 },
-    scrollHeight: { value: 6000 },
+    clientWidth: { get: () => size.width },
+    clientHeight: { get: () => size.height },
+    scrollWidth: { value: 5000 },
+    scrollHeight: { value: 10000 },
   });
-  host.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
-  const blocks = [
-    block("a", 0.1, 0.2),
-    block("b", 0.1, 0.45),
-    { ...block("image", 0.6, 0.2), text: "", image: "figure.png" },
-    { ...block("footer", 0.1, 0.95, 0.02, 2), label: "footer" },
-    block("last", 0.1, 0.2, 0.2, 3),
+  host.getBoundingClientRect = () =>
+    new DOMRect(30, 50, size.width, size.height);
+  const blocks: PDFBlock[] = [
+    {
+      id: "a",
+      page: 1,
+      label: "text",
+      text: "A",
+      bounds: { x: 0.1, y: 0.2, width: 0.4, height: 0.2 },
+    },
+    {
+      id: "b",
+      page: 1,
+      label: "text",
+      text: "B",
+      bounds: { x: 0.1, y: 0.5, width: 0.8, height: 0.4 },
+    },
+    {
+      id: "image",
+      page: 2,
+      label: "image",
+      text: "",
+      image: "figure.png",
+      bounds: { x: 0.6, y: 0.2, width: 0.2, height: 0.7 },
+    },
+    {
+      id: "footer",
+      page: 2,
+      label: "footer",
+      text: "2",
+      bounds: { x: 0.5, y: 0.95, width: 0.1, height: 0.02 },
+    },
   ];
-  const nodes = [1, 2, 3].map((n) => {
+  const nodes = [0, 1].map((n) => {
     const node = document.createElement("div");
     node.getBoundingClientRect = () =>
       new DOMRect(
-        200 - host.scrollLeft,
-        200 + (n - 1) * 1600 - host.scrollTop,
-        1000,
-        1000,
+        30 +
+          (host.classList.contains("pdf-block-reading") ? size.width / 2 : 0) -
+          host.scrollLeft,
+        50 +
+          (host.classList.contains("pdf-block-reading") ? size.height / 2 : 0) +
+          n * 1300 * scale -
+          host.scrollTop,
+        1000 * scale,
+        1200 * scale,
       );
     return node;
   });
-  const focus = vi.fn();
-  const scaleWrites: string[] = [];
+  const focus = vi.fn(),
+    anchor = vi.fn();
+  const page = vi.fn(
+    async () =>
+      ({ getViewport: () => ({ width: 750, height: 900 }) }) as PDFPageProxy,
+  );
+  const viewer = {
+    currentPageNumber: 1,
+    get currentScale() {
+      return scale;
+    },
+    set currentScaleValue(value: string) {
+      scale = Number(value);
+    },
+    updateScale: vi.fn(({ scaleFactor }: { scaleFactor: number }) => {
+      scale = Math.round(scale * scaleFactor * 100) / 100;
+    }),
+    getPageView: (i: number) => ({ div: nodes[i] }),
+  } as unknown as PDFViewer;
   const nav = new PDFReadingNavigation(
     host,
-    {
-      currentPageNumber: 1,
-      currentScale: 1,
-      set currentScaleValue(value: string) {
-        scaleWrites.push(value);
-      },
-      getPageView: (n: number) => ({ div: nodes[n] }),
-    } as unknown as PDFViewer,
-    async () =>
-      ({
-        getViewport: () => ({ width: 1000, height: 1000, transform: [] }),
-        getTextContent: async () => ({ items: [], styles: {} }),
-      }) as unknown as PDFPageProxy,
-    () => 3,
+    viewer,
+    page,
+    () => 2,
     () => blocks,
-    { location: vi.fn(), selection: vi.fn() },
+    { location: vi.fn(), selection: vi.fn(), readingAnchor: anchor },
     focus,
   );
-  return { host, nav, blocks, focus, scaleWrites };
+  const rect = (id: string) => {
+    const block = blocks.find((b) => b.id === id)!;
+    const r = nodes[block.page - 1].getBoundingClientRect();
+    return new DOMRect(
+      r.left + block.bounds.x * r.width,
+      r.top + block.bounds.y * r.height,
+      block.bounds.width * r.width,
+      block.bounds.height * r.height,
+    );
+  };
+  return { nav, host, size, viewer, page, blocks, focus, rect, anchor };
 }
-async function settled(pending: Promise<unknown>) {
-  await vi.advanceTimersByTimeAsync(600);
-  return pending;
+async function finish(p: Promise<unknown>) {
+  await vi.advanceTimersByTimeAsync(500);
+  return p;
 }
-it("centers the focused paragraph, advances by blocks including images, and skips page furniture", async () => {
-  const { nav, host, focus, scaleWrites } = setup();
+function centered(s: ReturnType<typeof setup>, id: string) {
+  const r = s.rect(id),
+    v = s.host.getBoundingClientRect();
+  expect(r.left + r.width / 2).toBeCloseTo(v.left + v.width / 2);
+  expect(r.top).toBeCloseTo(v.top + Math.max(0, (v.height - r.height) / 2));
+}
+it("smoothly scales and centers from the first click without a mode or an initial jump", async () => {
+  const s = setup();
   try {
-    await settled(nav.fit());
-    expect(host.scrollLeft).toBeCloseTo(200);
-    expect(host.scrollTop).toBe(200);
-    expect(focus).toHaveBeenLastCalledWith("a");
-    const zoom = [...scaleWrites];
-    await settled(nav.stepBlock(1));
-    expect(focus).toHaveBeenLastCalledWith("b");
-    expect(host.scrollTop).toBe(450);
-    await settled(nav.stepBlock(1));
-    expect(focus).toHaveBeenLastCalledWith("image");
-    expect(host.scrollLeft).toBeCloseTo(700);
-    await settled(nav.stepBlock(1));
-    expect(focus).toHaveBeenLastCalledWith("last");
-    await settled(nav.stepBlock(-1));
-    expect(focus).toHaveBeenLastCalledWith("image");
-    expect(scaleWrites).toEqual(zoom);
-    nav.stop();
-    expect(focus).toHaveBeenLastCalledWith(null);
+    const before = s.rect("a");
+    const pending = s.nav.focusBlock("a");
+    expect(s.rect("a")).toEqual(before);
+    await vi.advanceTimersByTimeAsync(16);
+    expect(s.rect("a").top).toBeCloseTo(before.top);
+    expect(s.rect("a").left + s.rect("a").width / 2).toBeCloseTo(
+      before.left + before.width / 2,
+    );
+    await vi.advanceTimersByTimeAsync(96);
+    expect(s.viewer.currentScale).toBeGreaterThan(1);
+    expect(s.viewer.currentScale).toBeLessThan(1.5);
+    await finish(pending);
+    expect(s.viewer.currentScale).toBe(1.5);
+    centered(s, "a");
+    expect(s.focus).toHaveBeenLastCalledWith("a");
   } finally {
-    nav.destroy();
+    s.nav.destroy();
   }
 });
-it("click positioning animates through intermediate positions and top-aligns a tall block", async () => {
-  const { nav, host, blocks, focus } = setup();
+it("remeasures a resized panel on every repeated click and caps automatic zoom at 200 percent", async () => {
+  const s = setup();
   try {
-    await settled(nav.fit());
-    blocks[1].bounds.height = 0.8;
-    nav.focusBlock("b");
-    expect(host.scrollTop).toBe(200);
-    await vi.advanceTimersByTimeAsync(120);
-    expect(host.scrollTop).toBeGreaterThan(200);
-    expect(host.scrollTop).toBeLessThan(650);
-    await vi.advanceTimersByTimeAsync(300);
-    expect(host.scrollTop).toBe(650);
-    expect(host.scrollLeft).toBeCloseTo(200);
-    expect(focus).toHaveBeenLastCalledWith("b");
-    expect(nav.fitted).toBe(true);
+    await finish(s.nav.focusBlock("a", "parallel"));
+    expect(s.viewer.currentScale).toBeCloseTo(1.42);
+    centered(s, "a");
+    s.size.width = 360;
+    await finish(s.nav.focusBlock("a", "parallel"));
+    expect(s.viewer.currentScale).toBeCloseTo(0.82);
+    centered(s, "a");
+    s.size.width = 1400;
+    await finish(s.nav.focusBlock("a", "parallel"));
+    expect(s.viewer.currentScale).toBe(2);
+    centered(s, "a");
+    await finish(s.nav.focusBlock("b", "parallel"));
+    expect(s.viewer.currentScale).toBe(1.71);
+    centered(s, "b");
   } finally {
-    nav.destroy();
+    s.nav.destroy();
   }
 });
-it("switches after a wheel scroll crosses the midpoint, with no inertial cascade", async () => {
-  const { nav, host, focus } = setup();
+it("top-aligns tall images and lets a new click replace an unfinished focus", async () => {
+  const s = setup();
   try {
-    await settled(nav.fit());
-    const wheel = () =>
-      host.dispatchEvent(
-        new WheelEvent("wheel", { deltaY: 30, cancelable: true }),
+    const first = s.nav.focusBlock("a");
+    await vi.advanceTimersByTimeAsync(96);
+    const before = s.rect("image");
+    const second = s.nav.focusBlock("image");
+    expect(s.rect("image")).toEqual(before);
+    await finish(second);
+    await first;
+    centered(s, "image");
+    expect(s.rect("image").top).toBe(50);
+    expect(s.focus).toHaveBeenLastCalledWith("image");
+  } finally {
+    s.nav.destroy();
+  }
+});
+it("cancels pending page geometry on manual zoom and uses fresh dimensions when page loading completes", async () => {
+  const s = setup();
+  try {
+    let release!: (page: PDFPageProxy) => void;
+    s.page.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = s.nav.focusBlock("a", "parallel");
+    s.nav.stop();
+    release({ getViewport: () => ({ width: 750 }) } as PDFPageProxy);
+    await pending;
+    expect(s.viewer.currentScale).toBe(1);
+    expect(s.nav.hasFocus).toBe(false);
+    s.page.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const next = s.nav.focusBlock("a", "parallel");
+    s.size.width = 360;
+    release({ getViewport: () => ({ width: 750 }) } as PDFPageProxy);
+    await finish(next);
+    expect(s.viewer.currentScale).toBe(0.82);
+    centered(s, "a");
+  } finally {
+    s.nav.destroy();
+  }
+});
+it("advances paragraphs at the midpoint including images, skipping footer blocks and inertial repeats", async () => {
+  const s = setup();
+  try {
+    await finish(s.nav.focusBlock("a"));
+    s.host.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 30, cancelable: true }),
+    );
+    s.host.scrollTop += s.rect("a").bottom - 350 + 1;
+    s.host.dispatchEvent(new Event("scroll"));
+    await vi.advanceTimersByTimeAsync(80);
+    for (let i = 0; i < 10; i++) {
+      s.host.dispatchEvent(
+        new WheelEvent("wheel", { deltaY: 20, cancelable: true }),
       );
-    wheel();
-    host.scrollTop = 301; // a bottom is now 299, above midpoint 300.
-    host.dispatchEvent(new Event("scroll"));
-    await vi.advanceTimersByTimeAsync(64);
-    expect(host.scrollTop).toBeGreaterThan(301);
-    for (let i = 0; i < 12; i++) {
-      wheel();
       await vi.advanceTimersByTimeAsync(32);
     }
-    expect(focus).toHaveBeenLastCalledWith("b");
-    expect(host.scrollTop).toBe(450);
-    await vi.advanceTimersByTimeAsync(200);
-    wheel();
-    host.scrollTop = 551;
-    host.dispatchEvent(new Event("scroll"));
-    await vi.advanceTimersByTimeAsync(600);
-    expect(focus).toHaveBeenLastCalledWith("image");
+    expect(s.focus).toHaveBeenLastCalledWith("b");
+    centered(s, "b");
+    await finish(s.nav.stepBlock(1));
+    centered(s, "image");
+    await finish(s.nav.stepBlock(1));
+    expect(s.focus).toHaveBeenLastCalledWith("image");
+    await finish(s.nav.stepBlock(-1));
+    centered(s, "b");
   } finally {
-    nav.destroy();
+    s.nav.destroy();
   }
 });
-it("pointer interruption cancels motion while retaining block mode for the next click", async () => {
-  const { nav, host, focus } = setup();
+it("cancels motion on pointer input and supports clicking again after manual zoom", async () => {
+  const s = setup();
   try {
-    await settled(nav.fit());
-    const pending = nav.stepBlock(1);
-    await vi.advanceTimersByTimeAsync(96);
-    host.dispatchEvent(new MouseEvent("pointerdown"));
-    const from = { left: host.scrollLeft, top: host.scrollTop };
-    nav.focusBlock("image");
-    expect(host.scrollLeft).toBe(from.left);
-    expect(host.scrollTop).toBe(from.top);
-    await vi.advanceTimersByTimeAsync(120);
-    expect(host.scrollLeft).toBeGreaterThan(from.left);
-    expect(host.scrollLeft).toBeLessThan(700);
-    expect(host.scrollTop).toBeLessThan(from.top);
-    expect(host.scrollTop).toBeGreaterThan(200);
-    await settled(pending);
-    expect(nav.fitted).toBe(true);
-    expect(focus).toHaveBeenLastCalledWith("image");
-    expect(host.scrollLeft).toBeCloseTo(700);
-    expect(host.scrollTop).toBe(200);
+    const pending = s.nav.focusBlock("a");
+    await vi.advanceTimersByTimeAsync(80);
+    s.host.dispatchEvent(new Event("pointerdown"));
+    const top = s.host.scrollTop;
+    await finish(pending);
+    expect(s.host.scrollTop).toBe(top);
+    s.nav.stop();
+    await finish(s.nav.focusBlock("b"));
+    centered(s, "b");
+    const last = s.nav.focusBlock("image");
+    s.nav.destroy();
+    await finish(last);
+    expect(s.focus).toHaveBeenLastCalledWith(null);
   } finally {
-    nav.destroy();
-  }
-});
-
-it("cleans up fitting insets when stopped between scale calculation and placement", async () => {
-  const { nav, host, focus } = setup();
-  try {
-    const pending = nav.fit();
-    await vi.advanceTimersByTimeAsync(1);
-    expect(host.classList.contains("pdf-block-reading")).toBe(true);
-    nav.stop();
-    await settled(pending);
-    expect(nav.fitted).toBe(false);
-    expect(host.classList.contains("pdf-block-reading")).toBe(false);
-    expect(focus).toHaveBeenLastCalledWith(null);
-    expect(host.scrollTop).toBe(0);
-  } finally {
-    nav.destroy();
-  }
-});
-it("does not move beyond the first/last block, and ignores reading controls after exit", async () => {
-  const { nav, host, focus } = setup();
-  try {
-    await settled(nav.fit());
-    await settled(nav.stepBlock(-1));
-    expect(focus).toHaveBeenLastCalledWith("a");
-    nav.focusBlock("last");
-    await vi.advanceTimersByTimeAsync(600);
-    const top = host.scrollTop;
-    await settled(nav.stepBlock(1));
-    expect(host.scrollTop).toBe(top);
-    expect(focus).toHaveBeenLastCalledWith("last");
-    nav.stop();
-    expect(nav.focusBlock("a")).toBe(false);
-    await settled(nav.stepBlock(-1));
-    expect(host.scrollTop).toBe(top);
-  } finally {
-    nav.destroy();
+    s.nav.destroy();
   }
 });
