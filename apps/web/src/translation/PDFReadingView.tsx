@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type {
   Annotation,
@@ -37,6 +37,7 @@ export function PDFReadingView({
   blocks,
   processing,
   toolbarHost,
+  pageNavigation,
   onReady,
   events,
 }: {
@@ -46,6 +47,7 @@ export function PDFReadingView({
   blocks: PDFBlock[];
   processing?: Processing;
   toolbarHost?: HTMLElement | null;
+  pageNavigation?: ReactNode;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
@@ -440,6 +442,9 @@ export function PDFReadingView({
   return (
     <div className="pdf-reading" ref={root} data-theme={theme.mode}>
       {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
+      {mode === "translation" && (
+        <div className="pdf-page-navigation">{pageNavigation}</div>
+      )}
       <TranslationPanes
         mode={mode}
         swapped={swapped}
@@ -498,6 +503,9 @@ export function PDFReadingView({
                 },
               }}
             />
+            {mode !== "translation" && (
+              <div className="pdf-page-navigation">{pageNavigation}</div>
+            )}
             {theme.pdfColumnReading && mode !== "translation" && !fitted && (
               <Button
                 className="fit-column"

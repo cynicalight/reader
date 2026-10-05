@@ -661,6 +661,42 @@ export function Workspace({
     a.click();
     URL.revokeObjectURL(url);
   };
+  const pageNavigation = (
+    <div className="page-navigation">
+      <IconButton
+        label="上一页"
+        onClick={() =>
+          void adapter?.previous().catch((e) => toast.error(e.message))
+        }
+      >
+        <ChevronLeft />
+      </IconButton>
+      {doc.type === "pdf" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const page = Number(pageInput);
+            if (Number.isInteger(page) && page > 0) move({ type: "pdf", page });
+          }}
+        >
+          <Input
+            aria-label="跳转 PDF 页码"
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            className="h-7 w-14 text-center"
+          />
+        </form>
+      ) : null}
+      <IconButton
+        label="下一页"
+        onClick={() =>
+          void adapter?.next().catch((e) => toast.error(e.message))
+        }
+      >
+        <ChevronRight />
+      </IconButton>
+    </div>
+  );
   return (
     <div className="workspace">
       <header className="reader-toolbar">
@@ -695,41 +731,7 @@ export function Workspace({
             </Button>
           )}
           {doc.type === "pdf" && <div ref={setPDFToolbar} />}
-          <div className="page-navigation">
-            <IconButton
-              label="上一页"
-              onClick={() =>
-                void adapter?.previous().catch((e) => toast.error(e.message))
-              }
-            >
-              <ChevronLeft />
-            </IconButton>
-            {doc.type === "pdf" ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const page = Number(pageInput);
-                  if (Number.isInteger(page) && page > 0)
-                    move({ type: "pdf", page });
-                }}
-              >
-                <Input
-                  aria-label="跳转 PDF 页码"
-                  value={pageInput}
-                  onChange={(e) => setPageInput(e.target.value)}
-                  className="h-7 w-14 text-center"
-                />
-              </form>
-            ) : null}
-            <IconButton
-              label="下一页"
-              onClick={() =>
-                void adapter?.next().catch((e) => toast.error(e.message))
-              }
-            >
-              <ChevronRight />
-            </IconButton>
-          </div>
+          {doc.type !== "pdf" && pageNavigation}
           <span className="toolbar-divider" />
           <IconButton
             label="目录与搜索"
@@ -1001,6 +1003,7 @@ export function Workspace({
                   blocks={blocks}
                   processing={processing}
                   toolbarHost={pdfToolbar}
+                  pageNavigation={pageNavigation}
                   onReady={(engine, items) => {
                     setAdapter(engine);
                     setTOC(items);
