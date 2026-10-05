@@ -52,3 +52,10 @@ EasyRead 的原页面板采用图片；Reader 保留 PDF.js 的真实文字选�
 
 重点覆盖翻译中断恢复、失败重试、来源变更、句子范围、同步回环、分栏阅读顺序及惯性边界。
 完成 `pnpm typecheck`、`pnpm test`、`pnpm build`。不使用浏览器自动化进行视觉验收；用真实双栏和混排论文手动检查。
+
+## 原文块修复
+
+- 文字坐标统一使用有效的字体 ascent；为零或无效时依次使用有效 descent 和 0.8 的回退值。正文提取和前端句子定位共用这条规则。
+- 同一栏中互不重叠的块按上下位置约束排序；跨栏部分保留模型顺序，全宽区域约束两侧。排序不改变现有缓存的 block ID、矩形和图片引用。
+- `node apps/processor/dist/repair-text.mjs --input PDF --manifest 原缓存/manifest.json --output 空目录` 可生成修复候选，不重新调用 Paddle，也不覆盖原缓存。输入 PDF 必须匹配原 manifest 的 SHA256。
+- 发布候选前停止对应 Reader 实例，备份原 `manifest.json` 和 `paper.md`，核对 ID、矩形和资源引用不变，再替换这两个文件。原笔记、图表解释和历史译文保留。重启后按原文 hash 复用未变化的译文，变化的段落进入现有后台翻译队列；旧译文上的标注不会错误贴到新版本文字。

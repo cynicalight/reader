@@ -1,3 +1,4 @@
+import { orderPageBlocks } from "./reading-order";
 export const labels = [
   "abstract",
   "algorithm",
@@ -236,7 +237,9 @@ export function readingRegions(
       members: members.map((r) => r.order),
     });
   }
-  return [...entries.filter((r) => !consumed.has(r)), ...merged].sort(
-    (a, b) => a.order - b.order,
+  return orderPageBlocks(
+    [...entries.filter((r) => !consumed.has(r)), ...merged].sort(
+      (a, b) => a.order - b.order,
+    ),
   );
 }

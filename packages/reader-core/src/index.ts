@@ -263,3 +263,5 @@ export interface AgentModel {
 }
 
 export { isPDFPageDecoration } from "./pdf-content";
+
+export { pdfFontAscent } from "./pdf-text";

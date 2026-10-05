@@ -1,3 +1,4 @@
+import { pdfFontAscent } from "@reader/core";
 import { expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { readingColumns, type TextRun } from "./pdf-reading";
@@ -31,7 +32,7 @@ it("detects body columns in the checked-in Oze paper before any AI call", async 
             bounds: {
               x: t[4] / viewport.width,
               y:
-                (t[5] - h * (content.styles[item.fontName]?.ascent ?? 0.8)) /
+                (t[5] - h * pdfFontAscent(content.styles[item.fontName])) /
                 viewport.height,
               width: Math.abs(item.width) / viewport.width,
               height: h / viewport.height,

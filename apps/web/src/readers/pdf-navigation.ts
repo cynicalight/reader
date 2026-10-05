@@ -1,7 +1,7 @@
 import { animatePDFScroll } from "./pdf-scroll";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
-import { isPDFPageDecoration } from "@reader/core";
+import { isPDFPageDecoration, pdfFontAscent } from "@reader/core";
 import type {
   PDFBlock,
   PDFReadingAnchor,
@@ -120,7 +120,7 @@ export class PDFReadingNavigation {
                 bounds: {
                   x: tr[4] / viewport.width,
                   y:
-                    (tr[5] - h * (text.styles[item.fontName]?.ascent ?? 0.8)) /
+                    (tr[5] - h * pdfFontAscent(text.styles[item.fontName])) /
                     viewport.height,
                   width: Math.abs(item.width) / viewport.width,
                   height: h / viewport.height,

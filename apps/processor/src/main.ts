@@ -10,12 +10,12 @@ import {
   readingRegions,
   isAsset,
   type Region,
-  type TextSpan,
 } from "./layout";
+import { extractTextSpans } from "./text";
 import { digest, model, resolveModel } from "./model";
 
 Object.assign(globalThis, { DOMMatrix, ImageData, Path2D });
-const { getDocument, Util } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
 const require = createRequire(import.meta.url);
 const assets = dirname(require.resolve("pdfjs-dist/package.json"));
 const pdfRequire = createRequire(require.resolve("pdfjs-dist/package.json"));
@@ -135,24 +135,7 @@ try {
       canvas.height,
     );
     for (const tensor of Object.values(result)) tensor.dispose();
-    const content = await page.getTextContent();
-    const spans: TextSpan[] = [];
-    for (const item of content.items) {
-      if (!("str" in item) || !item.str.trim()) continue;
-      const transform = Util.transform(viewport.transform, item.transform);
-      const height = Math.hypot(transform[2], transform[3]);
-      // Text transform points at the baseline. Font ascent gives the visible top.
-      const ascent = content.styles[item.fontName]?.ascent ?? 0.8;
-      spans.push({
-        text: item.str,
-        bounds: {
-          x: transform[4] / canvas.width,
-          y: (transform[5] - height * ascent) / canvas.height,
-          width: Math.abs(item.width * scale) / canvas.width,
-          height: height / canvas.height,
-        },
-      });
-    }
+    const spans = await extractTextSpans(page, scale);
     if (!spans.length) incompletePages.push(number);
     if (!spans.length)
       warnings.push(`第 ${number} 页无可提取文字；尚未接入 OCR，正文不完整。`);
@@ -251,6 +234,7 @@ try {
   }
   const manifest = {
     schemaVersion: 1,
+    textExtractionVersion: 2,
     inputSHA256: await digest(input),
     model,
     pages: pdf.numPages,
