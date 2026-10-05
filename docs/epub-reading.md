@@ -32,10 +32,14 @@ EPUB 在现有原文阅读区显示。目录、翻页、滚动、字体和主题
 在本 worktree 的 macOS 环境完成：
 
 - `pnpm typecheck`：通过。
-- `pnpm test`：Go 全套通过；Vitest 51 个文件通过、1 个文件跳过，227 个用例通过、3 个跳过。
+- `pnpm test`：Go 全套通过；Vitest 51 个文件通过、1 个文件跳过，229 个用例通过、3 个跳过。
 - `pnpm build`：Go、processor、web、Electron 构建通过。仍有现有依赖的纯函数注释与大 chunk 提示。
 - 隔离书库的真实 HTTP 检查：导入验收 EPUB、读取 3 个章节及 positions、给第二处重复句保存笔记、读取并恢复到第二处、保存阅读位置、删除批注均通过；预览页面 HTTP 200。
 - Go 回归覆盖完整 Locator 数据库关闭重开后保持不变及删除；前端覆盖元素边界、重复引用、失效路径、精确导航、键盘选区、删除期间的延迟请求。
+
+修复了预览空白：旧 `positions.json` 缺少 `total`，shared 2.6.0 的 `positionsFromManifest()` 会返回空列表，Navigator 因此无法创建章节 iframe。导入时写入总数，资源接口也为旧缓存补齐总数，不改动进度和笔记。适配器现在拒绝空位置列表，并报告 Navigator 打开失败。
+
+用户提供的本地 `docs/MAKE.epub` 已导入隔离预览书库。真实 HTTP + 已安装 Readium shared/FrameBlobBuilder 检查通过：319 个位置、127 个章节均可构建为合法 XHTML；原测试书的 3 个位置和 3 个章节也通过。此项检查未执行 iframe 内脚本或浏览器排版，不能代替视觉验收。本地书籍文件不随代码提交。
 
 未执行浏览器自动化或桌面视觉验收。
 

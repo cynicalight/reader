@@ -404,6 +404,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     });
     const positions = await this.publication.positionsFromManifest();
     if (this.disposed) return;
+    if (!positions.length) throw new Error("EPUB 阅读位置为空，无法打开正文");
     const listeners: EpubNavigatorListeners = {
       frameLoaded: this.bindFrame,
       positionChanged: (locator) => {
@@ -481,7 +482,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       "annotations",
       this.annotationObserver,
     );
-    await this.navigator.load();
+    const loaded = await this.navigator.load();
+    if (!this.disposed && !loaded)
+      throw new Error("EPUB 正文加载失败，请重新打开这本书");
   }
   async getTOC(): Promise<TOCItem[]> {
     const map = (items: Link[], prefix = ""): TOCItem[] =>

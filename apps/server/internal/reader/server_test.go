@@ -143,6 +143,56 @@ func TestLibraryRoundTrip(t *testing.T) {
 		t.Fatalf("library: %v %v", docs, e)
 	}
 }
+func TestEPUBPositionsIncludeTotal(t *testing.T) {
+	s := testServer(t)
+	w := upload(t, s, "the-art-of-reading.epub", sample(t, "the-art-of-reading.epub"))
+	if w.Code != 201 {
+		t.Fatalf("import: %s", w.Body.String())
+	}
+	var doc Document
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(s.Store.Root, "cache", doc.ID, "positions.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cached struct {
+		Total     int               `json:"total"`
+		Positions []json.RawMessage `json:"positions"`
+	}
+	if err := json.Unmarshal(data, &cached); err != nil {
+		t.Fatal(err)
+	}
+	if cached.Total == 0 || cached.Total != len(cached.Positions) {
+		t.Errorf("invalid cached position count: %s", data)
+	}
+	// Previously imported books have no total. Serve them without reimporting or
+	// changing their persisted progress and annotations.
+	legacy, err := json.Marshal(map[string]any{"positions": cached.Positions})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+	w = request(t, s, "GET", "/pub/test-secret/"+doc.ID+"/positions.json", nil)
+	var served struct {
+		Total     int               `json:"total"`
+		Positions []json.RawMessage `json:"positions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &served); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || served.Total == 0 || served.Total != len(served.Positions) {
+		t.Fatalf("invalid served position count: %s", w.Body.String())
+	}
+	if len(served.Positions) != len(cached.Positions) {
+		t.Fatal("positions changed")
+	}
+}
+
 func TestAuthBoundaries(t *testing.T) {
 	s := testServer(t)
 	for _, test := range []struct {

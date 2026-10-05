@@ -13,6 +13,7 @@ const bridge = vi.hoisted(() => ({
   observer: undefined as DecorationObserver | undefined,
   apply: vi.fn(),
   go: vi.fn(),
+  load: vi.fn(),
 }));
 vi.mock("@readium/navigator", () => ({
   DecorationLayout: { Boxes: "boxes" },
@@ -38,7 +39,9 @@ vi.mock("@readium/navigator", () => ({
         locator: payload().locator,
       } as ReturnType<typeof payload>);
     }
-    async load() {}
+    async load() {
+      return bridge.load();
+    }
     async destroy() {}
     registerDecorationObserver(_group: string, observer: DecorationObserver) {
       bridge.observer = observer;
@@ -75,6 +78,7 @@ beforeEach(async () => {
   activated.mockClear();
   bridge.apply.mockClear();
   bridge.go.mockClear();
+  bridge.load.mockReturnValue(true);
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -95,9 +99,13 @@ beforeEach(async () => {
       }),
     }),
   );
-  vi.spyOn(Publication.prototype, "positionsFromManifest").mockResolvedValue(
-    [],
-  );
+  vi.spyOn(Publication.prototype, "positionsFromManifest").mockResolvedValue([
+    Locator.deserialize({
+      href: "chapter.xhtml",
+      type: "application/xhtml+xml",
+      locations: { position: 1 },
+    })!,
+  ]);
   host = document.createElement("div");
   document.body.append(host);
   adapter = new EPUBReaderAdapter(host, {
@@ -328,4 +336,21 @@ it("captures keyboard selections through the Readium frame event path", () => {
     expect.objectContaining({ text: "Selected passage" }),
   );
   expect(adapter.getSelection()?.location.type).toBe("epub");
+});
+
+it("rejects an empty Readium position list before creating a navigator", async () => {
+  vi.mocked(Publication.prototype.positionsFromManifest).mockResolvedValueOnce(
+    [],
+  );
+  bridge.load.mockClear();
+  await expect(
+    adapter.open({ id: "test", type: "epub" } as ReaderDocument),
+  ).rejects.toThrow("EPUB 阅读位置为空");
+  expect(bridge.load).not.toHaveBeenCalled();
+});
+it("reports a failed navigator load instead of displaying an empty reader", async () => {
+  bridge.load.mockReturnValueOnce(false);
+  await expect(
+    adapter.open({ id: "test", type: "epub" } as ReaderDocument),
+  ).rejects.toThrow("EPUB 正文加载失败");
 });

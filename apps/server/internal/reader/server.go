@@ -616,6 +616,19 @@ func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, m)
 		return
 	}
+	if name == "positions.json" {
+		data, err := os.ReadFile(filepath.Join(cache, name))
+		var list struct {
+			Positions []json.RawMessage `json:"positions"`
+		}
+		if err != nil || json.Unmarshal(data, &list) != nil || len(list.Positions) == 0 {
+			fail(w, 404, "EPUB 阅读位置不可用")
+			return
+		}
+		// Older caches omitted total, which Readium requires to load positions.
+		respond(w, 200, map[string]any{"total": len(list.Positions), "positions": list.Positions})
+		return
+	}
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext == ".js" {
 		http.NotFound(w, r)
