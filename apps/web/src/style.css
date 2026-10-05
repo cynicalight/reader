@@ -1745,6 +1745,7 @@ kbd {
   gap: 16px;
 }
 .tag-board-card {
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1755,8 +1756,19 @@ kbd {
   border-radius: 12px;
   box-shadow: 0 2px 5px #00000005;
 }
+.tag-board-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tag-board-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
 .tag-board-title {
-  width: 100%;
+  flex: 1;
   min-width: 0;
   justify-content: flex-start;
   padding-inline: 0;
@@ -1790,4 +1802,8 @@ kbd {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.library-topbar > .search-field {
+  width: min(280px, 45%);
 }

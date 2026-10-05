@@ -321,13 +321,7 @@ export function App() {
                           : "我的文档"}
                   </h1>
                 </div>
-                <Button onClick={chooseFiles} disabled={busy}>
-                  {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-                  {busy ? "导入中…" : "导入文档"}
-                </Button>
-              </header>
-              <div className="library-content">
-                <div className="library-controls">
+                {filter === "tags" ? (
                   <div className="search-field">
                     <Search className="size-4" />
                     <Input
@@ -337,7 +331,27 @@ export function App() {
                       onChange={(e) => setQuery(e.target.value)}
                     />
                   </div>
-                </div>
+                ) : (
+                  <Button onClick={chooseFiles} disabled={busy}>
+                    {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+                    {busy ? "导入中…" : "导入文档"}
+                  </Button>
+                )}
+              </header>
+              <div className="library-content">
+                {filter !== "tags" && (
+                  <div className="library-controls">
+                    <div className="search-field">
+                      <Search className="size-4" />
+                      <Input
+                        aria-label="搜索书库"
+                        placeholder="搜索标题、作者、标签…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
                 {filter !== "tags" && (
                   <LibraryFilterBar
                     documents={documents}

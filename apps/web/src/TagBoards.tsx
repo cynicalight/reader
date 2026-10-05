@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  ArrowUpRight,
   LayoutGrid,
   List,
   Pencil,
@@ -249,17 +248,48 @@ export function TagBoards({
                       <ContextMenuTrigger
                         render={<article />}
                         className="tag-board-card"
+                        onClick={(event) => {
+                          if (
+                            !(event.target as Element).closest(
+                              ".tag-board-actions button",
+                            )
+                          )
+                            choose(board);
+                        }}
                       >
-                        <Button
-                          variant="ghost"
-                          className="tag-board-title"
-                          title={board.name}
-                          onClick={() => choose(board)}
-                        >
-                          <Tags />
-                          <span>{board.name}</span>
-                          <ArrowUpRight />
-                        </Button>
+                        <div className="tag-board-card-header">
+                          <Button
+                            variant="ghost"
+                            className="tag-board-title"
+                            title={board.name}
+                          >
+                            <Tags />
+                            <span>{board.name}</span>
+                          </Button>
+                          <div className="tag-board-actions">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`编辑看板 ${board.name}`}
+                              onClick={() =>
+                                setEditor({
+                                  ...board,
+                                  tags: board.tags.map((t) => t.toLowerCase()),
+                                })
+                              }
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`删除看板 ${board.name}`}
+                              onClick={() => setRemoving(board)}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </div>
                         <div className="document-badges">
                           {board.tags.map((tag) => (
                             <Badge key={tag.toLowerCase()} variant="secondary">
@@ -281,29 +311,6 @@ export function TagBoards({
                           ))}
                           {!matches.length && <li>暂无匹配文档</li>}
                         </ul>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`编辑看板 ${board.name}`}
-                            onClick={() =>
-                              setEditor({
-                                ...board,
-                                tags: board.tags.map((t) => t.toLowerCase()),
-                              })
-                            }
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`删除看板 ${board.name}`}
-                            onClick={() => setRemoving(board)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
                       </ContextMenuTrigger>
                       <ContextMenuContent>
                         <ContextMenuItem
