@@ -30,7 +30,7 @@ async function startServer() {
   } catch {
     dialog.showErrorBox(
       "无法应用系统代理",
-      "无法读取系统代理，或当前使用了暂不支持的 PAC/自动代理规则。本次保留原有网络环境，Agent 连接可能不可用。请使用手动系统代理后重启 Reader。",
+      "无法读取系统代理，或代理地址、自动配置、直连例外规则暂不受支持。本次保留原有网络环境，Agent 连接可能不可用。请检查手动系统代理后重启 Reader。",
     );
   }
   serverToken = randomBytes(32).toString("hex");

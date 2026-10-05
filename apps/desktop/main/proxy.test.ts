@@ -102,7 +102,7 @@ describe("system proxy environment", () => {
 
   it("preserves other platforms' environment", async () => {
     const parent = { HTTPS_PROXY: "http://existing:7890" };
-    expect(await childProxyEnvironment(parent, "win32")).toEqual(parent);
+    expect(await childProxyEnvironment(parent, "linux")).toEqual(parent);
   });
 
   it("passes resolved proxies through the server process to its CLI child", () => {

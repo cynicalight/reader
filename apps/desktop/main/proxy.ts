@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readWindowsProxySettings } from "./windows-proxy";
 
 const execFileAsync = promisify(execFile);
 // Use the native dictionary, not scutil's human-readable output. This does not
@@ -17,8 +18,8 @@ export function systemProxyEnvironment(
   if (config.ProxyAutoConfigEnable || config.ProxyAutoDiscoveryEnable)
     throw new Error("暂不支持将 PAC 或自动发现代理传递给 Agent CLI");
   const env = { ...inherited };
-  for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"])
-    for (const name of [key, key.toLowerCase()]) delete env[name];
+  for (const key of Object.keys(env))
+    if (/^(http|https|all|no)_proxy$/i.test(key)) delete env[key];
   env.NO_PROXY = env.no_proxy = "localhost,127.0.0.1,::1";
   // Disabled proxy settings may still retain old hosts and exception rules.
   if (!config.HTTPEnable && !config.HTTPSEnable && !config.SOCKSEnable)
@@ -73,6 +74,11 @@ export async function childProxyEnvironment(
   inherited: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform,
 ): Promise<NodeJS.ProcessEnv> {
+  if (platform === "win32")
+    return systemProxyEnvironment(
+      inherited,
+      await readWindowsProxySettings(inherited),
+    );
   if (platform !== "darwin") return { ...inherited };
   const { stdout } = await execFileAsync(
     "/usr/bin/osascript",
