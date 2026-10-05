@@ -52,8 +52,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
     private events: ReaderEvents,
   ) {
     container.classList.add("pdf-container");
-    this.blocks = new PDFBlockOverlay(container, (block, action) =>
-      this.events.blockAction?.(block, action),
+    this.blocks = new PDFBlockOverlay(
+      container,
+      (block, action) => this.events.blockAction?.(block, action),
+      (block) => this.events.blockHover?.(block),
     );
     const viewer = document.createElement("div");
     viewer.className = "pdfViewer";
@@ -90,6 +92,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.bus.on("pagerendered", () => {
       this.paintHighlights();
       this.navigation.repaint();
+      this.blocks.repaint();
     });
     this.bus.on("textlayerrendered", () => this.navigation.repaint());
     document.addEventListener("mouseup", this.onMouseUp);
@@ -503,6 +506,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.navigation.focusSentences(blockId, sources, scroll);
+  }
+  hoverBlock(blockId: string | null) {
+    this.blocks.setLinkedBlock(blockId);
   }
   focusPassages(passages: import("@reader/core").PDFPassage[], scroll = false) {
     return this.navigation.focusPassages(passages, scroll);

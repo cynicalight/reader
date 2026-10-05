@@ -121,3 +121,45 @@ it("attaches clicks, keeps action buttons interactive, and does not attach drags
   host.remove();
   vi.unstubAllGlobals();
 });
+
+it("reports source hover and paints a passive counterpart without feeding hover back", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="2"><span>Text</span></div>';
+  const page = host.firstElementChild as HTMLElement;
+  page.getBoundingClientRect = () => new DOMRect(10, 20, 1000, 1400);
+  const hover = vi.fn();
+  const layer = new PDFBlockOverlay(host, vi.fn(), hover);
+  layer.setBlocks([block]);
+  const target = page.firstElementChild!;
+  await act(async () =>
+    target.dispatchEvent(
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 210,
+        clientY: 440,
+      }),
+    ),
+  );
+  expect(hover).toHaveBeenLastCalledWith(block);
+  host.dispatchEvent(new Event("pointerleave"));
+  expect(hover).toHaveBeenLastCalledWith(null);
+  hover.mockClear();
+  layer.setLinkedBlock(block.id);
+  const counterpart = page.querySelector<HTMLElement>(
+    ".reader-block-counterpart",
+  )!;
+  expect(counterpart.dataset.blockId).toBe(block.id);
+  expect(counterpart.style.left).toBe("10%");
+  expect(counterpart.style.height).toBe("40%");
+  expect(counterpart.children).toHaveLength(0);
+  expect(hover).not.toHaveBeenCalled();
+  counterpart.remove();
+  layer.repaint();
+  expect(page.contains(counterpart)).toBe(true);
+  layer.setLinkedBlock(null);
+  expect(page.contains(counterpart)).toBe(false);
+  await act(async () => layer.destroy());
+  vi.unstubAllGlobals();
+});

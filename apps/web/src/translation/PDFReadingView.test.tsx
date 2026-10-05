@@ -63,6 +63,7 @@ const adapter = {
   stopColumnFit: vi.fn(),
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
+  hoverBlock: vi.fn(),
 } as unknown as ReaderAdapter;
 vi.mock("../ReaderView", () => ({
   ReaderView: ({
@@ -245,4 +246,39 @@ it("renders an incoming paragraph while the subscription remains open", async ()
   await act(async () => fixture.push!({ event: "translation", data: block }));
   expect(host.textContent).toContain("第一句。");
   expect(fixture.signal!.aborted).toBe(false);
+});
+
+it("links block hover in both directions and clears it without changing sentence selections", async () => {
+  await click("原文译文");
+  vi.mocked(adapter.focusSentences!).mockClear();
+  await act(async () =>
+    fixture.events!.blockHover?.({
+      id: "p1-b1",
+    } as import("@reader/core").PDFBlock),
+  );
+  const block = host.querySelector<HTMLElement>(
+    '[data-translation-block="p1-b1"]',
+  )!;
+  expect(block.hasAttribute("data-hovered")).toBe(true);
+  await act(async () => fixture.events!.blockHover?.(null));
+  expect(block.hasAttribute("data-hovered")).toBe(false);
+  await act(async () =>
+    block.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })),
+  );
+  expect(adapter.hoverBlock).toHaveBeenLastCalledWith("p1-b1");
+  expect(block.hasAttribute("data-hovered")).toBe(true);
+  await act(async () =>
+    block.dispatchEvent(
+      new MouseEvent("pointerout", { bubbles: true, relatedTarget: host }),
+    ),
+  );
+  expect(adapter.hoverBlock).toHaveBeenLastCalledWith(null);
+  expect(block.hasAttribute("data-hovered")).toBe(false);
+  expect(adapter.focusSentences).not.toHaveBeenCalled();
+  expect(adapter.clearSelection).not.toHaveBeenCalled();
+  await act(async () =>
+    block.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })),
+  );
+  await click("仅原文");
+  expect(adapter.hoverBlock).toHaveBeenLastCalledWith(null);
 });

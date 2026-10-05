@@ -118,6 +118,7 @@ export interface PDFSentenceLink {
   sentenceIndexes: number[];
 }
 export interface ReaderEvents {
+  blockHover?: (block: PDFBlock | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
   readingAnchor?: (anchor: PDFReadingAnchor) => void;
   columnFit?: (active: boolean) => void;
@@ -139,6 +140,7 @@ export interface ReaderAdapter {
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;
   setBlocks?(blocks: PDFBlock[]): void;
+  hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
   focusSentences?(

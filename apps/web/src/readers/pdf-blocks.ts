@@ -29,6 +29,9 @@ export class PDFBlockOverlay {
   private overlay: HTMLDivElement;
   private root: Root;
   private active?: PDFBlock;
+  private hovered?: string;
+  private linkedId: string | null = null;
+  private linked = document.createElement("div");
   private pressed?: { id: string; x: number; y: number };
   constructor(
     private host: HTMLElement,
@@ -36,10 +39,13 @@ export class PDFBlockOverlay {
       block: PDFBlock,
       action: PDFBlockAction,
     ) => void = () => {},
+    private onHover: (block: PDFBlock | null) => void = () => {},
   ) {
     this.overlay = document.createElement("div");
     this.overlay.className = "reader-block-hover";
     this.root = createRoot(this.overlay);
+    this.linked.className = "reader-block-hover reader-block-counterpart";
+    this.linked.setAttribute("aria-hidden", "true");
     host.addEventListener("pointermove", this.move);
     host.addEventListener("pointerleave", this.clear);
     host.addEventListener("pointerdown", this.press);
@@ -50,10 +56,15 @@ export class PDFBlockOverlay {
   setBlocks(blocks: PDFBlock[]) {
     this.blocks = blocks;
     this.clear();
+    this.repaint();
   }
   clear = () => {
     this.pressed = undefined;
     this.overlay.remove();
+    if (this.hovered) {
+      this.hovered = undefined;
+      this.onHover(null);
+    }
   };
   private press = (event: PointerEvent) => {
     this.pressed = undefined;
@@ -136,9 +147,37 @@ export class PDFBlockOverlay {
     });
     this.overlay.dataset.blockId = block.id;
     if (this.overlay.parentElement !== page) page.append(this.overlay);
+    if (this.hovered !== block.id) {
+      this.hovered = block.id;
+      this.onHover(block);
+    }
   };
+  setLinkedBlock(blockId: string | null) {
+    if (this.linkedId === blockId) return;
+    this.linkedId = blockId;
+    this.repaint();
+  }
+  repaint() {
+    this.linked.remove();
+    const block = this.blocks.find((b) => b.id === this.linkedId);
+    if (!block) return;
+    const page = this.host.querySelector<HTMLElement>(
+      `.page[data-page-number="${block.page}"]`,
+    );
+    if (!page) return;
+    const b = block.bounds;
+    Object.assign(this.linked.style, {
+      left: `${b.x * 100}%`,
+      top: `${b.y * 100}%`,
+      width: `${b.width * 100}%`,
+      height: `${b.height * 100}%`,
+    });
+    this.linked.dataset.blockId = block.id;
+    page.append(this.linked);
+  }
   destroy() {
     this.clear();
+    this.linked.remove();
     this.root.unmount();
     this.host.removeEventListener("pointermove", this.move);
     this.host.removeEventListener("pointerleave", this.clear);

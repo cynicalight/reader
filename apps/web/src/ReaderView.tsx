@@ -58,6 +58,9 @@ export function ReaderView({
         zoom: (zoom) => {
           if (!disposed) latest.current.events.zoom?.(zoom);
         },
+        blockHover: (block) => {
+          if (!disposed) latest.current.events.blockHover?.(block);
+        },
         blockAction: (block, action) => {
           if (!disposed) latest.current.events.blockAction?.(block, action);
         },

@@ -56,6 +56,18 @@ export function PDFReadingView({
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>(),
     [linked, setLinked] = useState<Record<string, number[]>>();
   const [engine, setEngine] = useState<ReaderAdapter>();
+  const [hoveredBlock, setHoveredBlock] = useState<string>();
+  const hoverOwner = useRef<"source" | "translation" | undefined>(undefined);
+  const hover = (origin: "source" | "translation", blockId?: string) => {
+    if (!blockId && hoverOwner.current !== origin) return;
+    hoverOwner.current = blockId ? origin : undefined;
+    setHoveredBlock(blockId);
+    engine?.hoverBlock?.(
+      mode === "parallel" && origin === "translation"
+        ? (blockId ?? null)
+        : null,
+    );
+  };
   const previousMode = useRef<Mode>("source");
   const root = useRef<HTMLDivElement>(null),
     pane = useRef<HTMLDivElement>(null),
@@ -219,6 +231,9 @@ export function PDFReadingView({
   };
   useEffect(() => {
     if (!engine) return;
+    hoverOwner.current = undefined;
+    setHoveredBlock(undefined);
+    engine.hoverBlock?.(null);
     const previous = previousMode.current;
     previousMode.current = mode;
     let cancelled = false;
@@ -246,6 +261,7 @@ export function PDFReadingView({
     return () => {
       cancelled = true;
       engine.stopColumnFit?.();
+      engine.hoverBlock?.(null);
     };
   }, [mode, engine]);
   useEffect(() => () => cancelAnimationFrame(scrollFrame.current), []);
@@ -476,6 +492,9 @@ export function PDFReadingView({
                 if (state.current.sync && state.current.mode === "parallel")
                   followTranslation(anchor);
               },
+              blockHover: (block) => {
+                if (mode === "parallel") hover("source", block?.id);
+              },
               blockAction: (block, action) => {
                 if (action !== "translate") {
                   events.blockAction?.(block, action);
@@ -513,10 +532,15 @@ export function PDFReadingView({
             ref={pane}
             tabIndex={0}
             aria-label="论文译文"
-            onScroll={translatedScroll}
+            onScroll={() => {
+              hover("translation");
+              translatedScroll();
+            }}
+            onPointerLeave={() => hover("translation")}
             onWheelCapture={() => input("translation")}
             onPointerDownCapture={() => {
               input("translation");
+              hover("translation");
               selecting.current = true;
               selection.current = null;
               events.selection(null);
@@ -562,6 +586,16 @@ export function PDFReadingView({
                   key={block.id}
                   data-translation-block={block.id}
                   data-label={block.label}
+                  data-hovered={hoveredBlock === block.id || undefined}
+                  onPointerEnter={(event) => {
+                    if (!event.buttons && !selecting.current)
+                      hover("translation", block.id);
+                  }}
+                  onPointerMove={(event) => {
+                    if (!event.buttons && !selecting.current)
+                      hover("translation", block.id);
+                  }}
+                  onPointerLeave={() => hover("translation")}
                   className={noteIndexes.length ? "translation-annotated" : ""}
                 >
                   <TranslationText
