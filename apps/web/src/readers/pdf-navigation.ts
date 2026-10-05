@@ -1,3 +1,4 @@
+import { animatePDFScroll } from "./pdf-scroll";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { isPDFPageDecoration } from "@reader/core";
@@ -39,17 +40,67 @@ export class PDFReadingNavigation {
     private blocks: () => PDFBlock[],
     private events: ReaderEvents,
   ) {
+    host.addEventListener("pointerdown", this.interrupt);
     host.addEventListener("scroll", this.scrolled, { passive: true });
     host.addEventListener("wheel", this.wheel, { passive: false });
   }
   get fitted() {
     return this.active;
   }
-  relocated() {
-    this.operation++;
-    this.moving = false;
-    this.lastLeft = this.host.scrollLeft;
+  private interrupt = () => {
+    if (this.moving) this.stop();
+  };
+  private async moveTo(left: number, top: number, operation: number) {
+    this.moving = true;
+    try {
+      await animatePDFScroll(
+        this.host,
+        left,
+        top,
+        () => this.disposed || operation !== this.operation,
+        () => {
+          this.lastLeft = this.host.scrollLeft;
+        },
+      );
+    } finally {
+      if (operation === this.operation) {
+        this.moving = false;
+        this.scrolled();
+      }
+    }
+  }
+  async goTo(page: number, point?: { x: number; y: number }) {
+    const operation = ++this.operation;
+    if (this.active) {
+      const columns = await this.columns(page);
+      if (this.disposed || operation !== this.operation) return false;
+      if (columns.length) {
+        const index = point
+          ? Math.max(
+              0,
+              columns.findIndex(
+                (b) =>
+                  point.x >= b.x &&
+                  point.x <= b.x + b.width &&
+                  point.y >= b.y &&
+                  point.y <= b.y + b.height,
+              ),
+            )
+          : 0;
+        return this.place(page, index, columns[index], false, point?.y);
+      }
+    }
+    const node = this.pageNode(page);
+    if (!node || this.disposed || operation !== this.operation) return false;
     this.column = undefined;
+    const r = node.getBoundingClientRect(),
+      v = this.host.getBoundingClientRect();
+    await this.moveTo(
+      this.host.scrollLeft + r.left - v.left + (point?.x ?? 0) * r.width,
+      this.host.scrollTop + r.top - v.top + (point?.y ?? 0) * r.height - 24,
+      operation,
+    );
+    return !this.disposed && operation === this.operation;
   }
   private async runs(page: number) {
     if (!this.cache.has(page))
@@ -202,8 +253,6 @@ export class PDFReadingNavigation {
     this.active = true;
     this.column = { page, index, bounds };
     try {
-      if (this.viewer.currentPageNumber !== page)
-        this.viewer.currentPageNumber = page;
       if (
         scale !== undefined &&
         Math.abs(this.viewer.currentScale - scale) > 0.002
@@ -212,23 +261,28 @@ export class PDFReadingNavigation {
       await new Promise<void>((r) =>
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
       );
-      if (this.disposed || operation !== this.operation) return;
+      if (this.disposed || operation !== this.operation) return false;
       const node = this.pageNode(page);
-      if (!node) return;
+      if (!node) return false;
       const r = node.getBoundingClientRect(),
         v = this.host.getBoundingClientRect();
-      this.host.scrollLeft += r.left - v.left + bounds.x * r.width - 16;
-      this.lastLeft = this.host.scrollLeft;
-      this.host.scrollTop +=
-        r.top -
-        v.top +
-        (targetY ?? (bottom ? bounds.y + bounds.height : bounds.y)) * r.height -
-        (targetY !== undefined
-          ? this.host.clientHeight * 0.3
-          : bottom
-            ? this.host.clientHeight - 24
-            : 24);
+      await this.moveTo(
+        this.host.scrollLeft + r.left - v.left + bounds.x * r.width - 16,
+        this.host.scrollTop +
+          r.top -
+          v.top +
+          (targetY ?? (bottom ? bounds.y + bounds.height : bounds.y)) *
+            r.height -
+          (targetY !== undefined
+            ? this.host.clientHeight * 0.3
+            : bottom
+              ? this.host.clientHeight - 24
+              : 24),
+        operation,
+      );
+      if (this.disposed || operation !== this.operation) return false;
       this.events.columnFit?.(true);
+      return true;
     } finally {
       if (operation === this.operation) {
         this.moving = false;
@@ -242,7 +296,11 @@ export class PDFReadingNavigation {
       this.stop();
       return;
     }
-    if (!this.active || !this.column) return;
+    if (!this.active) {
+      this.interrupt();
+      return;
+    }
+    if (!this.column) return;
     const fresh = this.gesture.accept(performance.now());
     if (this.moving) {
       event.preventDefault();
@@ -281,9 +339,9 @@ export class PDFReadingNavigation {
       await this.place(page, index, columns[index], direction < 0);
   }
   async follow(anchor: PDFReadingAnchor) {
-    const operation = ++this.operation;
     const block = this.blocks().find((b) => b.id === anchor.blockId);
     if (!block || isPDFPageDecoration(block)) return;
+    const operation = ++this.operation;
     if (this.active) {
       const columns = await this.columns(block.page);
       if (!columns.length) return;
@@ -300,22 +358,23 @@ export class PDFReadingNavigation {
         block.bounds.y + anchor.fraction * block.bounds.height,
       );
     } else {
-      if (this.viewer.currentPageNumber !== block.page)
-        this.viewer.currentPageNumber = block.page;
       const node = this.pageNode(block.page);
       if (!node) return;
       const r = node.getBoundingClientRect(),
         v = this.host.getBoundingClientRect();
-      this.host.scrollTop +=
-        r.top -
-        v.top +
-        (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
-        this.host.clientHeight * 0.3;
-      // Respect manual scale; only pan when the requested paragraph is offscreen.
+      let left = this.host.scrollLeft;
       const x = r.left + block.bounds.x * r.width;
       if (x > v.right || x + block.bounds.width * r.width < v.left)
-        this.host.scrollLeft += x - v.left - 16;
-      this.lastLeft = this.host.scrollLeft;
+        left += x - v.left - 16;
+      await this.moveTo(
+        left,
+        this.host.scrollTop +
+          r.top -
+          v.top +
+          (block.bounds.y + anchor.fraction * block.bounds.height) * r.height -
+          this.host.clientHeight * 0.3,
+        operation,
+      );
     }
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
@@ -484,6 +543,7 @@ export class PDFReadingNavigation {
   destroy() {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
+    this.host.removeEventListener("pointerdown", this.interrupt);
     this.host.removeEventListener("scroll", this.scrolled);
     this.host.removeEventListener("wheel", this.wheel);
     this.cache.clear();

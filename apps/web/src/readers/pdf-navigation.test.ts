@@ -152,8 +152,10 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
     clientHeight: { value: 600 },
   });
   host.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
-  let scale = 1,
-    currentPage = 1;
+  let scale = 1;
+  const pageWrites: number[] = [];
+  const currentPage = () =>
+    Math.min(3, Math.floor((host.scrollTop + 600) / 2000) + 1);
   const scaleWrites: number[] = [];
   const nodes = [1, 2, 3].map((n) => {
     const node = document.createElement("div");
@@ -168,10 +170,10 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
   });
   const viewer = {
     get currentPageNumber() {
-      return currentPage;
+      return currentPage();
     },
     set currentPageNumber(n: number) {
-      currentPage = n;
+      pageWrites.push(n);
     },
     get currentScale() {
       return scale;
@@ -275,7 +277,7 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
       new WheelEvent("wheel", { deltaY: 100, cancelable: true }),
     );
     await vi.waitFor(() => expect(host.scrollLeft).toBeGreaterThan(500));
-    expect(currentPage).toBe(1);
+    expect(currentPage()).toBe(1);
     await new Promise((r) => setTimeout(r, 200));
     await nav.follow({ blockId: "right", fraction: 1 });
     expect(scaleWrites).toEqual([1.5]);
@@ -283,7 +285,7 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
     host.dispatchEvent(
       new WheelEvent("wheel", { deltaY: 100, cancelable: true }),
     );
-    await vi.waitFor(() => expect(currentPage).toBe(3));
+    await vi.waitFor(() => expect(currentPage()).toBe(3));
     await vi.waitFor(() => expect(host.scrollTop).toBeGreaterThan(4000));
     expect(scaleWrites).toEqual([1.5]);
     await nav.fit(false); // resizing / explicit page navigation only repositions
@@ -293,7 +295,7 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
     host.dispatchEvent(
       new WheelEvent("wheel", { deltaY: -100, cancelable: true }),
     );
-    await vi.waitFor(() => expect(currentPage).toBe(1));
+    await vi.waitFor(() => expect(currentPage()).toBe(1));
     await vi.waitFor(() => expect(host.scrollTop).toBeLessThan(2000));
     expect(scaleWrites).toEqual([1.5]);
     nav.stop();
@@ -301,7 +303,37 @@ it("keeps zoom fixed while following mixed layouts and skips furniture-only page
     await nav.follow({ blockId: "single", fraction: 0.5 });
     expect(scale).toBe(1.75);
     expect(nav.fitted).toBe(false);
+    expect(pageWrites).toEqual([]);
     expect(scaleWrites).toEqual([1.5]);
+  } finally {
+    nav.destroy();
+  }
+});
+
+it("cancels an in-flight page move on pointer input without reporting the destination as reached", async () => {
+  const host = document.createElement("div"),
+    node = document.createElement("div");
+  host.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  node.getBoundingClientRect = () =>
+    new DOMRect(0, 1200 - host.scrollTop, 800, 1000);
+  const nav = new PDFReadingNavigation(
+    host,
+    { getPageView: () => ({ div: node }) } as unknown as PDFViewer,
+    vi.fn(),
+    () => 2,
+    () => [],
+    { location: vi.fn(), selection: vi.fn() },
+  );
+  try {
+    const pending = nav.goTo(2);
+    await vi.waitFor(() => expect(host.scrollTop).toBeGreaterThan(0));
+    expect(host.scrollTop).toBeLessThan(1176);
+    host.dispatchEvent(new MouseEvent("pointerdown"));
+    host.scrollTop = 42;
+    expect(await pending).toBe(false);
+    expect(host.scrollTop).toBe(42);
+    expect(await nav.goTo(2)).toBe(true);
+    expect(host.scrollTop).toBe(1176);
   } finally {
     nav.destroy();
   }

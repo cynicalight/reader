@@ -43,6 +43,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private appliedZoom?: ReaderTheme["zoom"];
   private wheelScale?: number;
   private disposed = false;
+  private navigationRequest = 0;
   private blocks: PDFBlockOverlay;
   private blockData: PDFBlock[] = [];
   private selecting = false;
@@ -207,10 +208,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async goTo(location: DocumentLocation) {
     if (location.type !== "pdf" || !this.pdf) return;
+    const request = ++this.navigationRequest;
     this.clearSelection();
     const page = Math.max(1, Math.min(this.pdf.numPages, location.page));
     const pdfPage = await this.pdf.getPage(page);
-    if (this.disposed) return;
+    if (this.disposed || request !== this.navigationRequest) return;
     const viewport = pdfPage.getViewport({ scale: 1 });
     let point =
       location.rects?.[0] ||
@@ -225,32 +227,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
         viewport,
       );
     }
-    if (this.disposed) return;
-    this.viewer.currentPageNumber = page;
-    const coordinates = point
-      ? viewport.convertToPdfPoint(
-          point.x * viewport.width,
-          point.y * viewport.height,
-        )
-      : undefined;
-    this.viewer.scrollPageIntoView({
-      pageNumber: page,
-      ...(coordinates
-        ? {
-            destArray: [
-              null,
-              { name: "XYZ" },
-              coordinates[0],
-              coordinates[1],
-              null,
-            ],
-            ignoreDestinationZoom: true,
-          }
-        : {}),
-    });
-    this.navigation.relocated();
+    if (this.disposed || request !== this.navigationRequest) return;
+    const completed = await this.navigation.goTo(page, point);
+    if (!completed || this.disposed || request !== this.navigationRequest)
+      return;
     this.location = { ...location, page };
-    if (this.navigation.fitted) await this.navigation.fit(false);
     this.events.location(this.location, page / this.pdf.numPages);
   }
   async next() {
