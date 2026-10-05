@@ -1,4 +1,5 @@
 import { animatePDFScroll } from "./pdf-scroll";
+import { sentenceTextRanges } from "./pdf-sentence-matching";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { isPDFPageDecoration } from "@reader/core";
@@ -548,7 +549,14 @@ export class PDFReadingNavigation {
         width: r.width / page.width,
         height: r.height / page.height,
       };
-      if (overlap(b, block.bounds) / (b.width * b.height || 1) < 0.5) {
+      // Parser bounds can cut through a PDF.js line. Include one line of
+      // vertical context; sentence text, not this box, determines the highlight.
+      const region = {
+        ...block.bounds,
+        y: block.bounds.y - b.height,
+        height: block.bounds.height + 2 * b.height,
+      };
+      if (overlap(b, region) / (b.width * b.height || 1) < 0.5) {
         group++;
         continue;
       }
@@ -561,12 +569,14 @@ export class PDFReadingNavigation {
     }
     const joined = chars.join(""),
       ranges: Range[] = [];
-    let cursor = startOffset;
-    for (const source of sources) {
-      const needle = source.toLowerCase().replace(/[\s\u00ad]/g, "");
-      const i = joined.indexOf(needle, cursor);
-      if (i < 0 || !needle) continue;
-      cursor = i + needle.length;
+    const normalize = (value: string) =>
+      value.toLowerCase().replace(/[\s\u00ad]/g, "");
+    for (const { start: i, end: cursor } of sentenceTextRanges(
+      joined,
+      normalize(block.text),
+      sources.map(normalize),
+      startOffset,
+    )) {
       // PDF DOM order can interleave columns. Never let a Range bridge text
       // nodes that were excluded from this paragraph during matching.
       for (let start = i; start < cursor;) {

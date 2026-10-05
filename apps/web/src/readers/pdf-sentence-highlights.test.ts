@@ -4,6 +4,7 @@ import type { PDFPageProxy } from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { translatedSelection } from "../translation/selection";
+import oze from "./fixtures/oze-sentence-alignment.json";
 vi.mock("pdfjs-dist", () => ({
   Util: { transform: (_a: number[], b: number[]) => b },
 }));
@@ -11,6 +12,7 @@ import { PDFReadingNavigation } from "./pdf-navigation";
 
 let host: HTMLDivElement, page: HTMLDivElement, nav: PDFReadingNavigation;
 let registry: Map<string, Set<Range>>;
+let currentBlock: PDFBlock;
 const block: PDFBlock = {
   id: "paragraph",
   page: 1,
@@ -34,6 +36,7 @@ function textLayer() {
 const markedText = () =>
   [...registry.values()].flatMap((h) => [...h].map((r) => r.toString()));
 beforeEach(() => {
+  currentBlock = block;
   registry = new Map();
   vi.stubGlobal("CSS", { highlights: registry });
   vi.stubGlobal(
@@ -60,13 +63,60 @@ beforeEach(() => {
         getTextContent: async () => ({ items: [], styles: {} }),
       }) as unknown as PDFPageProxy,
     () => 1,
-    () => [block],
+    () => [currentBlock],
     { location: vi.fn(), selection: vi.fn() },
   );
   Object.defineProperty(Range.prototype, "getClientRects", {
     configurable: true,
     value: () => [new DOMRect(100, 100, 800, 20)],
   });
+});
+
+it("maps the real page 6 cached sentences to PDF text despite displaced mathematical subscripts", async () => {
+  currentBlock = oze.block;
+  const layer = page.querySelector(".textLayer")!;
+  layer.replaceChildren(
+    ...oze.runs.map(({ text, bounds: b }) => {
+      const span = document.createElement("span");
+      span.textContent = text;
+      span.getBoundingClientRect = () =>
+        new DOMRect(b.x * 1000, b.y * 1000, b.width * 1000, b.height * 1000);
+      return span;
+    }),
+  );
+  const sources = oze.sentences.slice(1, 3).map((s) => s.source);
+  const normalize = (s: string) => s.replace(/[\s\u00ad]/g, "");
+  await nav.focusPassages([
+    {
+      blockId: oze.block.id,
+      sources,
+      sourceOffset: normalize(oze.sentences[0].source).length,
+    },
+  ]);
+  expect(markedText().map(normalize)).toEqual([
+    normalize(
+      "Each time 𝑡𝑖 merges a record-local graph, it checks the acyclicity of the resulting graph and identifies all its followers.",
+    ),
+    normalize(
+      "If a follower of 𝑡𝑖 exists, 𝑡𝑖 merges record-local graphs of the records read or written by that follower and repeats identifying its followers and merging the record-local graphs.",
+    ),
+  ]);
+  await nav.focusPassages([
+    {
+      blockId: oze.block.id,
+      sources: [oze.sentences[3].source],
+      sourceOffset: normalize(
+        oze.sentences
+          .slice(0, 3)
+          .map((s) => s.source)
+          .join(""),
+      ).length,
+    },
+  ]);
+  expect(markedText().join("")).toContain(
+    "to the finalizing phase for committing.",
+  );
+  expect(page.querySelector(".reader-linked-highlight")).toBeNull();
 });
 afterEach(() => {
   nav.destroy();
