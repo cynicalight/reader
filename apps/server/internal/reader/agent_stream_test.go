@@ -78,6 +78,13 @@ func runAgentProcess() {
 		return
 	}
 	if provider == "claude" {
+		if path := os.Getenv("READER_SYSTEM_CAPTURE"); path != "" {
+			for i, arg := range os.Args {
+				if arg == "--append-system-prompt" && i+1 < len(os.Args) {
+					_ = os.WriteFile(path, []byte(os.Args[i+1]), 0600)
+				}
+			}
+		}
 		if !strings.Contains(args, "--include-partial-messages") {
 			os.Exit(10)
 		}
@@ -119,6 +126,16 @@ func runAgentProcess() {
 		}
 		return
 	}
+	if provider == "kimi" {
+		if path := os.Getenv("READER_SYSTEM_CAPTURE"); path != "" {
+			for i, arg := range os.Args {
+				if arg == "--agent-file" && i+1 < len(os.Args) {
+					data, _ := os.ReadFile(os.Args[i+1])
+					_ = os.WriteFile(path, data, 0600)
+				}
+			}
+		}
+	}
 	decoder := json.NewDecoder(os.Stdin)
 	for {
 		var req struct {
@@ -143,6 +160,10 @@ func runAgentProcess() {
 			case "thread/start":
 				var params map[string]any
 				_ = json.Unmarshal(req.Params, &params)
+				if path := os.Getenv("READER_SYSTEM_CAPTURE"); path != "" {
+					instructions, _ := params["baseInstructions"].(string)
+					_ = os.WriteFile(path, []byte(instructions), 0600)
+				}
 				if params["ephemeral"] != true || params["sandbox"] != "read-only" || params["approvalPolicy"] != "never" {
 					os.Exit(13)
 				}

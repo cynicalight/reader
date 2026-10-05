@@ -60,18 +60,28 @@ func TestImageChatSendsPixelsAndRecordsAttachmentWithFallback(t *testing.T) {
 		calls++
 		var body struct {
 			Messages []struct {
-				Content []struct {
-					Type     string `json:"type"`
-					ImageURL struct {
-						URL string `json:"url"`
-					} `json:"image_url"`
-				} `json:"content"`
+				Content json.RawMessage `json:"content"`
 			} `json:"messages"`
+		}
+		var content []struct {
+			Type     string `json:"type"`
+			ImageURL struct {
+				URL string `json:"url"`
+			} `json:"image_url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
+			return
 		}
-		if len(body.Messages) != 1 || len(body.Messages[0].Content) != 2 || body.Messages[0].Content[1].ImageURL.URL != imageData(data) {
+		if len(body.Messages) != 2 {
+			t.Error("expected system and user messages")
+			return
+		}
+		if err := json.Unmarshal(body.Messages[1].Content, &content); err != nil {
+			t.Error(err)
+			return
+		}
+		if len(content) != 2 || content[1].ImageURL.URL != imageData(data) {
 			t.Error("original image pixels missing")
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -122,19 +132,29 @@ func TestImageAPIKeepsMultipleAttachments(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Messages []struct {
-				Content []struct {
-					ImageURL struct {
-						URL string `json:"url"`
-					} `json:"image_url"`
-				} `json:"content"`
+				Content json.RawMessage `json:"content"`
 			} `json:"messages"`
+		}
+		var content []struct {
+			ImageURL struct {
+				URL string `json:"url"`
+			} `json:"image_url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
+			return
 		}
-		if len(body.Messages) != 1 || len(body.Messages[0].Content) != 3 {
+		if len(body.Messages) != 2 {
+			t.Error("expected system and user messages")
+			return
+		}
+		if err := json.Unmarshal(body.Messages[1].Content, &content); err != nil {
+			t.Error(err)
+			return
+		}
+		if len(content) != 3 {
 			t.Error("not all images transmitted")
-		} else if body.Messages[0].Content[1].ImageURL.URL != imageData(data) || body.Messages[0].Content[2].ImageURL.URL != imageData(second) {
+		} else if content[1].ImageURL.URL != imageData(data) || content[2].ImageURL.URL != imageData(second) {
 			t.Error("image ordering changed")
 		}
 		writeAPIReply(w, "Both images received")

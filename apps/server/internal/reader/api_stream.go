@@ -38,7 +38,10 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 		}
 		content = parts
 	}
-	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{map[string]any{"role": "user", "content": content}}, "stream": true, "n": 1})
+	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{
+		map[string]any{"role": "system", "content": readerSystemPrompt},
+		map[string]any{"role": "user", "content": content},
+	}, "stream": true, "n": 1})
 	request, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.URL, "/")+"/chat/completions", bytes.NewReader(body))
 	if e != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, "API 地址无效")

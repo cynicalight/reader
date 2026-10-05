@@ -159,11 +159,11 @@ func TestAPIFallbackStreamsOverHTTP(t *testing.T) {
 							Content json.RawMessage `json:"content"`
 						} `json:"messages"`
 					}
-					if json.NewDecoder(r.Body).Decode(&body) != nil || !body.Stream || body.N != 1 || len(body.Messages) != 1 {
+					if json.NewDecoder(r.Body).Decode(&body) != nil || !body.Stream || body.N != 1 || len(body.Messages) != 2 {
 						t.Error("not a streaming request")
 						return
 					}
-					if vision && !strings.Contains(string(body.Messages[0].Content), "data:image/png;base64,") {
+					if vision && !strings.Contains(string(body.Messages[1].Content), "data:image/png;base64,") {
 						t.Error("missing image")
 					}
 					w.Header().Set("Content-Type", "text/event-stream")
