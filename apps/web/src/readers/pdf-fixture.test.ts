@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
+// Loading the real PDF engine/worker on a cold Windows runner can exceed 5s.
+// Keep the integration assertions intact without relaxing unit-test timeouts.
 it("PDF.js reads the shipped PDF with outline and selectable text", async () => {
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const bytes = await readFile(
@@ -9,8 +11,8 @@ it("PDF.js reads the shipped PDF with outline and selectable text", async () => 
     data: new Uint8Array(bytes),
     useSystemFonts: true,
   });
-  const pdf = await task.promise;
   try {
+    const pdf = await task.promise;
     expect(pdf.numPages).toBe(2);
     expect((await pdf.getOutline())?.map((item) => item.title)).toEqual([
       "1. Start with a question",
@@ -24,4 +26,4 @@ it("PDF.js reads the shipped PDF with outline and selectable text", async () => 
   } finally {
     await task.destroy();
   }
-});
+}, 30_000);
