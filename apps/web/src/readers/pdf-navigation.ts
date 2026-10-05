@@ -58,12 +58,7 @@ export class PDFReadingNavigation {
     this.moving = false;
     this.wheelDirection = 0;
   };
-  private async moveTo(
-    left: number,
-    top: number,
-    operation: number,
-    immediate = false,
-  ) {
+  private async moveTo(left: number, top: number, operation: number) {
     this.moving = true;
     try {
       await animatePDFScroll(
@@ -75,7 +70,6 @@ export class PDFReadingNavigation {
           this.lastLeft = this.host.scrollLeft;
           this.lastTop = this.host.scrollTop;
         },
-        immediate,
       );
     } finally {
       if (operation === this.operation) {
@@ -288,7 +282,6 @@ export class PDFReadingNavigation {
     if (block) {
       await this.placeBlock(
         block,
-        false,
         scale,
         resetScale ? undefined : anchor?.fraction,
       );
@@ -376,15 +369,10 @@ export class PDFReadingNavigation {
     const block = this.readableBlocks().find((b) => b.id === id);
     if (!block) return false;
     this.gesture = new ColumnGesture();
-    void this.placeBlock(block, true).catch(() => this.stop());
+    void this.placeBlock(block).catch(() => this.stop());
     return true;
   }
-  private async placeBlock(
-    block: PDFBlock,
-    immediate = false,
-    scale?: number,
-    fraction?: number,
-  ) {
+  private async placeBlock(block: PDFBlock, scale?: number, fraction?: number) {
     const operation = ++this.operation;
     this.moving = true;
     this.wheelDirection = 0;
@@ -419,7 +407,6 @@ export class PDFReadingNavigation {
           ? top - Math.max(0, (this.host.clientHeight - height) / 2)
           : top + fraction * height - this.host.clientHeight / 2,
         operation,
-        immediate,
       );
       if (this.disposed || operation !== this.operation) return false;
       this.events.columnFit?.(true);
@@ -482,7 +469,7 @@ export class PDFReadingNavigation {
     if (!block || isPDFPageDecoration(block)) return;
     const operation = ++this.operation;
     if (this.active) {
-      await this.placeBlock(block, false, undefined, anchor.fraction);
+      await this.placeBlock(block, undefined, anchor.fraction);
     } else {
       const node = this.pageNode(block.page);
       if (!node) return;

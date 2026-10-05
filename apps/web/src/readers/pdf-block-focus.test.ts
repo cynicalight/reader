@@ -106,12 +106,17 @@ it("centers the focused paragraph, advances by blocks including images, and skip
     nav.destroy();
   }
 });
-it("click positioning is immediate and top-aligns a block taller than the viewport", async () => {
+it("click positioning animates through intermediate positions and top-aligns a tall block", async () => {
   const { nav, host, blocks, focus } = setup();
   try {
     await settled(nav.fit());
     blocks[1].bounds.height = 0.8;
     nav.focusBlock("b");
+    expect(host.scrollTop).toBe(200);
+    await vi.advanceTimersByTimeAsync(120);
+    expect(host.scrollTop).toBeGreaterThan(200);
+    expect(host.scrollTop).toBeLessThan(650);
+    await vi.advanceTimersByTimeAsync(300);
     expect(host.scrollTop).toBe(650);
     expect(host.scrollLeft).toBeCloseTo(200);
     expect(focus).toHaveBeenLastCalledWith("b");
@@ -156,7 +161,15 @@ it("pointer interruption cancels motion while retaining block mode for the next 
     const pending = nav.stepBlock(1);
     await vi.advanceTimersByTimeAsync(96);
     host.dispatchEvent(new MouseEvent("pointerdown"));
+    const from = { left: host.scrollLeft, top: host.scrollTop };
     nav.focusBlock("image");
+    expect(host.scrollLeft).toBe(from.left);
+    expect(host.scrollTop).toBe(from.top);
+    await vi.advanceTimersByTimeAsync(120);
+    expect(host.scrollLeft).toBeGreaterThan(from.left);
+    expect(host.scrollLeft).toBeLessThan(700);
+    expect(host.scrollTop).toBeLessThan(from.top);
+    expect(host.scrollTop).toBeGreaterThan(200);
     await settled(pending);
     expect(nav.fitted).toBe(true);
     expect(focus).toHaveBeenLastCalledWith("image");
@@ -190,7 +203,7 @@ it("does not move beyond the first/last block, and ignores reading controls afte
     await settled(nav.stepBlock(-1));
     expect(focus).toHaveBeenLastCalledWith("a");
     nav.focusBlock("last");
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(600);
     const top = host.scrollTop;
     await settled(nav.stepBlock(1));
     expect(host.scrollTop).toBe(top);
