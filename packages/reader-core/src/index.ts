@@ -6,6 +6,13 @@ export type PDFLocation = {
   x?: number;
   y?: number;
   quote?: string;
+  translation?: {
+    blockId: string;
+    sourceHash: string;
+    sentenceIndexes: number[];
+    start: number;
+    end: number;
+  };
   rects?: { x: number; y: number; width: number; height: number }[];
 };
 export type EPUBLocation = {
@@ -87,9 +94,15 @@ export const defaultTheme: ReaderTheme = {
   scroll: false,
   zoom: "width",
 };
-export type PDFBlockAction = "attach" | "preview" | "explain";
+export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
+export interface PDFReadingAnchor {
+  blockId: string;
+  fraction: number;
+}
 export interface ReaderEvents {
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
+  readingAnchor?: (anchor: PDFReadingAnchor) => void;
+  columnFit?: (active: boolean) => void;
   blockAction?: (block: PDFBlock, action: PDFBlockAction) => void;
   location: (location: DocumentLocation, percentage: number) => void;
   selection: (selection: ReaderSelection | null) => void;
@@ -109,6 +122,14 @@ export interface ReaderAdapter {
   getContext(): Promise<string>;
   setBlocks?(blocks: PDFBlock[]): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
+  followBlock?(anchor: PDFReadingAnchor): Promise<void>;
+  focusSentences?(
+    blockId: string,
+    sources: string[],
+    scroll?: boolean,
+  ): Promise<void>;
+  fitColumn?(): Promise<void>;
+  stopColumnFit?(): void;
   destroy(): Promise<void>;
 }
 export function locationLabel(location?: DocumentLocation): string {
@@ -166,6 +187,17 @@ export interface PDFBlock {
   text: string;
   image?: string;
   caption?: string;
+}
+export interface TranslationSentence {
+  source: string;
+  target: string;
+}
+export interface TranslationBlock {
+  blockId: string;
+  sourceHash: string;
+  status: "pending" | "running" | "complete" | "failed";
+  sentences: TranslationSentence[];
+  error?: string;
 }
 export interface AICapability {
   pendingVision?: boolean;

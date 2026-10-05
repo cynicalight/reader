@@ -129,6 +129,10 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Status = "queued"
 	p.Detail = "等待继续处理"
+	if e = s.retryFailedTranslations(d.ID); e != nil {
+		fail(w, 500, "无法恢复翻译任务")
+		return
+	}
 	if e = s.Store.saveProcessing(p); e != nil {
 		fail(w, 500, "无法继续处理")
 		return
@@ -148,7 +152,7 @@ func (s *Server) documentBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 	blocks := []PDFBlock{}
 	for _, b := range manifest.Blocks {
-		if b.Image != "" {
+		if b.Image != "" || strings.TrimSpace(b.Text) != "" {
 			blocks = append(blocks, b)
 		}
 	}
@@ -183,6 +187,7 @@ func (s *Server) readLayout(id string) (layoutManifest, error) {
 // Stop waits for children before the library database is closed.
 func (s *Server) StartProcessing(parent context.Context) func() {
 	ctx, cancel := context.WithCancel(parent)
+	s.queueUntranslatedPDFs()
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running'")
 	if e == nil {
@@ -374,7 +379,14 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 	p.Phase = "settling"
 	p.Status = "queued"
 	p.Detail = "等待解析图表与公式"
-	if p.AssetsTotal == 0 {
+	needsTranslation := false
+	for _, b := range m.Blocks {
+		if translationSource(b) != "" {
+			needsTranslation = true
+			break
+		}
+	}
+	if p.AssetsTotal == 0 && !needsTranslation {
 		p.Phase = "ready"
 		p.Status = "complete"
 		p.Detail = "正文已就绪，无图片附件需要解析"
@@ -387,6 +399,9 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 	m, e := s.readLayout(p.DocumentID)
 	if e != nil {
+		return e
+	}
+	if e = s.settleTranslations(ctx, p, m); e != nil || p.Status == "waiting" {
 		return e
 	}
 	dir := filepath.Join(s.analysisDir(p.DocumentID), "transcripts")

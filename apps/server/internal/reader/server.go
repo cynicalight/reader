@@ -64,6 +64,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
+	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
+	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)

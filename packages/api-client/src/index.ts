@@ -55,6 +55,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  translations: (id: string) =>
+    request<import("@reader/core").TranslationBlock[]>(
+      `/api/documents/${id}/translations`,
+    ),
+  translate: (id: string, blockId = "") =>
+    request<{ queued: boolean }>(`/api/documents/${id}/translations`, {
+      method: "POST",
+      body: JSON.stringify({ blockId }),
+    }),
   processing: () => request<Processing[]>("/api/processing"),
   process: (id: string) =>
     request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),

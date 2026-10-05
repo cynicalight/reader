@@ -999,6 +999,113 @@
                 },
             },
         },
+      "/api/documents/{id}/translations":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/TranslationBlock",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties": { "blockId": { "type": "string" } },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Translation queued; completed blocks are retained",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["queued"],
+                                  "properties":
+                                    { "queued": { "type": "boolean" } },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1032,6 +1139,31 @@
                                     "height": { "type": "number" },
                                   },
                                 "required": ["x", "y", "width", "height"],
+                              },
+                          },
+                        "translation":
+                          {
+                            "type": "object",
+                            "required":
+                              [
+                                "blockId",
+                                "sourceHash",
+                                "sentenceIndexes",
+                                "start",
+                                "end",
+                              ],
+                            "properties":
+                              {
+                                "blockId": { "type": "string" },
+                                "sourceHash": { "type": "string" },
+                                "sentenceIndexes":
+                                  {
+                                    "type": "array",
+                                    "items":
+                                      { "type": "integer", "minimum": 0 },
+                                  },
+                                "start": { "type": "integer", "minimum": 0 },
+                                "end": { "type": "integer", "minimum": 0 },
                               },
                           },
                       },
@@ -1444,6 +1576,35 @@
                 },
               "required":
                 ["primary", "models", "textAPI", "imageAPI", "capabilities"],
+            },
+          "TranslationSentence":
+            {
+              "type": "object",
+              "required": ["source", "target"],
+              "properties":
+                {
+                  "source": { "type": "string" },
+                  "target": { "type": "string" },
+                },
+            },
+          "TranslationBlock":
+            {
+              "type": "object",
+              "required": ["blockId", "sourceHash", "status", "sentences"],
+              "properties":
+                {
+                  "blockId": { "type": "string" },
+                  "sourceHash": { "type": "string" },
+                  "status":
+                    { "enum": ["pending", "running", "complete", "failed"] },
+                  "sentences":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/TranslationSentence" },
+                    },
+                  "error": { "type": "string" },
+                },
             },
         },
     },
