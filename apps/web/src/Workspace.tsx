@@ -194,6 +194,7 @@ export function Workspace({
   const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
+  const [pdfToolbar, setPDFToolbar] = useState<HTMLDivElement | null>(null);
   const renderBlockImage = useMemo(
     () => adapter?.renderBlockImage?.bind(adapter),
     [adapter],
@@ -604,6 +605,7 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
+          {doc.type === "pdf" && <div ref={setPDFToolbar} />}
           <div className="page-navigation">
             <IconButton
               label="上一页"
@@ -909,6 +911,7 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
+                  toolbarHost={pdfToolbar}
                   onReady={(engine, items) => {
                     setAdapter(engine);
                     setTOC(items);

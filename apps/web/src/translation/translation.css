@@ -11,8 +11,8 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
+  -webkit-app-region: no-drag;
   flex: none;
   overflow-x: auto;
 }

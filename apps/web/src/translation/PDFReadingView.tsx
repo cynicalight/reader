@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   Annotation,
   Document as ReaderDocument,
@@ -33,6 +34,7 @@ export function PDFReadingView({
   annotations,
   blocks,
   processing,
+  toolbarHost,
   onReady,
   events,
 }: {
@@ -41,6 +43,7 @@ export function PDFReadingView({
   annotations: Annotation[];
   blocks: PDFBlock[];
   processing?: Processing;
+  toolbarHost?: HTMLElement | null;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
@@ -394,40 +397,43 @@ export function PDFReadingView({
     setMode(value);
   };
   const activePopup = popup && byId.get(popup.block.id);
+  const toolbar = (
+    <div className="translation-toolbar">
+      <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
+        <TabsList>
+          <TabsTrigger value="source">仅原文</TabsTrigger>
+          <TabsTrigger value="parallel">原文译文</TabsTrigger>
+          <TabsTrigger value="translation">仅译文</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {mode === "parallel" && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="交换原文和译文"
+            title="交换原文和译文"
+            onClick={() => setSwapped(!swapped)}
+          >
+            <ArrowLeftRight />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="同步滚动"
+            title="同步滚动"
+            aria-pressed={sync}
+            onClick={() => setSync(!sync)}
+          >
+            {sync ? <Link2 /> : <Unlink2 />}
+          </Button>
+        </>
+      )}
+    </div>
+  );
   return (
     <div className="pdf-reading" ref={root} data-theme={theme.mode}>
-      <div className="translation-toolbar">
-        <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
-          <TabsList>
-            <TabsTrigger value="source">仅原文</TabsTrigger>
-            <TabsTrigger value="parallel">原文译文</TabsTrigger>
-            <TabsTrigger value="translation">仅译文</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {mode === "parallel" && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="交换原文和译文"
-              title="交换原文和译文"
-              onClick={() => setSwapped(!swapped)}
-            >
-              <ArrowLeftRight />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="同步滚动"
-              title="同步滚动"
-              aria-pressed={sync}
-              onClick={() => setSync(!sync)}
-            >
-              {sync ? <Link2 /> : <Unlink2 />}
-            </Button>
-          </>
-        )}
-      </div>
+      {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
       <div
         className="translation-panes"
         data-mode={mode}
