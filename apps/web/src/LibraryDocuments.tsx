@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   FileText,
@@ -6,7 +6,7 @@ import {
   Star,
   Pencil,
   Trash2,
-  ListChecks,
+  Check,
 } from "lucide-react";
 import type { Document, Processing } from "@reader/core";
 import { api } from "@reader/api";
@@ -43,6 +43,8 @@ export function LibraryDocuments({
   favorite,
   onEdit,
   onSettings,
+  editing,
+  onEditingChange,
 }: {
   documents: Document[];
   libraryView: "grid" | "list";
@@ -52,6 +54,8 @@ export function LibraryDocuments({
   favorite: (doc: Document) => void;
   onEdit: (id: string) => void;
   onSettings: () => void;
+  editing?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }) {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState(false);
@@ -62,7 +66,14 @@ export function LibraryDocuments({
   const selected = new Set(
     documents.filter((d) => selection.has(d.id)).map((d) => d.id),
   );
-  const selecting = mode || selected.size > 0;
+  const selecting = editing ?? mode;
+  const changeEditing = onEditingChange ?? setMode;
+  useEffect(() => {
+    if (!selecting) {
+      setSelection(new Set());
+      anchor.current = null;
+    }
+  }, [selecting]);
   const all = documents.length > 0 && selected.size === documents.length;
   const toggle = (id: string, range = false) => {
     setSelection(
@@ -109,67 +120,71 @@ export function LibraryDocuments({
           )
         )
           return;
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+        if (
+          selecting &&
+          (e.metaKey || e.ctrlKey) &&
+          e.key.toLowerCase() === "a"
+        ) {
           e.preventDefault();
-          setMode(true);
           setSelection(new Set(documents.map((d) => d.id)));
         }
         if (e.key === "Escape") {
-          setMode(false);
+          changeEditing(false);
           setSelection(new Set());
         }
       }}
     >
-      <div className="library-selection-bar">
-        <Button
-          variant={selecting ? "secondary" : "ghost"}
-          size="sm"
-          aria-pressed={selecting}
-          onClick={() => {
-            setMode(!selecting);
-            setSelection(new Set());
-          }}
-        >
-          <ListChecks />
-          {selecting ? "取消多选" : "多选"}
-        </Button>
-        {selecting && (
-          <>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={all}
-                indeterminate={selected.size > 0 && !all}
-                onCheckedChange={() =>
-                  setSelection(
-                    all ? new Set() : new Set(documents.map((d) => d.id)),
-                  )
-                }
-              />
-              全选当前结果
-            </label>
-            <span className="text-sm text-muted-foreground" role="status">
-              已选 {selected.size} 份
-            </span>
+      {(!onEditingChange || selecting) && (
+        <div className="library-selection-bar">
+          {!onEditingChange && (
             <Button
+              variant={selecting ? "secondary" : "ghost"}
               size="sm"
-              variant="destructive"
-              className="ml-auto"
-              disabled={!selected.size}
-              onClick={removeSelected}
+              aria-pressed={selecting}
+              onClick={() => changeEditing(!selecting)}
             >
-              <Trash2 />
-              删除所选
+              {selecting ? <Check /> : <Pencil />}
+              {selecting ? "完成" : "编辑"}
             </Button>
-          </>
-        )}
-      </div>
+          )}
+          {selecting && (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={all}
+                  indeterminate={selected.size > 0 && !all}
+                  onCheckedChange={() =>
+                    setSelection(
+                      all ? new Set() : new Set(documents.map((d) => d.id)),
+                    )
+                  }
+                />
+                全选当前结果
+              </label>
+              <span className="text-sm text-muted-foreground" role="status">
+                已选 {selected.size} 份
+              </span>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="ml-auto"
+                disabled={!selected.size}
+                onClick={removeSelected}
+              >
+                <Trash2 />
+                删除所选
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       <div className={`book-grid ${libraryView === "list" ? "book-list" : ""}`}>
         {documents.map((doc, i) => (
           <ContextMenu key={doc.id}>
             <ContextMenuTrigger
               render={<article />}
               className="book-card"
-              data-selected={selected.has(doc.id)}
+              data-selected={selecting && selected.has(doc.id)}
               tabIndex={0}
               aria-label={doc.title}
               onKeyDown={(e) => {
@@ -178,13 +193,13 @@ export function LibraryDocuments({
                   (e.key === "Enter" || e.key === " ")
                 ) {
                   e.preventDefault();
-                  if (selecting || e.key === " ") toggle(doc.id, e.shiftKey);
+                  if (selecting) toggle(doc.id, e.shiftKey);
                   else openDocument(doc);
                 }
               }}
               onClickCapture={(e) => {
                 if (
-                  (selecting || e.metaKey || e.ctrlKey || e.shiftKey) &&
+                  selecting &&
                   !(e.target as Element).closest(
                     '[data-document-action], [data-slot="checkbox"]',
                   )
@@ -195,13 +210,15 @@ export function LibraryDocuments({
                 }
               }}
             >
-              <div className="book-select" data-document-action>
-                <Checkbox
-                  checked={selected.has(doc.id)}
-                  aria-label={`选择 ${doc.title}`}
-                  onCheckedChange={() => toggle(doc.id)}
-                />
-              </div>
+              {selecting && (
+                <div className="book-select" data-document-action>
+                  <Checkbox
+                    checked={selected.has(doc.id)}
+                    aria-label={`选择 ${doc.title}`}
+                    onCheckedChange={() => toggle(doc.id)}
+                  />
+                </div>
+              )}
               <div className="book-cover-frame">
                 <Button
                   variant="ghost"
@@ -326,7 +343,7 @@ export function LibraryDocuments({
                 <Trash2 />
                 删除文档
               </ContextMenuItem>
-              {selected.has(doc.id) && selected.size > 1 && (
+              {selecting && selected.has(doc.id) && selected.size > 1 && (
                 <ContextMenuItem variant="destructive" onClick={removeSelected}>
                   <Trash2 />
                   删除所选 {selected.size} 份文档

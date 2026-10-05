@@ -2,19 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Library,
-  Clock3,
   Star,
   Plus,
   Search,
   Settings2,
   ArrowUpRight,
   FileText,
-  ArrowDownToLine,
   Loader2,
   PanelLeft,
   Command,
   X,
   Tags,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { api } from "@reader/api";
 import type { Document } from "@reader/core";
@@ -47,6 +47,7 @@ export function App() {
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
   const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
+  const [editingLibrary, setEditingLibrary] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -159,6 +160,7 @@ export function App() {
     }
   };
   const openDocument = (doc: Document) => {
+    setEditingLibrary(false);
     open(doc);
     void api.update(doc.id, {}).catch((e) => toast.error(e.message));
   };
@@ -264,12 +266,6 @@ export function App() {
                     count: undefined,
                   },
                   {
-                    id: "recent",
-                    label: "最近阅读",
-                    icon: Clock3,
-                    count: documents.filter((d) => d.percentage > 0).length,
-                  },
-                  {
                     id: "favorites",
                     label: "收藏",
                     icon: Star,
@@ -280,13 +276,29 @@ export function App() {
                     key={item.id}
                     variant="ghost"
                     className={`nav-item ${filter === item.id ? "active" : ""}`}
-                    onClick={() => setFilter(item.id)}
+                    onClick={() => {
+                      setFilter(item.id);
+                      setEditingLibrary(false);
+                    }}
                   >
                     <item.icon className="size-4" />
                     <span>{item.label}</span>
                     <span className="nav-count">{item.count}</span>
                   </Button>
                 ))}
+                <Button
+                  variant="ghost"
+                  className="nav-item"
+                  onClick={chooseFiles}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  <span>{busy ? "导入中…" : "导入文档"}</span>
+                </Button>
               </nav>
               <div className="sidebar-bottom">
                 <Button
@@ -316,9 +328,7 @@ export function App() {
                       ? "标签看板"
                       : filter === "favorites"
                         ? "收藏"
-                        : filter === "recent"
-                          ? "最近阅读"
-                          : "我的文档"}
+                        : "全部文档"}
                   </h1>
                 </div>
                 {filter === "tags" ? (
@@ -332,9 +342,14 @@ export function App() {
                     />
                   </div>
                 ) : (
-                  <Button onClick={chooseFiles} disabled={busy}>
-                    {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-                    {busy ? "导入中…" : "导入文档"}
+                  <Button
+                    variant={editingLibrary ? "secondary" : "outline"}
+                    aria-pressed={editingLibrary}
+                    disabled={!filtered.length && !editingLibrary}
+                    onClick={() => setEditingLibrary(!editingLibrary)}
+                  >
+                    {editingLibrary ? <Check /> : <Pencil />}
+                    {editingLibrary ? "完成" : "编辑"}
                   </Button>
                 )}
               </header>
@@ -396,6 +411,8 @@ export function App() {
                     key={JSON.stringify([filter, query, filters])}
                     documents={filtered}
                     libraryView={libraryView}
+                    editing={editingLibrary}
+                    onEditingChange={setEditingLibrary}
                     jobs={jobs}
                     processingError={processingError}
                     openDocument={openDocument}
@@ -432,10 +449,6 @@ export function App() {
                         显示全部文档
                       </Button>
                     )}
-                    <Button onClick={() => chooseFiles()} disabled={busy}>
-                      <ArrowDownToLine className="size-4" />
-                      选择本地文件
-                    </Button>
                     {!documents.length && (
                       <Button
                         variant="link"
@@ -493,17 +506,6 @@ export function App() {
                   </span>
                 </Button>
               ))}
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => {
-                  setCommand(false);
-                  chooseFiles();
-                }}
-              >
-                <Plus />
-                导入文档
-              </Button>
               <Button
                 variant="ghost"
                 className="w-full justify-start"

@@ -36,7 +36,6 @@ export function filterDocuments(
     .filter((d) => {
       const tags = d.tags.map((tag) => tag.toLowerCase());
       return (
-        (view !== "recent" || d.percentage > 0) &&
         (view !== "favorites" || d.favorite) &&
         (filters.category === "all" || d.category === filters.category) &&
         (filters.format === "all" || d.type === filters.format) &&

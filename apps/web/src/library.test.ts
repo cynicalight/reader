@@ -70,7 +70,7 @@ it("supports unread/finished boundaries and title/tag search without mutating th
     }).map((d) => d.id),
   ).toEqual(["book"]);
   expect(
-    filterDocuments(documents, "recent", "", {
+    filterDocuments(documents, "all", "", {
       ...initialFilters,
       reading: "finished",
     }).map((d) => d.id),

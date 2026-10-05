@@ -70,17 +70,16 @@ const button = (label: string) =>
     (b) => b.textContent?.trim() === label,
   )!;
 it("selects all current results and waits for explicit confirmation before deleting", async () => {
+  await act(async () => button("编辑").click());
   await act(async () =>
-    host
-      .querySelector("article")!
-      .dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "a",
-          metaKey: true,
-          bubbles: true,
-          cancelable: true,
-        }),
-      ),
+    host.querySelector("article")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "a",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
   );
   expect(host.textContent).toContain("已选 2 份");
   await act(async () => button("删除所选").click());
@@ -120,4 +119,32 @@ it("opens the context menu on the targeted document and edits that document", as
   await act(async () => item!.click());
   expect(edit).toHaveBeenCalledExactlyOnceWith("1");
   expect(open).not.toHaveBeenCalled();
+});
+
+it("requires edit mode before selecting and clears selection on exit", async () => {
+  const shortcut = () =>
+    host
+      .querySelector("article")!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "a",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+  expect(host.querySelector('[role="checkbox"]')).toBeNull();
+  await act(async () => {
+    shortcut();
+  });
+  expect(host.textContent).not.toContain("已选");
+  await act(async () => button("编辑").click());
+  await act(async () => {
+    shortcut();
+  });
+  expect(host.textContent).toContain("已选 2 份");
+  await act(async () => button("完成").click());
+  expect(host.querySelector('[role="checkbox"]')).toBeNull();
+  await act(async () => button("编辑").click());
+  expect(host.textContent).toContain("已选 0 份");
 });
