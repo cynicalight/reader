@@ -31,7 +31,9 @@ vi.mock("@readium/navigator", () => ({
       callback(true);
     }
     get _cframes() {
-      return [{ iframe: frame }];
+      return [
+        { iframe: frame, source: "blob:http://localhost/active-chapter" },
+      ];
     }
     eventListener(_key: string, selection: Record<string, unknown>) {
       bridge.listeners!.textSelected({
@@ -71,7 +73,8 @@ const payload = () => ({
     href: "chapter.xhtml",
     type: "application/xhtml+xml",
   })!,
-  targetFrameSrc: frame.src,
+  // Readium navigates contentWindow.location, leaving iframe.src empty.
+  targetFrameSrc: "blob:http://localhost/active-chapter",
 });
 beforeEach(async () => {
   changed.mockClear();
@@ -354,3 +357,54 @@ it("reports a failed navigator load instead of displaying an empty reader", asyn
     adapter.open({ id: "test", type: "epub" } as ReaderDocument),
   ).rejects.toThrow("EPUB 正文加载失败");
 });
+
+it("publishes a selected passage and toolbar anchor when iframe.src is empty", () => {
+  expect(frame.getAttribute("src")).toBeNull();
+  expect(changed).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      text: "Selected passage",
+      anchor: { x: 510, top: 160, bottom: 180 },
+    }),
+  );
+  const location = adapter.getSelection()!.location;
+  expect(location.type).toBe("epub");
+  if (location.type === "epub") {
+    expect(JSON.parse(location.locator!).locations.domRange).toBeDefined();
+  }
+});
+it("ignores a delayed selection from an inactive chapter", () => {
+  changed.mockClear();
+  const current = adapter.getSelection();
+  bridge.listeners!.textSelected({
+    ...payload(),
+    targetFrameSrc: "blob:http://localhost/previous-chapter",
+  });
+  expect(changed).not.toHaveBeenCalled();
+  expect(adapter.getSelection()).toBe(current);
+});
+it.each(["highlight", "underline", "note"] as const)(
+  "restores %s decorations from the same exact selected passage",
+  async (kind) => {
+    const selection = adapter.getSelection()!;
+    await adapter.highlight([
+      {
+        id: kind,
+        documentId: "test",
+        kind,
+        location: selection.location,
+        quote: selection.text,
+        note: kind === "note" ? "Saved note" : "",
+        color: "#e6b94c",
+        createdAt: "",
+      },
+    ]);
+    const [decoration] = bridge.apply.mock.calls.at(-1)![0] as Decoration[];
+    expect(decoration!.style).toEqual({
+      type: kind === "underline" ? "underline" : "highlight",
+      tint: "#e6b94c",
+    });
+    expect(decoration!.locator.serialize().locations.domRange).toBeDefined();
+    await adapter.highlight([]);
+    expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
+  },
+);

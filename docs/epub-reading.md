@@ -32,7 +32,7 @@ EPUB 在现有原文阅读区显示。目录、翻页、滚动、字体和主题
 在本 worktree 的 macOS 环境完成：
 
 - `pnpm typecheck`：通过。
-- `pnpm test`：Go 全套通过；Vitest 51 个文件通过、1 个文件跳过，230 个用例通过、3 个跳过。
+- `pnpm test`：Go 全套通过；Vitest 51 个文件通过、1 个文件跳过，235 个用例通过、3 个跳过。
 - `pnpm build`：Go、processor、web、Electron 构建通过。仍有现有依赖的纯函数注释与大 chunk 提示。
 - 隔离书库的真实 HTTP 检查：导入验收 EPUB、读取 3 个章节及 positions、给第二处重复句保存笔记、读取并恢复到第二处、保存阅读位置、删除批注均通过；预览页面 HTTP 200。
 - Go 回归覆盖完整 Locator 数据库关闭重开后保持不变及删除；前端覆盖元素边界、重复引用、失效路径、精确导航、键盘选区、删除期间的延迟请求。
@@ -42,6 +42,8 @@ EPUB 在现有原文阅读区显示。目录、翻页、滚动、字体和主题
 用户提供的本地 `docs/MAKE.epub` 已导入隔离预览书库。真实 HTTP + 已安装 Readium shared/FrameBlobBuilder 检查通过：319 个位置、127 个章节均可构建为合法 XHTML；原测试书的 3 个位置和 3 个章节也通过。此项检查未执行 iframe 内脚本或浏览器排版，不能代替视觉验收。本地书籍文件不随代码提交。
 
 修复了正文缩在左上角及白底黑字：应用需为 Readium 的重排 iframe 明确设置宽高，否则使用浏览器默认视口；服务器 `style-src` 也需允许 Readium 注入的 `blob:` 样式表。Blob 文档会继承创建者的安全策略，见 [HTML 标准的 policy container 规则](https://html.spec.whatwg.org/multipage/browsers.html#policy-containers)。新增测试检查真实 FrameManager 元素是否匹配构建后的尺寸规则，并检查 HTTP CSP 的样式来源。固定版式的嵌套 iframe 继续使用 Readium 自身尺寸。
+
+修复了 EPUB 划词后不出现共用工具栏：Readium 使用 `contentWindow.location.replace()` 导航章节，iframe 的 `src` 属性不随之更新。适配器改用活动 FrameManager 的 `source` 匹配选区事件，键盘选区也使用同一来源；旧章节的延迟选区不覆盖当前选区。沿用 PDF 的高亮、下划线、笔记、翻译、问 AI、引用和取消入口，以及已有批注的编辑和删除操作。测试使用空 `iframe.src` 加真实形态的 Blob 来源，覆盖选区坐标和三种批注的恢复、删除。
 
 未执行浏览器自动化或桌面视觉验收。
 

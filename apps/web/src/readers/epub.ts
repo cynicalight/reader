@@ -243,7 +243,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
           y: rect.y,
           width: rect.width,
           height: rect.height,
-          targetFrameSrc: manager.iframe.src,
+          targetFrameSrc: manager.source,
         },
         manager,
       );
@@ -430,9 +430,12 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       textSelected: (selection) => {
         if (this.disposed) return;
         if (!selection.text.trim()) return this.clearState();
-        const frame = Array.from(
-          this.container.querySelectorAll("iframe"),
-        ).find((frame) => frame.src === selection.targetFrameSrc);
+        // Readium navigates via contentWindow.location.replace(), so iframe.src
+        // does not identify the loaded chapter. Match the active frame manager.
+        const frame = this.navigator?._cframes.find(
+          (manager) => manager?.source === selection.targetFrameSrc,
+        )?.iframe;
+        if (!frame) return; // Ignore delayed selections from previous chapters.
         const selected = frame?.contentWindow?.getSelection();
         if (
           !selected ||
