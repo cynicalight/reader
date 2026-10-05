@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Annotation } from "@reader/core";
-import { applySavedAnnotation } from "./annotations";
+import { activeAnnotation, applySavedAnnotation } from "./annotations";
 const a: Annotation = {
   id: "a",
   documentId: "doc",
@@ -24,4 +24,9 @@ it("replaces a merged underline in place and removes only superseded IDs", () =>
   expect(
     applySavedAnnotation(result, { ...a, quote: "one two three" }),
   ).toEqual(result);
+});
+it("edits an existing note when several annotation kinds cover a passage", () => {
+  const note = { ...a, id: "note", kind: "note" as const, note: "Keep this" };
+  expect(activeAnnotation([a, note], [a.id, note.id])).toBe(note);
+  expect(activeAnnotation([a, note], [a.id])).toBe(a);
 });

@@ -1,7 +1,12 @@
 import type { RefObject } from "react";
 import type { Annotation, SelectionAnchor } from "@reader/core";
-import { Trash2, X } from "lucide-react";
+import { Trash2, StickyNote, SquarePen, MessageSquare } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@reader/ui/components/tooltip";
 import { SelectionToolbar } from "./SelectionToolbar";
 
 export const annotationLabels = {
@@ -12,64 +17,56 @@ export const annotationLabels = {
 };
 
 export function AnnotationToolbar({
-  annotations,
+  annotation,
   anchor,
   pane,
-  deleting,
+  deleting = false,
   onDelete,
-  onClose,
+  onNote,
+  onAskAI,
 }: {
-  annotations: Annotation[];
+  annotation: Annotation;
   anchor: SelectionAnchor;
   pane: RefObject<HTMLDivElement | null>;
-  deleting: ReadonlySet<string>;
+  deleting?: boolean;
   onDelete: (id: string) => void;
-  onClose: () => void;
+  onNote: (annotation: Annotation) => void;
+  onAskAI: (annotation: Annotation) => void;
 }) {
+  const hasNote = !!annotation.note.trim();
+  const actions = [
+    {
+      label: `删除${annotationLabels[annotation.kind]}`,
+      Icon: Trash2,
+      onClick: () => onDelete(annotation.id),
+    },
+    {
+      label: hasNote ? "编辑笔记" : "添加笔记",
+      Icon: hasNote ? SquarePen : StickyNote,
+      onClick: () => onNote(annotation),
+    },
+    { label: "问 AI", Icon: MessageSquare, onClick: () => onAskAI(annotation) },
+  ];
   return (
     <SelectionToolbar anchor={anchor} pane={pane} label="批注操作">
-      <div className="annotation-actions">
-        <div className="annotation-actions-heading">
-          <span>
-            {[
-              ...new Set(
-                annotations.map(
-                  (annotation) => annotationLabels[annotation.kind],
-                ),
-              ),
-            ].join(" / ")}
-          </span>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="关闭批注操作"
-            onClick={onClose}
-          >
-            <X />
-          </Button>
-        </div>
-        <div className="annotation-actions-list">
-          {annotations.map((annotation) => (
-            <div className="annotation-action" key={annotation.id}>
-              <div>
-                {annotations.length > 1 && (
-                  <small>{annotationLabels[annotation.kind]}</small>
-                )}
-                <p>{annotation.note || annotation.quote}</p>
-              </div>
+      {actions.map(({ label, Icon, onClick }) => (
+        <Tooltip key={label}>
+          <TooltipTrigger
+            render={
               <Button
                 size="icon-sm"
                 variant="ghost"
-                aria-label={`删除${annotationLabels[annotation.kind]}`}
-                disabled={deleting.has(annotation.id)}
-                onClick={() => onDelete(annotation.id)}
-              >
-                <Trash2 />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
+                aria-label={label}
+                disabled={deleting}
+                onClick={onClick}
+              />
+            }
+          >
+            <Icon />
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      ))}
     </SelectionToolbar>
   );
 }

@@ -119,6 +119,11 @@ export const api = {
         body: JSON.stringify(annotation),
       },
     ),
+  updateAnnotationNote: (id: string, annotation: string, note: string) =>
+    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    }),
   removeAnnotation: (id: string, annotation: string) =>
     request<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",
