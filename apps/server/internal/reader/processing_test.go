@@ -3,9 +3,12 @@ package reader
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -88,6 +91,94 @@ func TestProcessingResumesSavedTranscriptsWithoutCallingAI(t *testing.T) {
 	data, _ := os.ReadFile(target)
 	if string(data) != "user-corrected transcript" {
 		t.Fatal("user correction lost")
+	}
+}
+
+func TestProcessingCompletesAttachmentsBeforeTranslation(t *testing.T) {
+	for _, mode := range []string{"success", "saved", "waiting", "failed"} {
+		t.Run(mode, func(t *testing.T) {
+			s, p := processingFixture(t)
+			m, err := s.readLayout("doc")
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.Blocks[0].Caption = "Figure one."
+			dir := s.analysisDir("doc")
+			data, _ := json.Marshal(m)
+			if err = os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(filepath.Join(dir, m.Blocks[0].Image), []byte("image fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(dir, "transcripts", "p1-b1.md")
+			if mode == "saved" {
+				if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err = writeTranscript(target, []byte("saved interpretation\n")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var imageCalls, textCalls atomic.Int32
+			images := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				imageCalls.Add(1)
+				if textCalls.Load() != 0 {
+					t.Error("translation started before attachment interpretation")
+				}
+				if mode == "failed" {
+					http.Error(w, "image provider unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				sendTranslationDelta(w, "saved interpretation")
+				finishTranslationStream(w)
+			}))
+			defer images.Close()
+			text := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				textCalls.Add(1)
+				if data, err := os.ReadFile(target); err != nil || string(data) != "saved interpretation\n" {
+					t.Error("translation started before attachment transcript was saved")
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				for _, paragraph := range readTranslationInput(t, r).Batch.Paragraphs {
+					sendTranslationDelta(w, translationParagraphLine(paragraph))
+				}
+				finishTranslationStream(w)
+			}))
+			defer text.Close()
+			configureTranslationTest(t, s, text.URL)
+			config := s.aiConfig()
+			config.ImageAPI = APIConnection{URL: images.URL, Model: "test"}
+			if mode != "waiting" {
+				config.Capabilities["image-api"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "image-api")}
+			}
+			if err = s.writeAIConfig(config); err != nil {
+				t.Fatal(err)
+			}
+			if err = s.learnPDF(context.Background(), &p); err != nil {
+				t.Fatal(err)
+			}
+			err = s.settlePDF(context.Background(), &p)
+			if mode == "waiting" || mode == "failed" {
+				if textCalls.Load() != 0 {
+					t.Fatal("translated while attachments were unfinished")
+				}
+				if mode == "waiting" && (err != nil || p.Status != "waiting") {
+					t.Fatalf("did not wait for vision: %+v, %v", p, err)
+				}
+				if mode == "failed" && err == nil {
+					t.Fatal("attachment failure was ignored")
+				}
+				return
+			}
+			if err != nil || p.Phase != "ready" || p.AssetsDone != 1 || textCalls.Load() != 1 {
+				t.Fatalf("processing did not complete: %+v, %v, text calls=%d", p, err, textCalls.Load())
+			}
+			if mode == "saved" && imageCalls.Load() != 0 {
+				t.Fatal("regenerated saved attachment")
+			}
+		})
 	}
 }
 func TestLayoutRejectsEscapingAssetPath(t *testing.T) {

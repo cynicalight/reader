@@ -406,9 +406,6 @@ func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 	if e != nil {
 		return e
 	}
-	if e = s.settleTranslations(ctx, p, m); e != nil || p.Status == "waiting" {
-		return e
-	}
 	dir := filepath.Join(s.analysisDir(p.DocumentID), "transcripts")
 	if e = os.MkdirAll(dir, 0700); e != nil {
 		return e
@@ -462,6 +459,10 @@ func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 		if e = s.Store.saveProcessing(*p); e != nil {
 			return e
 		}
+	}
+	// Finish and persist every attachment before starting body translation.
+	if e = s.settleTranslations(ctx, p, m); e != nil || p.Status == "waiting" {
+		return e
 	}
 	p.Phase = "ready"
 	p.Status = "complete"
