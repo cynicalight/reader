@@ -168,9 +168,16 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 	})
 	service := s.generationService(config)
 	service.timeout = translationBatchTimeout
+	service.usageSink = s.processingUsageSink(doc.ID, "translating", batch.Paragraphs[0].BlockID+"…"+batch.Paragraphs[len(batch.Paragraphs)-1].BlockID)
 	_, callErr := service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {
+		if event.Text == "" {
+			return nil
+		}
 		return decoder.feed(event.Text)
 	})
+	if errorKind(callErr) == ErrorSave {
+		return callErr
+	}
 	// A successful EOF may terminate the final JSONL record without a newline.
 	// Cancellation/truncation never promotes an unfinished line to a saved record.
 	if callErr == nil && strings.TrimSpace(decoder.buffer) != "" {
@@ -197,6 +204,11 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 	return ctx.Err()
 }
 func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layoutManifest) error {
+	finishStage, err := s.startUsageStage(p.DocumentID, "translating")
+	if err != nil {
+		return err
+	}
+	defer finishStage()
 	doc, err := s.Store.Document(p.DocumentID)
 	if err != nil {
 		return err

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  ChartColumn,
   ArrowLeft,
   BookOpen,
   PanelLeft,
@@ -82,6 +83,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { toast } from "sonner";
+import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { ModelSelector } from "./ModelSelector";
 import { SourceReferences } from "./SourceReferences";
 import { ChatSession } from "./chat/chat-session";
@@ -283,6 +285,7 @@ export function Workspace({
       group.removeAttribute("data-toggling");
     };
   }, [left, right, leftPanel, rightPanel]);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [rightTab, setRightTab] = useState("ai");
   const [leftTab, setLeftTab] = useState("toc");
   const [query, setQuery] = useState("");
@@ -1123,6 +1126,15 @@ export function Workspace({
                   <StickyNote className="size-3.5" />
                   笔记<small>{annotations.length || ""}</small>
                 </TabsTrigger>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="聊天用量统计"
+                  aria-label="聊天用量统计"
+                  onClick={() => setUsageOpen(true)}
+                >
+                  <ChartColumn />
+                </Button>
               </TabsList>
               <TabsContent value="ai" className="ai-panel">
                 <AssistantPanel
@@ -1369,6 +1381,10 @@ export function Workspace({
           </Button>
         </DialogContent>
       </Dialog>
+      <ProcessingUsageDialog
+        document={usageOpen ? doc : null}
+        onClose={() => setUsageOpen(false)}
+      />
     </div>
   );
 }

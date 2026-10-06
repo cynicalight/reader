@@ -1397,6 +1397,94 @@
                 },
             },
         },
+      "/api/documents/{id}/processing-usage":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Persisted processing usage, including failed and fallback attempts",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ProcessingUsage",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/chat-usage":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Persisted per-document chat usage, including failed and fallback attempts",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ProcessingUsage",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1812,6 +1900,9 @@
                   "warning": { "type": "string" },
                   "updatedAt": { "type": "string" },
                   "incomplete": { "type": "boolean" },
+                  "startedAt": { "type": "string" },
+                  "completedAt": { "type": "string" },
+                  "usageTracked": { "type": "boolean" },
                 },
               "required":
                 [
@@ -1998,6 +2089,149 @@
                   "match": { "type": "string", "enum": ["all", "any"] },
                 },
               "required": ["id", "name", "tags", "match"],
+            },
+          "TokenCounts":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "inputTokens": { "type": "integer", "minimum": 0 },
+                  "outputTokens": { "type": "integer", "minimum": 0 },
+                  "totalTokens": { "type": "integer", "minimum": 0 },
+                  "cachedInputTokens":
+                    { "type": ["integer", "null"], "minimum": 0 },
+                  "cacheWriteInputTokens":
+                    { "type": ["integer", "null"], "minimum": 0 },
+                  "reasoningOutputTokens":
+                    { "type": ["integer", "null"], "minimum": 0 },
+                },
+              "required":
+                [
+                  "inputTokens",
+                  "outputTokens",
+                  "totalTokens",
+                  "cachedInputTokens",
+                  "cacheWriteInputTokens",
+                  "reasoningOutputTokens",
+                ],
+            },
+          "ModelTokens":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "model": { "type": "string" },
+                  "tokens":
+                    {
+                      "oneOf":
+                        [
+                          { "$ref": "#/components/schemas/TokenCounts" },
+                          { "type": "null" },
+                        ],
+                    },
+                },
+              "required": ["model", "tokens"],
+            },
+          "UsageCall":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "stage": { "type": "string" },
+                  "target": { "type": "string" },
+                  "provider": { "type": "string" },
+                  "startedAt": { "type": "string" },
+                  "finishedAt": { "type": "string" },
+                  "status": { "type": "string" },
+                  "models":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ModelTokens" },
+                    },
+                },
+              "required":
+                [
+                  "id",
+                  "stage",
+                  "target",
+                  "provider",
+                  "startedAt",
+                  "status",
+                  "models",
+                ],
+            },
+          "UsageGroup":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "stage": { "type": "string" },
+                  "provider": { "type": "string" },
+                  "model": { "type": "string" },
+                  "calls": { "type": "integer", "minimum": 0 },
+                  "unknownCalls": { "type": "integer", "minimum": 0 },
+                  "tokens": { "$ref": "#/components/schemas/TokenCounts" },
+                },
+              "required":
+                [
+                  "stage",
+                  "provider",
+                  "model",
+                  "calls",
+                  "unknownCalls",
+                  "tokens",
+                ],
+            },
+          "StageUsage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "stage": { "type": "string" },
+                  "durationMs": { "type": "integer", "minimum": 0 },
+                },
+              "required": ["stage", "durationMs"],
+            },
+          "ProcessingUsage":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "historyComplete": { "type": "boolean" },
+                  "total": { "$ref": "#/components/schemas/TokenCounts" },
+                  "calls":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/UsageCall" },
+                    },
+                  "groups":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/UsageGroup" },
+                    },
+                  "stages":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/StageUsage" },
+                    },
+                  "unknownCalls": { "type": "integer", "minimum": 0 },
+                  "failedCalls": { "type": "integer", "minimum": 0 },
+                  "partialCalls": { "type": "integer", "minimum": 0 },
+                  "elapsedMs": { "type": "integer", "minimum": 0 },
+                },
+              "required":
+                [
+                  "historyComplete",
+                  "total",
+                  "calls",
+                  "groups",
+                  "stages",
+                  "unknownCalls",
+                  "failedCalls",
+                  "partialCalls",
+                  "elapsedMs",
+                ],
             },
         },
     },

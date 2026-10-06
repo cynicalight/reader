@@ -47,7 +47,7 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{
 		map[string]any{"role": "system", "content": readerSystemPrompt},
 		map[string]any{"role": "user", "content": content},
-	}, "stream": true, "n": 1})
+	}, "stream": true, "n": 1, "stream_options": map[string]bool{"include_usage": true}})
 	request, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.URL, "/")+"/chat/completions", bytes.NewReader(body))
 	if e != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, "API 地址无效")
@@ -91,6 +91,7 @@ func readCompletionStream(ctx context.Context, r io.Reader, emit func(ProviderEv
 	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 	var frame, text strings.Builder
 	finished := false
+	model := ""
 	protocol := func() (GenerateResult, error) {
 		return GenerateResult{}, generationError(ErrorProtocol, "API 流协议无效或缺少成功终态")
 	}
@@ -110,7 +111,9 @@ func readCompletionStream(ctx context.Context, r io.Reader, emit func(ProviderEv
 			return false, generationError(ErrorProtocol, "API 返回无效 UTF-8")
 		}
 		var chunk struct {
-			Error   json.RawMessage `json:"error"`
+			Error   json.RawMessage  `json:"error"`
+			Model   string           `json:"model"`
+			Usage   *completionUsage `json:"usage"`
 			Choices []struct {
 				Index *int `json:"index"`
 				Delta struct {
@@ -127,6 +130,15 @@ func readCompletionStream(ctx context.Context, r io.Reader, emit func(ProviderEv
 		}
 		if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
 			return false, generationError(ErrorUpstream, "API 上游报告生成失败")
+		}
+		modelChanged := chunk.Model != "" && chunk.Model != model
+		if modelChanged {
+			model = chunk.Model
+		}
+		if emit != nil && (modelChanged || chunk.Usage != nil) {
+			if e := emit(ProviderEvent{Metrics: []ModelTokens{{Model: model, Tokens: completionTokens(chunk.Usage)}}}); e != nil {
+				return false, e
+			}
 		}
 		selected := false
 		for _, choice := range chunk.Choices {

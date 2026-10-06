@@ -182,7 +182,7 @@ func runAgentProcess() {
 				if path := os.Getenv("READER_AGENT_THREAD_CAPTURE"); path != "" {
 					_ = os.WriteFile(path, req.Params, 0600)
 				}
-				respond(map[string]any{"thread": map[string]string{"id": "thread"}})
+				respond(map[string]any{"thread": map[string]string{"id": "thread"}, "model": "actual-codex"})
 			case "turn/start":
 				if path := os.Getenv("READER_AGENT_CAPTURE"); path != "" {
 					_ = os.WriteFile(path, req.Params, 0600)
@@ -210,6 +210,12 @@ func runAgentProcess() {
 					}
 					emit(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "other", "turnId": "turn", "itemId": "other", "delta": "private"}})
 					emit(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "thread", "turnId": "other", "itemId": "other", "delta": "private"}})
+				}
+				if mode == "usage" {
+					emit(map[string]any{"method": "thread/tokenUsage/updated", "params": map[string]any{"threadId": "other", "tokenUsage": map[string]any{"total": TokenCounts{TotalTokens: 999}}}})
+					for _, n := range []int64{15, 30, 30} {
+						emit(map[string]any{"method": "thread/tokenUsage/updated", "params": map[string]any{"threadId": "thread", "tokenUsage": map[string]any{"total": TokenCounts{InputTokens: n - 5, OutputTokens: 5, TotalTokens: n}, "last": TokenCounts{TotalTokens: 2}}}})
+					}
 				}
 				notify("item/reasoning/textDelta", map[string]any{"delta": "private"})
 				notify("item/commandExecution/outputDelta", map[string]any{"delta": "tool output"})

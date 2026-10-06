@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  ChartColumn,
 } from "lucide-react";
 import type { Document, Processing } from "@reader/core";
 import { api } from "@reader/api";
@@ -28,6 +29,7 @@ import {
   DialogDescription,
 } from "@reader/ui/components/dialog";
 import { DocumentBadges } from "./DocumentManagement";
+import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { CoverProcessing } from "./ProcessingStatus";
 import {
   removeLibraryDocuments,
@@ -57,6 +59,7 @@ export function LibraryDocuments({
   editing?: boolean;
   onEditingChange?: (editing: boolean) => void;
 }) {
+  const [usageDocument, setUsageDocument] = useState<Document | null>(null);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState(false);
   const [removing, setRemoving] = useState<Document[]>([]);
@@ -299,6 +302,16 @@ export function LibraryDocuments({
                 <Button
                   size="icon-xs"
                   variant="ghost"
+                  aria-label={`查看 ${doc.title} 的用量统计`}
+                  title="用量统计"
+                  data-document-action
+                  onClick={() => setUsageDocument(doc)}
+                >
+                  <ChartColumn />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
                   aria-label={`编辑 ${doc.title} 的信息`}
                   data-document-action
                   title="编辑文档信息"
@@ -328,6 +341,10 @@ export function LibraryDocuments({
               </p>
             </ContextMenuTrigger>
             <ContextMenuContent>
+              <ContextMenuItem onClick={() => setUsageDocument(doc)}>
+                <ChartColumn />
+                用量统计
+              </ContextMenuItem>
               <ContextMenuItem onClick={() => onEdit(doc.id)}>
                 <Pencil />
                 编辑文档信息
@@ -350,6 +367,11 @@ export function LibraryDocuments({
           </ContextMenu>
         ))}
       </div>
+      <ProcessingUsageDialog
+        document={usageDocument}
+        job={jobs.find((job) => job.documentId === usageDocument?.id)}
+        onClose={() => setUsageDocument(null)}
+      />
       <Dialog
         open={removing.length > 0}
         onOpenChange={(open) => {

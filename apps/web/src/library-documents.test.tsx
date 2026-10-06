@@ -6,7 +6,13 @@ import { api } from "@reader/api";
 import type { Document } from "@reader/core";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { useReaderStore } from "./store";
-vi.mock("@reader/api", () => ({ api: { removeDocument: vi.fn() } }));
+vi.mock("@reader/api", () => ({
+  api: {
+    removeDocument: vi.fn(),
+    processingUsage: vi.fn(),
+    chatUsage: vi.fn(),
+  },
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("./ProcessingStatus", () => ({ CoverProcessing: () => null }));
 const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
@@ -54,6 +60,24 @@ beforeEach(async () => {
     },
   );
   vi.clearAllMocks();
+  vi.mocked(api.chatUsage).mockResolvedValue({
+    historyComplete: true,
+    total: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cachedInputTokens: null,
+      cacheWriteInputTokens: null,
+      reasoningOutputTokens: null,
+    },
+    calls: [],
+    groups: [],
+    stages: [{ stage: "chat", durationMs: 0 }],
+    unknownCalls: 0,
+    failedCalls: 0,
+    partialCalls: 0,
+    elapsedMs: 0,
+  });
   useReaderStore.setState({ documents: docs });
   host = document.createElement("div");
   document.body.append(host);
@@ -123,16 +147,14 @@ it("opens the context menu on the targeted document and edits that document", as
 
 it("requires edit mode before selecting and clears selection on exit", async () => {
   const shortcut = () =>
-    host
-      .querySelector("article")!
-      .dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "a",
-          metaKey: true,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
+    host.querySelector("article")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "a",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
   expect(host.querySelector('[role="checkbox"]')).toBeNull();
   await act(async () => {
     shortcut();
@@ -147,4 +169,69 @@ it("requires edit mode before selecting and clears selection on exit", async () 
   expect(host.querySelector('[role="checkbox"]')).toBeNull();
   await act(async () => button("编辑").click());
   expect(host.textContent).toContain("已选 0 份");
+});
+
+it("opens PDF processing statistics from the button beside edit without opening the book", async () => {
+  const pdf = { ...docs[0], type: "pdf" as const };
+  const job = {
+    documentId: pdf.id,
+    phase: "ready" as const,
+    status: "complete" as const,
+    pagesDone: 2,
+    pagesTotal: 2,
+    assetsDone: 0,
+    assetsTotal: 0,
+    translationsDone: 18,
+    translationsTotal: 18,
+    detail: "",
+    updatedAt: "",
+  };
+  vi.mocked(api.processingUsage).mockResolvedValue({
+    historyComplete: false,
+    total: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      reasoningOutputTokens: 0,
+    },
+    calls: [],
+    groups: [],
+    stages: [],
+    unknownCalls: 0,
+    failedCalls: 0,
+    partialCalls: 0,
+    elapsedMs: 0,
+  });
+  await act(async () =>
+    root.render(
+      <LibraryDocuments
+        documents={[pdf, docs[1]]}
+        libraryView="grid"
+        jobs={[job]}
+        processingError=""
+        openDocument={open}
+        favorite={() => {}}
+        onEdit={edit}
+        onSettings={() => {}}
+      />,
+    ),
+  );
+  const button = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="查看 Alpha 的用量统计"]',
+  )!;
+  expect(button).not.toBeNull();
+  expect(button.nextElementSibling?.getAttribute("aria-label")).toBe(
+    "编辑 Alpha 的信息",
+  );
+  expect(
+    host.querySelector('button[aria-label="查看 Beta 的用量统计"]'),
+  ).not.toBeNull();
+  await act(async () => button.click());
+  expect(api.processingUsage).toHaveBeenCalledWith(pdf.id);
+  expect(open).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "历史用量未记录",
+  );
 });

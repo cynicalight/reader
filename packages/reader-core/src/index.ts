@@ -203,6 +203,9 @@ export interface Message {
 }
 
 export interface Processing {
+  usageTracked?: boolean;
+  startedAt?: string;
+  completedAt?: string;
   incomplete?: boolean;
   documentId: string;
   phase: "learning" | "settling" | "translating" | "ready";
@@ -271,3 +274,45 @@ export interface AgentModel {
 export { isPDFPageDecoration } from "./pdf-content";
 
 export { pdfFontAscent } from "./pdf-text";
+
+export interface TokenCounts {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number | null;
+  cacheWriteInputTokens: number | null;
+  reasoningOutputTokens: number | null;
+}
+export interface ModelTokens {
+  model: string;
+  tokens: TokenCounts | null;
+}
+export interface UsageCall {
+  id: string;
+  stage: string;
+  target: string;
+  provider: string;
+  startedAt: string;
+  finishedAt?: string;
+  status: string;
+  models: ModelTokens[];
+}
+export interface UsageGroup {
+  stage: string;
+  provider: string;
+  model: string;
+  calls: number;
+  unknownCalls: number;
+  tokens: TokenCounts;
+}
+export interface ProcessingUsage {
+  historyComplete: boolean;
+  total: TokenCounts;
+  calls: UsageCall[];
+  groups: UsageGroup[];
+  stages: { stage: string; durationMs: number }[];
+  unknownCalls: number;
+  failedCalls: number;
+  partialCalls: number;
+  elapsedMs: number;
+}
