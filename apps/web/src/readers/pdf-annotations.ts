@@ -21,7 +21,7 @@ export class PDFAnnotationLayer {
   paint = () => {
     this.clear();
     this.host
-      .querySelectorAll(".reader-highlight")
+      .querySelectorAll(".reader-annotation")
       .forEach((el) => el.remove());
     for (const annotation of this.annotations) {
       if (annotation.location.type !== "pdf" || annotation.kind === "bookmark")
@@ -30,6 +30,14 @@ export class PDFAnnotationLayer {
         `.page[data-page-number="${annotation.location.page}"]`,
       );
       if (!page) continue;
+      // Composite the entire annotation once. Range.getClientRects() may
+      // include overlapping element/text boxes, which must not darken the mark.
+      const group = document.createElement("div");
+      group.className = "reader-annotation";
+      group.style.setProperty(
+        "--annotation-color",
+        annotation.color || "#facc15",
+      );
       for (const rect of annotation.location.rects || []) {
         const el = document.createElement("div");
         el.className = "reader-highlight";
@@ -41,12 +49,9 @@ export class PDFAnnotationLayer {
           width: `${rect.width * 100}%`,
           height: `${rect.height * 100}%`,
         });
-        el.style.setProperty(
-          "--annotation-color",
-          annotation.color || "#facc15",
-        );
-        page.append(el);
+        group.append(el);
       }
+      if (group.childElementCount) page.append(group);
     }
   };
   clear = () => {
@@ -136,7 +141,7 @@ export class PDFAnnotationLayer {
     this.host.removeEventListener("click", this.click, true);
     this.host.removeEventListener("scroll", this.clear);
     this.host
-      .querySelectorAll(".reader-highlight")
+      .querySelectorAll(".reader-annotation")
       .forEach((el) => el.remove());
   }
 }

@@ -652,21 +652,24 @@ kbd {
   padding-inline: var(--reading-inset-x);
   padding-top: var(--reading-inset-y);
 }
-.reader-highlight {
+.reader-annotation {
   position: absolute;
+  inset: 0;
   opacity: 0.32;
   pointer-events: none;
   /* Keep annotation feedback above both local and linked block hover. */
   z-index: 7;
   mix-blend-mode: multiply;
+}
+.reader-highlight {
+  position: absolute;
   background: var(--annotation-color);
 }
 .reader-highlight[data-kind="underline"] {
   background: transparent;
   border-bottom: 2px solid var(--annotation-color);
 }
-.reader-highlight[data-hovered] {
-  background: var(--annotation-color);
+.reader-annotation:has(.reader-highlight[data-hovered]) {
   opacity: 0.48;
 }
 .reader-highlight[data-kind="underline"][data-hovered] {
