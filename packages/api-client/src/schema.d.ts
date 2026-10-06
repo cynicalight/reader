@@ -1274,6 +1274,52 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/processing-usage": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Persisted processing usage, including failed and fallback attempts */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["ProcessingUsage"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1446,6 +1492,9 @@ export interface components {
       warning?: string;
       updatedAt: string;
       incomplete?: boolean;
+      startedAt?: string;
+      completedAt?: string;
+      usageTracked?: boolean;
     };
     PDFBlock: {
       id: string;
@@ -1527,6 +1576,51 @@ export interface components {
       tags: string[];
       /** @enum {string} */
       match: "all" | "any";
+    };
+    TokenCounts: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      cachedInputTokens: number | null;
+      cacheWriteInputTokens: number | null;
+      reasoningOutputTokens: number | null;
+    };
+    ModelTokens: {
+      model: string;
+      tokens: components["schemas"]["TokenCounts"] | null;
+    };
+    UsageCall: {
+      id: string;
+      stage: string;
+      target: string;
+      provider: string;
+      startedAt: string;
+      finishedAt?: string;
+      status: string;
+      models: components["schemas"]["ModelTokens"][];
+    };
+    UsageGroup: {
+      stage: string;
+      provider: string;
+      model: string;
+      calls: number;
+      unknownCalls: number;
+      tokens: components["schemas"]["TokenCounts"];
+    };
+    StageUsage: {
+      stage: string;
+      durationMs: number;
+    };
+    ProcessingUsage: {
+      historyComplete: boolean;
+      total: components["schemas"]["TokenCounts"];
+      calls: components["schemas"]["UsageCall"][];
+      groups: components["schemas"]["UsageGroup"][];
+      stages: components["schemas"]["StageUsage"][];
+      unknownCalls: number;
+      failedCalls: number;
+      partialCalls: number;
+      elapsedMs: number;
     };
   };
   responses: never;

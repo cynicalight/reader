@@ -15,7 +15,7 @@ import (
 // App Server exposes agentMessage deltas; exec --json only exposes completed
 // assistant messages. Use one private stdio connection and ephemeral thread per
 // invocation, retaining the CLI's own login without reading its credentials.
-func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func(string)) (string, error) {
+func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (string, error) {
 	child, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	args := []string{"app-server", "--listen", "stdio://"}
@@ -110,6 +110,17 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 			} `json:"turn"`
 		}
 		if json.Unmarshal(msg.Params, &p) != nil || threadID == "" || p.ThreadID != threadID {
+			return nil
+		}
+		if msg.Method == "thread/tokenUsage/updated" {
+			var usage struct {
+				TokenUsage struct {
+					Total json.RawMessage `json:"total"`
+				} `json:"tokenUsage"`
+			}
+			if json.Unmarshal(msg.Params, &usage) == nil {
+				emitMetrics(metrics, []ModelTokens{{Tokens: codexTokens(usage.TokenUsage.Total)}})
+			}
 			return nil
 		}
 		id := p.TurnID
@@ -208,6 +219,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		return "", err
 	}
 	var thread struct {
+		Model  string `json:"model"`
 		Thread struct {
 			ID string `json:"id"`
 		} `json:"thread"`
@@ -216,6 +228,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		return "", generationError(ErrorProtocol, "Codex 会话无效")
 	}
 	threadID = thread.Thread.ID
+	emitMetrics(metrics, []ModelTokens{{Model: thread.Model}})
 	input := []any{map[string]string{"type": "text", "text": in.Prompt}}
 	for _, image := range in.images() {
 		input = append(input, map[string]string{"type": "image", "url": imageData(image)})

@@ -49,6 +49,7 @@ func errorKind(err error) ErrorKind {
 type ProviderEvent struct {
 	Text     string
 	Fallback string
+	Metrics  []ModelTokens
 }
 type GenerateRequest struct{ Input AIInput }
 type GenerateResult struct {
@@ -70,6 +71,7 @@ type GenerationService struct {
 	primary       string
 	connections   map[string]generationConnection
 	attemptFailed func(string, bool, error)
+	usageSink     func(UsageCall) error
 }
 
 func (s *Server) generationService(config AIConfig) *GenerationService {
@@ -127,6 +129,10 @@ func (a cliAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 				cancel()
 			}
 		}
+	}, func(metrics []ModelTokens) {
+		if emitErr == nil && emit != nil {
+			emitErr = emit(ProviderEvent{Metrics: metrics})
+		}
 	})
 	if emitErr != nil {
 		return GenerateResult{}, emitErr
@@ -176,7 +182,7 @@ func runAttempt(ctx context.Context, adapter Adapter, in AIInput, emit func(Prov
 			emitErr = generationError(ErrorProtocol, "适配器事件无效")
 		} else if text.Len()+len(e.Text) > 1<<20 {
 			emitErr = generationError(ErrorLimit, "回答超过 1 MiB 限制")
-		} else if e.Text != "" {
+		} else if e.Text != "" || len(e.Metrics) > 0 {
 			text.WriteString(e.Text)
 			if emit != nil {
 				emitErr = emit(e)
@@ -208,7 +214,43 @@ func (g *GenerationService) Generate(ctx context.Context, in AIInput, interactiv
 	return g.generate(ctx, in, interactive, emit != nil, emit)
 }
 func (g *GenerationService) attempt(ctx context.Context, provider string, in AIInput, emit func(ProviderEvent) error) (GenerateResult, error) {
-	result, err := runAttempt(ctx, g.connections[provider].Adapter, in, emit)
+	call := UsageCall{ID: id(), Provider: provider, StartedAt: now(), Status: "running", Models: []ModelTokens{{Model: ""}}}
+	if g.usageSink != nil {
+		if err := g.usageSink(call); err != nil {
+			return GenerateResult{}, generationError(ErrorSave, "无法保存调用统计")
+		}
+	}
+	var metricMu sync.Mutex
+	result, err := runAttempt(ctx, g.connections[provider].Adapter, in, func(event ProviderEvent) error {
+		if len(event.Metrics) > 0 {
+			metricMu.Lock()
+			call.Models = mergeModelTokens(call.Models, event.Metrics)
+			if g.usageSink != nil {
+				if err := g.usageSink(call); err != nil {
+					metricMu.Unlock()
+					return generationError(ErrorSave, "无法保存调用统计")
+				}
+			}
+			metricMu.Unlock()
+		}
+		if emit != nil {
+			return emit(event)
+		}
+		return nil
+	})
+	call.FinishedAt = now()
+	call.Status = "complete"
+	if err != nil {
+		call.Status = "failed"
+		if errors.Is(err, context.Canceled) {
+			call.Status = "cancelled"
+		}
+	}
+	if g.usageSink != nil {
+		if saveErr := g.usageSink(call); saveErr != nil {
+			return GenerateResult{}, generationError(ErrorSave, "无法保存调用统计")
+		}
+	}
 	// User cancellation and a disconnected consumer do not invalidate the agent.
 	if err != nil && !errors.Is(ctx.Err(), context.Canceled) && errorKind(err) != ErrorCanceled && g.attemptFailed != nil {
 		g.attemptFailed(provider, len(in.images()) > 0, err)
@@ -229,6 +271,9 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	primary := g.connections[g.primary]
 	visible := false
 	send := func(e ProviderEvent) error {
+		if e.Text == "" && e.Fallback == "" {
+			return nil
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -254,6 +299,9 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	}
 	if ctx.Err() != nil {
 		return AIResult{}, ctx.Err()
+	}
+	if errorKind(err) == ErrorSave {
+		return AIResult{}, err
 	}
 	if visible {
 		return AIResult{}, err

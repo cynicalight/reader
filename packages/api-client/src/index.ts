@@ -17,6 +17,7 @@ import type {
   ReaderTheme,
   SourceReference,
   Processing,
+  ProcessingUsage,
   PDFBlock,
   AIConfig,
   AICapability,
@@ -60,6 +61,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  processingUsage: (id: string) =>
+    request<ProcessingUsage>(
+      `/api/documents/${encodeURIComponent(id)}/processing-usage`,
+    ),
   tagBoards: () => request<TagBoard[]>("/api/tag-boards"),
   createTagBoard: (board: Omit<TagBoard, "id">) =>
     request<TagBoard>("/api/tag-boards", {

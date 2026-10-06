@@ -1814,3 +1814,77 @@ kbd {
 .library-topbar > .search-field {
   width: min(280px, 45%);
 }
+
+.usage-dialog {
+  width: min(680px, calc(100vw - 2rem));
+  max-width: 680px;
+}
+.processing-usage {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.usage-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.usage-totals dt,
+.usage-note,
+.usage-table small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.usage-totals dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-table-scroll {
+  overflow-x: auto;
+}
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-table th,
+.usage-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+.usage-table th:first-child {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.usage-table tbody th {
+  font-weight: 400;
+}
+.usage-table small {
+  display: block;
+  margin-top: 4px;
+}
+.usage-table .usage-stage th {
+  font-weight: 600;
+}
+.usage-calls summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.usage-call {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.usage-call p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+.usage-call p span {
+  float: right;
+  color: var(--muted-foreground);
+}

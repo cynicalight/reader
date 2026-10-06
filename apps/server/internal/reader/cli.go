@@ -19,7 +19,7 @@ import (
 func imageData(b []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
 }
-func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, delta func(string)) (string, error) {
+func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (string, error) {
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -32,10 +32,10 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 	}
 	defer os.RemoveAll(work)
 	if provider == "kimi" {
-		return invokeKimi(ctx, work, model, in, delta)
+		return invokeKimi(ctx, work, model, in, delta, metrics...)
 	}
 	if provider == "codex" {
-		return invokeCodex(ctx, work, model, in, delta)
+		return invokeCodex(ctx, work, model, in, delta, metrics...)
 	}
 	args := append(claudeArgs(), "--append-system-prompt", readerSystemPrompt)
 	if in.Effort != "" {
@@ -84,6 +84,7 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 		if completed {
 			continue
 		}
+		reportClaudeMetrics(scan.Bytes(), metrics)
 		part, done, bad := claudeEvent(scan.Bytes())
 		if !utf8.Valid(scan.Bytes()) {
 			bad = true
@@ -127,7 +128,7 @@ func invokeCLI(ctx context.Context, root, provider, model string, in AIInput, de
 
 // ACP transmits image content directly. No filesystem or terminal capabilities
 // are advertised; the isolated profile disables all model tools and subagents.
-func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(string)) (string, error) {
+func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (string, error) {
 	profile := filepath.Join(work, "reader.md")
 	if e := os.WriteFile(profile, []byte("---\nname: reader\ndescription: Reader document assistant\ntools: []\nsubagents: []\n---\n"+readerSystemPrompt+"\n"), 0600); e != nil {
 		return "", e
@@ -256,6 +257,13 @@ func invokeKimi(ctx context.Context, work, model string, in AIInput, delta func(
 		return "", generationError(ErrorProtocol, "Kimi 会话无效")
 	}
 	sessionID = session.ID
+	var selected struct {
+		Models struct {
+			Current string `json:"currentModelId"`
+		} `json:"models"`
+	}
+	_ = json.Unmarshal(raw, &selected)
+	emitMetrics(metrics, []ModelTokens{{Model: selected.Models.Current}})
 	lifecycle.setCancel(map[string]any{"jsonrpc": "2.0", "method": "session/cancel", "params": map[string]string{"sessionId": sessionID}})
 	if in.Effort != "" {
 		if _, e = request(4, "session/set_config_option", map[string]any{"sessionId": session.ID, "configId": "thinking", "value": in.Effort}); e != nil {
