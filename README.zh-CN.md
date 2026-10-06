@@ -4,6 +4,13 @@
 
 一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
+  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader 的 PDF 阅读界面：左侧目录，右侧 AI 助读" />
+</picture>
+</p>
+
 Reader 以 EPUB 和 PDF 为两种核心文档格式。它使用统一的书库、目录、批注与对话界面，并分别通过 Readium 和 PDF.js 提供阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code 或 Codex CLI 调用，无需在 Reader 中另填 API Key。
 
 支持从源码运行；发布 Release 后，CI 会构建 macOS（Apple Silicon）的 DMG 和 Windows x64 的 EXE。安装包没有开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。尚未完成 Windows 安装后的人工验收，Linux 不提供安装包。
@@ -30,6 +37,14 @@ Reader 以 EPUB 和 PDF 为两种核心文档格式。它使用统一的书库�
 空书库中可以点击“先体验示例文档”，加载项目附带的原创三章 EPUB 和两页 PDF。
 
 界面支持浅色、深色与跟随系统，桌面窗口外观同步切换。
+
+## 截图
+
+以下截图来自应用本身，使用项目自带的示例文档；图片会跟随 GitHub 的浅色 / 深色外观。
+
+| 书库 | Agent 设置 |
+| --- | --- |
+| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="书库，PDF 封面上显示后台处理进度" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent 设置：Codex、Claude Code 与 Kimi Code" /> |
 
 ## 快速开始
 
@@ -110,6 +125,8 @@ pnpm build         # 构建 Go、Web 和 Electron
 pnpm api:generate  # 从 OpenAPI 重新生成客户端类型
 ```
 
+项目官网位于 `website/`，是无需构建的静态 HTML / CSS / JavaScript。本地预览：`python3 -m http.server 4321 -d website`，然后打开 `http://127.0.0.1:4321/`。
+
 测试覆盖文档导入、持久化、资源访问边界、CLI 协议、PDF 解析与部分前端回归。构建和测试通过不能替代真实文档与界面的人工检查，详见[验证记录](docs/verification.md)。
 
 ## 技术与结构
@@ -126,6 +143,7 @@ packages/
 ├── reader-core/   # Document、Location、TOC、Annotation、ReaderAdapter
 └── api-client/    # OpenAPI 类型与 API 客户端
 docs/              # 范围、路线图、接口与验证记录
+website/           # 项目官网静态页面与 README 截图
 ```
 
 业务模型围绕 `Document` 组织。PDF 用页码和坐标定位；EPUB 使用章节资源和 locator 定位。阅读界面通过 `ReaderAdapter` 调用各自的引擎。项目使用 pnpm workspace，不依赖 Nx 或 Turborepo。
