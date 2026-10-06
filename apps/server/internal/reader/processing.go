@@ -304,7 +304,7 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		child, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(child, node, worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models"))
-		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1")
+		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1", "NODE_USE_ENV_PROXY=1")
 		cmd.WaitDelay = 3 * time.Second
 		cmd.Dir = s.Store.Root
 		cmd.Stderr = io.Discard
