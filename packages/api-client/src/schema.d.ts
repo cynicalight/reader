@@ -1557,6 +1557,8 @@ export interface components {
       kind?: "selection" | "section";
       image?: string;
       caption?: string;
+      /** @description Formula-only display math from consolidation, excluding interpretation. */
+      formulaMarkdown?: string;
     };
     AICapability: {
       text: boolean;

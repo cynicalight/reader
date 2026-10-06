@@ -228,6 +228,7 @@ export interface PDFBlock {
   text: string;
   image?: string;
   caption?: string;
+  formulaMarkdown?: string;
 }
 export interface TranslationSentence {
   source: string;

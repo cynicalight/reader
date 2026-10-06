@@ -256,3 +256,13 @@
     animation-duration: 0s;
   }
 }
+
+.translation-formula-source {
+  margin-top: 0.5em;
+  font-size: 0.85em;
+  color: var(--muted-foreground);
+}
+.translation-formula-source summary {
+  cursor: pointer;
+  width: fit-content;
+}

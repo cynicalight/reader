@@ -2,6 +2,7 @@ import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { lazy, Suspense } from "react";
+const FormulaFragment = lazy(() => import("./FormulaFragment"));
 const Markdown = lazy(() =>
   import("../chat/MessageMarkdown").then((module) => ({
     default: module.MessageMarkdown,
@@ -28,6 +29,24 @@ export function TranslationText({
   retry: () => void;
   linked?: number[];
 }) {
+  const formula = ["display_formula", "inline_formula"].includes(block.label);
+  const asset =
+    !!block.image || ["table", "chart", "image"].includes(block.label);
+  const image = block.image ? (
+    <img
+      className="translation-image"
+      src={blockImageURL(documentId, block.id)}
+      alt={block.caption || block.label}
+      loading="lazy"
+    />
+  ) : null;
+  if (formula && block.formulaMarkdown) {
+    return (
+      <Suspense fallback={image}>
+        <FormulaFragment content={block.formulaMarkdown} fallback={image} />
+      </Suspense>
+    );
+  }
   const preserve =
     [
       "reference",
@@ -40,19 +59,12 @@ export function TranslationText({
       "footer",
       "number",
     ].includes(block.label) ||
-    (!!block.image && block.label !== "table" && !block.caption);
+    (asset && !block.caption);
   return (
     <>
-      {block.image && (
-        <img
-          className="translation-image"
-          src={blockImageURL(documentId, block.id)}
-          alt={block.caption || block.label}
-          loading="lazy"
-        />
-      )}
+      {image}
       {preserve ? (
-        !block.image &&
+        !asset &&
         (block.label === "algorithm" ? (
           <pre>{block.text}</pre>
         ) : (

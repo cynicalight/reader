@@ -29,7 +29,7 @@ func translationSource(b PDFBlock) string {
 	case "reference", "reference_content", "algorithm", "display_formula", "inline_formula", "formula_number", "header", "footer", "number":
 		return ""
 	}
-	if b.Image != "" && b.Label != "table" {
+	if isImageAsset(b) {
 		return strings.TrimSpace(b.Caption)
 	}
 	return strings.TrimSpace(b.Text)

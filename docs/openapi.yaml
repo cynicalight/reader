@@ -1943,6 +1943,11 @@
                   "kind": { "enum": ["selection", "section"] },
                   "image": { "type": "string" },
                   "caption": { "type": "string" },
+                  "formulaMarkdown":
+                    {
+                      "type": "string",
+                      "description": "Formula-only display math from consolidation, excluding interpretation.",
+                    },
                 },
               "required": ["id", "page", "label", "bounds", "text"],
             },
