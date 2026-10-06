@@ -3,6 +3,7 @@
 interface Window {
   readerDesktop?: {
     platform: string;
+    checkForUpdates: () => Promise<void>;
     writeClipboardText: (text: string) => Promise<void>;
     setAppearance: (appearance: "light" | "dark" | "system") => Promise<void>;
     importFiles: () => Promise<void>;
