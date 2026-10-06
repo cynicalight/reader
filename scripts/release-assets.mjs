@@ -6,17 +6,14 @@ import { spawnSync } from "node:child_process";
 const { version } = JSON.parse(
   await readFile("apps/desktop/package.json", "utf8"),
 );
-const expected = [
-  `Reader-${version}-mac-arm64.dmg`,
-  `Reader-${version}-win-x64.exe`,
-].sort();
+const expected = [`Reader-${version}-mac-arm64.dmg`];
 const actual = (await readdir("release"))
   .filter((file) => file !== "SHA256SUMS.txt")
   .sort();
 assert.deepEqual(
   actual,
   expected,
-  "Release must contain exactly the Apple Silicon Mac and Windows x64 installers",
+  "Release must contain exactly the Apple Silicon Mac installer",
 );
 const checksums = [];
 for (const file of expected) {

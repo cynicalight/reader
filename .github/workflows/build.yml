@@ -22,8 +22,6 @@ jobs:
         include:
           - os: macos-15
             target: mac-arm64
-          - os: windows-2022
-            target: win-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
@@ -54,7 +52,6 @@ jobs:
           name: reader-${{ matrix.target }}
           path: |
             release/Reader-*-${{ matrix.target }}.dmg
-            release/Reader-*-${{ matrix.target }}.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

@@ -37,4 +37,6 @@ jobs:
           cache-dependency-path: apps/server/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm test:go
+      - name: Test shared and macOS code
+        run: pnpm exec vitest run --exclude "apps/desktop/main/windows-proxy*.test.ts"
