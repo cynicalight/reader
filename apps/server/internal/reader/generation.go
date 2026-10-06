@@ -87,7 +87,11 @@ func (s *Server) generationService(config AIConfig) *GenerationService {
 		if level == "" {
 			level = "medium"
 		}
-		var adapter Adapter = configuredCLIAdapter{cliAdapter{s.Store.Root, p, model}, level, s.modelCatalog}
+		cli := configuredCLIAdapter{cliAdapter{s.Store.Root, p, model}, level, s.modelCatalog}
+		var adapter Adapter = cli
+		if p == "codex" {
+			adapter = codexChatAdapter{cli, &s.codexChat}
+		}
 		if p == "text-api" {
 			adapter = apiAdapter{config.TextAPI}
 		}

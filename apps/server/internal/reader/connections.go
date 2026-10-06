@@ -48,6 +48,7 @@ type savedConfig struct {
 	Fingerprints map[string]string `json:"fingerprints"`
 }
 type AIInput struct {
+	Chat   *chatInput
 	Effort string
 	Prompt string
 	Image  []byte
