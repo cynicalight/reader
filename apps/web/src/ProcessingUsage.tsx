@@ -16,6 +16,7 @@ import {
 } from "@reader/ui/components/dialog";
 
 const labels: Record<string, string> = {
+  chat: "聊天",
   settling: "沉淀／图片解析",
   translating: "正文翻译",
 };
@@ -63,6 +64,24 @@ const zero: TokenCounts = {
   cacheWriteInputTokens: null,
   reasoningOutputTokens: null,
 };
+export function combineUsageReports(
+  processing: ProcessingUsage,
+  chat: ProcessingUsage,
+): ProcessingUsage {
+  return {
+    historyComplete: processing.historyComplete && chat.historyComplete,
+    total: add(processing.total, chat.total),
+    calls: [...processing.calls, ...chat.calls],
+    groups: [...processing.groups, ...chat.groups],
+    stages: [...processing.stages, ...chat.stages],
+    unknownCalls: processing.unknownCalls + chat.unknownCalls,
+    failedCalls: processing.failedCalls + chat.failedCalls,
+    partialCalls: processing.partialCalls + chat.partialCalls,
+    elapsedMs:
+      processing.stages.reduce((sum, stage) => sum + stage.durationMs, 0) +
+      chat.elapsedMs,
+  };
+}
 export function UsageDetails({ report }: { report: ProcessingUsage }) {
   const known = report.calls.some((call) =>
     call.models.some((model) => model.tokens !== null),
@@ -89,7 +108,7 @@ export function UsageDetails({ report }: { report: ProcessingUsage }) {
           <dd>{known ? count(report.total.outputTokens) : "—"}</dd>
         </div>
         <div>
-          <dt>总经过时间</dt>
+          <dt>累计执行耗时</dt>
           <dd>
             {report.elapsedMs ? usageDuration(report.elapsedMs) : "未记录"}
           </dd>
@@ -121,7 +140,7 @@ export function UsageDetails({ report }: { report: ProcessingUsage }) {
             </tr>
           </thead>
           <tbody>
-            {["settling", "translating"].map((stage) => {
+            {["settling", "translating", "chat"].map((stage) => {
               const groups = report.groups.filter(
                 (group) => group.stage === stage,
               );
@@ -186,7 +205,10 @@ function StageRows({
               <span className="usage-stage-name">
                 {labels[stage]}
                 <small>
-                  {usageDuration(duration)} · {calls.length} 次调用
+                  {usageDuration(duration)} ·{" "}
+                  {stage === "chat" &&
+                    `${new Set(calls.map((call) => call.target)).size} 次提问 · `}
+                  {calls.length} 次调用
                 </small>
               </span>
               <span>{known ? count(tokens.inputTokens) : "—"}</span>
@@ -347,7 +369,11 @@ export function ProcessingUsageDialog({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const next = await api.processingUsage(documentId);
+        const [processing, chat] = await Promise.all([
+          api.processingUsage(documentId),
+          api.chatUsage(documentId),
+        ]);
+        const next = combineUsageReports(processing, chat);
         if (!stopped) {
           setReport(next);
           setError("");
@@ -355,8 +381,7 @@ export function ProcessingUsageDialog({
       } catch (e) {
         if (!stopped) setError((e as Error).message);
       }
-      if (!stopped && job?.status === "running")
-        timer = setTimeout(() => void poll(), 1500);
+      if (!stopped) timer = setTimeout(() => void poll(), 1500);
     };
     void poll();
     return () => {
@@ -373,7 +398,7 @@ export function ProcessingUsageDialog({
     >
       <DialogContent className="usage-dialog">
         <DialogHeader>
-          <DialogTitle>处理统计</DialogTitle>
+          <DialogTitle>用量统计</DialogTitle>
           <DialogDescription>{document?.title}</DialogDescription>
         </DialogHeader>
         {error && (

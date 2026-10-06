@@ -1,7 +1,9 @@
 package reader
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"sync"
@@ -232,20 +234,32 @@ func addTokens(a *TokenCounts, b TokenCounts) {
 	addOptional(&a.ReasoningOutputTokens, b.ReasoningOutputTokens)
 }
 func (s *Store) usageReport(documentID string) (UsageReport, error) {
+	return s.scopedUsageReport(documentID, false)
+}
+func (s *Store) scopedUsageReport(documentID string, chat bool) (UsageReport, error) {
 	report := UsageReport{Calls: []UsageCall{}, Groups: []UsageGroup{}, Stages: []StageUsage{{Stage: "learning"}, {Stage: "settling"}, {Stage: "translating"}}}
-	p, err := s.processing(documentID)
-	if err != nil {
-		return report, err
-	}
-	report.HistoryComplete = p.UsageTracked
-	end := p.CompletedAt
-	if end == "" {
-		end = now()
-		if p.Status != "running" && p.Status != "queued" {
-			end = p.UpdatedAt
+	if chat {
+		report.Stages = []StageUsage{{Stage: "chat"}}
+		report.HistoryComplete = true
+		err := s.DB.QueryRow("SELECT history_complete FROM chat_usage_coverage WHERE document_id=?", documentID).Scan(&report.HistoryComplete)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return report, err
 		}
+	} else {
+		p, err := s.processing(documentID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return report, err
+		}
+		report.HistoryComplete = p.UsageTracked || errors.Is(err, sql.ErrNoRows)
+		end := p.CompletedAt
+		if end == "" {
+			end = now()
+			if p.Status != "running" && p.Status != "queued" {
+				end = p.UpdatedAt
+			}
+		}
+		report.ElapsedMs = elapsedMilliseconds(p.StartedAt, end)
 	}
-	report.ElapsedMs = elapsedMilliseconds(p.StartedAt, end)
 	rows, err := s.DB.Query("SELECT body FROM processing_usage WHERE document_id=? ORDER BY rowid", documentID)
 	if err != nil {
 		return report, err
@@ -259,6 +273,16 @@ func (s *Store) usageReport(documentID string) (UsageReport, error) {
 		if err != nil {
 			rows.Close()
 			return report, err
+		}
+		if (call.Stage == "chat") != chat {
+			continue
+		}
+		if chat {
+			finish := call.FinishedAt
+			if finish == "" && call.Status == "running" {
+				finish = now()
+			}
+			report.ElapsedMs += elapsedMilliseconds(call.StartedAt, finish)
 		}
 		report.Calls = append(report.Calls, call)
 	}
@@ -302,6 +326,10 @@ func (s *Store) usageReport(documentID string) (UsageReport, error) {
 			report.PartialCalls++
 		}
 	}
+	if chat {
+		report.Stages[0].DurationMs = report.ElapsedMs
+		return report, nil
+	}
 	rows, err = s.DB.Query("SELECT stage,started_at,COALESCE(finished_at,'') FROM processing_intervals WHERE document_id=?", documentID)
 	if err != nil {
 		return report, err
@@ -332,6 +360,19 @@ func (s *Server) processingUsage(w http.ResponseWriter, r *http.Request) {
 	report, err := s.Store.usageReport(key)
 	if err != nil {
 		fail(w, 500, "无法读取处理统计")
+		return
+	}
+	respond(w, 200, report)
+}
+func (s *Server) chatUsage(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("id")
+	if _, err := s.Store.Document(key); err != nil {
+		fail(w, 404, "文档不存在")
+		return
+	}
+	report, err := s.Store.scopedUsageReport(key, true)
+	if err != nil {
+		fail(w, 500, "无法读取聊天统计")
 		return
 	}
 	respond(w, 200, report)

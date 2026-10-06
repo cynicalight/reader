@@ -176,3 +176,96 @@ func TestUsageStorageFailureDoesNotTriggerFallback(t *testing.T) {
 		t.Fatal(err, attempts)
 	}
 }
+
+func TestChatUsageRecordsTextAndImageAndSeparatesProcessing(t *testing.T) {
+	fakeAgent(t, "codex", "usage")
+	s, _ := imageFixture(t)
+	config := AIConfig{Primary: "codex", Models: map[string]string{}, Capabilities: map[string]Capability{}}
+	config.Capabilities["codex"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "codex")}
+	if err := s.writeAIConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{`{"provider":"codex","prompt":"explain","context":""}`, `{"provider":"codex","prompt":"describe image","context":"","attachments":["p1-b1"]}`} {
+		res := request(t, s, "POST", "/api/documents/doc/chat", strings.NewReader(body))
+		if !strings.Contains(res.Body.String(), "event: done") {
+			t.Fatal(res.Body.String())
+		}
+	}
+	r, err := s.Store.scopedUsageReport("doc", true)
+	if err != nil || !r.HistoryComplete || len(r.Calls) != 2 || r.Total.TotalTokens != 60 || r.Calls[0].Target == r.Calls[1].Target || r.Calls[0].Models[0].Model != "actual-codex" {
+		t.Fatal(r, err)
+	}
+	processing, err := s.Store.usageReport("doc")
+	if err != nil || len(processing.Calls) != 0 || processing.Total.TotalTokens != 0 {
+		t.Fatal(processing, err)
+	}
+	// EPUB chat reporting needs no PDF processing task.
+	if _, err = s.Store.DB.Exec("DELETE FROM document_processing WHERE document_id='doc'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Store.DB.Exec("UPDATE documents SET type='epub' WHERE id='doc'"); err != nil {
+		t.Fatal(err)
+	}
+	res := request(t, s, "GET", "/api/documents/doc/chat-usage", nil)
+	if res.Code != 200 {
+		t.Fatal(res.Body.String())
+	}
+	var apiReport UsageReport
+	if err = json.Unmarshal(res.Body.Bytes(), &apiReport); err != nil || apiReport.Total.TotalTokens != 60 {
+		t.Fatal(apiReport, err)
+	}
+	// Clearing conversation text must not erase usage that already occurred.
+	s.Store.DB.Exec("DELETE FROM messages WHERE document_id='doc'")
+	reopened, err := OpenStore(s.Store.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.DB.Close()
+	r, err = reopened.scopedUsageReport("doc", true)
+	if err != nil || !r.HistoryComplete || r.Total.TotalTokens != 60 {
+		t.Fatal(r, err)
+	}
+	s.Store.DB.Exec("DELETE FROM documents WHERE id='doc'")
+	var n int
+	s.Store.DB.QueryRow("SELECT count(*) FROM processing_usage").Scan(&n)
+	if n != 0 {
+		t.Fatal(n)
+	}
+	s.Store.DB.QueryRow("SELECT count(*) FROM chat_usage_coverage").Scan(&n)
+	if n != 0 {
+		t.Fatal(n)
+	}
+}
+func TestChatUsageMigrationAndDocumentIsolation(t *testing.T) {
+	s, p := processingFixture(t)
+	if err := s.Store.saveMessage(Message{DocumentID: p.DocumentID, Role: "assistant", Content: "old"}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a library from before chat usage was introduced.
+	s.Store.DB.Exec("DELETE FROM chat_usage_coverage")
+	reopened, err := OpenStore(s.Store.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.DB.Close()
+	r, err := reopened.scopedUsageReport(p.DocumentID, true)
+	if err != nil || r.HistoryComplete {
+		t.Fatal(r, err)
+	}
+	stamp := now()
+	if _, err = s.Store.DB.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at) VALUES('other','epub','other','',0,?,?)", stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
+	sink := s.processingUsageSink(p.DocumentID, "chat", "request")
+	if err = sink(UsageCall{ID: "failed-chat", Status: "failed", StartedAt: stamp, FinishedAt: stamp, Models: []ModelTokens{{Model: "actual", Tokens: &TokenCounts{InputTokens: 2, OutputTokens: 1, TotalTokens: 3}}}}); err != nil {
+		t.Fatal(err)
+	}
+	r, err = s.Store.scopedUsageReport(p.DocumentID, true)
+	if err != nil || r.Total.TotalTokens != 3 || r.FailedCalls != 1 || r.PartialCalls != 1 || r.HistoryComplete {
+		t.Fatal(r, err)
+	}
+	other, err := s.Store.scopedUsageReport("other", true)
+	if err != nil || len(other.Calls) != 0 || other.Total.TotalTokens != 0 || !other.HistoryComplete {
+		t.Fatal(other, err)
+	}
+}

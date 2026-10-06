@@ -7,7 +7,11 @@ import type { Document } from "@reader/core";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { useReaderStore } from "./store";
 vi.mock("@reader/api", () => ({
-  api: { removeDocument: vi.fn(), processingUsage: vi.fn() },
+  api: {
+    removeDocument: vi.fn(),
+    processingUsage: vi.fn(),
+    chatUsage: vi.fn(),
+  },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("./ProcessingStatus", () => ({ CoverProcessing: () => null }));
@@ -56,6 +60,24 @@ beforeEach(async () => {
     },
   );
   vi.clearAllMocks();
+  vi.mocked(api.chatUsage).mockResolvedValue({
+    historyComplete: true,
+    total: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cachedInputTokens: null,
+      cacheWriteInputTokens: null,
+      reasoningOutputTokens: null,
+    },
+    calls: [],
+    groups: [],
+    stages: [{ stage: "chat", durationMs: 0 }],
+    unknownCalls: 0,
+    failedCalls: 0,
+    partialCalls: 0,
+    elapsedMs: 0,
+  });
   useReaderStore.setState({ documents: docs });
   host = document.createElement("div");
   document.body.append(host);
@@ -197,15 +219,15 @@ it("opens PDF processing statistics from the button beside edit without opening 
     ),
   );
   const button = host.querySelector<HTMLButtonElement>(
-    'button[aria-label="查看 Alpha 的处理统计"]',
+    'button[aria-label="查看 Alpha 的用量统计"]',
   )!;
   expect(button).not.toBeNull();
   expect(button.nextElementSibling?.getAttribute("aria-label")).toBe(
     "编辑 Alpha 的信息",
   );
   expect(
-    host.querySelector('button[aria-label="查看 Beta 的处理统计"]'),
-  ).toBeNull();
+    host.querySelector('button[aria-label="查看 Beta 的用量统计"]'),
+  ).not.toBeNull();
   await act(async () => button.click());
   expect(api.processingUsage).toHaveBeenCalledWith(pdf.id);
   expect(open).not.toHaveBeenCalled();

@@ -61,6 +61,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 export const api = {
+  chatUsage: (id: string) =>
+    request<ProcessingUsage>(
+      `/api/documents/${encodeURIComponent(id)}/chat-usage`,
+    ),
   processingUsage: (id: string) =>
     request<ProcessingUsage>(
       `/api/documents/${encodeURIComponent(id)}/processing-usage`,

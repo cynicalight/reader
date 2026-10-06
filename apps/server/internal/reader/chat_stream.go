@@ -82,7 +82,14 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 	if finalErr = out.send("status", map[string]string{"status": status}); finalErr != nil {
 		return
 	}
-	result, err := s.generationService(config).Generate(ctx, in, true, func(e ProviderEvent) error {
+	service := s.generationService(config)
+	if _, err := s.Store.DB.Exec("INSERT OR IGNORE INTO chat_usage_coverage(document_id,history_complete) VALUES(?,1)", documentID); err != nil {
+		finalErr = generationError(ErrorSave, "无法保存聊天统计")
+		_ = out.send("error", map[string]string{"error": finalErr.Error()})
+		return
+	}
+	service.usageSink = s.processingUsageSink(documentID, "chat", requestID)
+	result, err := service.Generate(ctx, in, true, func(e ProviderEvent) error {
 		if e.Fallback != "" {
 			return out.send("fallback", map[string]string{"message": e.Fallback})
 		}
