@@ -1,8 +1,15 @@
 # Reader
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [简体中文](README.zh-CN.md) | [Website](https://cynicalight.github.io/reader/)
 
 A local-first EPUB / PDF reader for books and papers, with annotations and AI assistance grounded in the text you are reading.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
+  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader reading a PDF, with contents on the left and AI assistance on the right" />
+</picture>
+</p>
 
 Reader treats EPUB and PDF as core document formats. It provides a shared library, table of contents, annotation tools, and chat interface, with Readium and PDF.js powering their respective reading experiences. Documents, reading progress, and notes stay on your machine. AI features use an already authenticated Claude Code or Codex CLI, without requiring a separate API key in Reader.
 
@@ -35,6 +42,14 @@ The first PDF analysis automatically downloads and verifies approximately 130 MB
 **Automatic image interpretation sends the cropped PDF figures/formulas to the selected agent.** Capability testing uses a synthetic image. Current chat still uses selected text or the current page/chapter; whole-document retrieval over transcripts and image-click conversations are not implemented yet.
 
 Appearance supports light, dark, and system modes, including the desktop window.
+
+## Screenshots
+
+Captured from the app with the bundled sample documents. Images follow GitHub's light / dark appearance.
+
+| Library | Agent settings |
+| --- | --- |
+| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="Library with a PDF processing overlay on its cover" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent settings with Codex, Claude Code and Kimi Code" /> |
 
 ## Quick start
 
@@ -116,6 +131,8 @@ pnpm build         # Build Go, web, and Electron
 pnpm api:generate  # Regenerate client types from OpenAPI
 ```
 
+The project website lives in `website/` as static HTML, CSS and JavaScript with no build step. Preview it locally with `python3 -m http.server 4321 -d website` and open `http://127.0.0.1:4321/`.
+
 Tests cover document imports, persistence, resource access boundaries, CLI protocols, PDF parsing, and selected frontend regressions. Passing builds and tests does not replace manual checks with real documents and the application UI. See the [verification notes](docs/verification.md) (Chinese).
 
 ## Technology and structure
@@ -132,6 +149,7 @@ packages/
 ├── reader-core/   # Document, Location, TOC, Annotation, ReaderAdapter
 └── api-client/    # OpenAPI types and API client
 docs/              # Scope, roadmap, API contract, and verification notes
+website/           # Static project website and README screenshots
 ```
 
 The domain model centers on `Document`. PDF positions use page numbers and coordinates; EPUB positions use chapter resources and locators. The reading interface accesses each engine through `ReaderAdapter`. The project uses pnpm workspaces without Nx or Turborepo.
