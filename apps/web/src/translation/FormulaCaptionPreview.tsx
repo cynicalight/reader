@@ -25,6 +25,7 @@ export default function FormulaCaptionPreview() {
             bounds,
             formulaMarkdown: formula,
           }}
+          formulaNumber="(1)"
           documentId="preview"
           retry={() => {}}
         />

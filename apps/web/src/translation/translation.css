@@ -266,3 +266,17 @@
   cursor: pointer;
   width: fit-content;
 }
+
+.translation-formula-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+.translation-formula-content {
+  min-width: 0;
+  overflow-x: auto;
+}
+.translation-formula-number {
+  white-space: nowrap;
+}

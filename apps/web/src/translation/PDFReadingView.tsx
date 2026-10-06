@@ -31,6 +31,7 @@ import { ReaderView } from "../ReaderView";
 import { overlap, ReadingSync } from "../readers/pdf-reading";
 import { animatePDFScroll } from "../readers/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
+import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
 import { paintTranslatedAnnotations } from "./annotations";
 import { translatedSelection as captureTranslationSelection } from "./selection";
@@ -140,7 +141,10 @@ export function PDFReadingView({
   const selecting = useRef(false),
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
-  const visibleBlocks = blocks.filter((b) => !isPDFPageDecoration(b));
+  const equationNumbers = useMemo(() => formulaNumbers(blocks), [blocks]);
+  const visibleBlocks = blocks.filter(
+    (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
+  );
   useEffect(() => {
     if (pane.current) return installTranslationSelectionHighlight(pane.current);
   }, [mode, doc.id]);
@@ -752,6 +756,7 @@ export function PDFReadingView({
                   >
                     <TranslationText
                       block={block}
+                      formulaNumber={equationNumbers.byFormula.get(block.id)}
                       translation={translated}
                       documentId={doc.id}
                       retry={() => void translate(block.id)}
@@ -789,6 +794,7 @@ export function PDFReadingView({
             <>
               <TranslationText
                 block={popup.block}
+                formulaNumber={equationNumbers.byFormula.get(popup.block.id)}
                 translation={activePopup}
                 documentId={doc.id}
                 retry={() => void translate(popup.block.id)}

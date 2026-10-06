@@ -1,3 +1,4 @@
+import { FormulaRow } from "./FormulaRow";
 import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
@@ -22,12 +23,14 @@ export function TranslationText({
   documentId,
   retry,
   linked = [],
+  formulaNumber,
 }: {
   block: PDFBlock;
   translation?: TranslationBlock;
   documentId: string;
   retry: () => void;
   linked?: number[];
+  formulaNumber?: string;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const asset =
@@ -40,13 +43,24 @@ export function TranslationText({
       loading="lazy"
     />
   ) : null;
+  const formulaFallback = image || <MessageMarkdown content={block.text} />;
   if (formula && block.formulaMarkdown) {
     return (
-      <Suspense fallback={image}>
-        <FormulaFragment content={block.formulaMarkdown} fallback={image} />
+      <Suspense
+        fallback={
+          <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>
+        }
+      >
+        <FormulaFragment
+          content={block.formulaMarkdown}
+          fallback={formulaFallback}
+          number={formulaNumber}
+        />
       </Suspense>
     );
   }
+  if (formula)
+    return <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>;
   const preserve =
     [
       "reference",

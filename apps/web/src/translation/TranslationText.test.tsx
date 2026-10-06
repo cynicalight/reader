@@ -29,11 +29,16 @@ afterEach(async () => {
   await act(async () => root.unmount());
   vi.unstubAllGlobals();
 });
-async function render(block: PDFBlock, translation?: TranslationBlock) {
+async function render(
+  block: PDFBlock,
+  translation?: TranslationBlock,
+  formulaNumber?: string,
+) {
   await act(async () =>
     root.render(
       <TranslationText
         block={block}
+        formulaNumber={formulaNumber}
         translation={translation}
         documentId="doc"
         retry={() => {}}
@@ -107,3 +112,25 @@ it("retains the original formula image for invalid LaTeX", async () => {
   expect(host.querySelector(".katex-error")).toBeNull();
   expect(host.querySelector(".translation-formula")).toBeNull();
 });
+
+it.each(["$$\n x=1\n$$", "$$\n\\unknowncommand{x}\n$$", ""])(
+  "keeps the equation number in the formula row: %s",
+  async (formulaMarkdown) => {
+    await render(
+      { ...base, label: "display_formula", formulaMarkdown },
+      undefined,
+      "(6)",
+    );
+    const row = host.querySelector(".translation-formula-row");
+    expect(row?.querySelector(".translation-formula-number")?.textContent).toBe(
+      "(6)",
+    );
+    expect(row?.querySelector(".translation-formula-content")).not.toBeNull();
+    expect(host.querySelectorAll(".translation-formula-number")).toHaveLength(
+      1,
+    );
+    expect(
+      host.querySelector("details .translation-formula-number"),
+    ).toBeNull();
+  },
+);
