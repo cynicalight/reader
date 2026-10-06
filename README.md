@@ -1,6 +1,6 @@
 # Reader
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [简体中文](README.zh-CN.md) | [Website](https://cynicalight.github.io/reader/)
 
 A local-first EPUB / PDF reader for books and papers, with annotations and AI assistance grounded in the text you are reading.
 

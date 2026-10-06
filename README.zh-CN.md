@@ -1,6 +1,6 @@
 # Reader
 
-[English](README.md) | **简体中文**
+[English](README.md) | **简体中文** | [官网](https://cynicalight.github.io/reader/)
 
 一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
