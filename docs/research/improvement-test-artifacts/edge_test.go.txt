@@ -1,0 +1,145 @@
+package reader
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func edgeStore(t *testing.T) *Server {
+	s := testServer(t)
+	if _, err := s.Store.DB.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at) VALUES('edge','pdf','edge','',1,?,?)", now(), now()); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+func TestImprovementOversizeHistoryEvidence(t *testing.T) {
+	s := edgeStore(t)
+	source := strings.Repeat("证据边界", 3000) + "此前独有事实：维修费用为471元。"
+	for _, m := range []Message{{Role: "user", Content: "维修费用是多少？", Context: source}, {Role: "assistant", Content: "471元"}} {
+		m.DocumentID = "edge"
+		if err := s.Store.saveMessage(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prompt := improvedPrompt(s, "edge", "edge", "给出原始依据", "", "")
+	if !strings.Contains(prompt, "此前独有事实：维修费用为471元。") {
+		t.Fatal("candidate drops original source when one historical excerpt exceeds budget")
+	}
+}
+func TestProtoCancellationDropsSession(t *testing.T) {
+	s := edgeStore(t)
+	if err := s.Store.saveMessage(Message{DocumentID: "edge", Role: "user", Content: "hello", Context: "source"}); err != nil {
+		t.Fatal(err)
+	}
+	improvementDocument = "edge"
+	defer func() { improvementDocument = "" }()
+	dir := t.TempDir()
+	script := `#!/usr/bin/env python3
+import sys,json
+for line in sys.stdin:
+ m=json.loads(line); method=m.get('method'); rid=m.get('id')
+ if method=='initialize': print(json.dumps({'id':rid,'result':{}}),flush=True)
+ elif method=='thread/start': print(json.dumps({'id':rid,'result':{'model':'gpt-6.1-sol','thread':{'id':'fixture-thread'}}}),flush=True)
+ elif method=='turn/start':
+  print(json.dumps({'id':rid,'result':{'turn':{'id':'fixture-turn'}}}),flush=True)
+  print(json.dumps({'method':'item/agentMessage/delta','params':{'threadId':'fixture-thread','itemId':'msg','delta':'partial'}}),flush=True)
+`
+	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	p := &protoSession{server: s, work: dir}
+	defer p.close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := p.Stream(ctx, GenerateRequest{AIInput{Prompt: "test"}}, func(e ProviderEvent) error {
+		if e.Text != "" {
+			cancel()
+		}
+		return nil
+	})
+	if err != context.Canceled {
+		t.Fatalf("want canceled, got %v", err)
+	}
+	if p.cmd != nil || p.expected != "" {
+		t.Fatal("uncertain state retained")
+	}
+}
+func TestPrototypeLastUsageSchema(t *testing.T) {
+	var frame struct {
+		TokenUsage struct {
+			Last json.RawMessage `json:"last"`
+		} `json:"tokenUsage"`
+	}
+	raw := `{"tokenUsage":{"last":{"inputTokens":100,"outputTokens":5,"totalTokens":105,"cachedInputTokens":80},"total":{"inputTokens":900,"outputTokens":50,"totalTokens":950}}}`
+	if err := json.Unmarshal([]byte(raw), &frame); err != nil {
+		t.Fatal(err)
+	}
+	if v := codexTokens(frame.TokenUsage.Last); v == nil || v.TotalTokens != 105 {
+		t.Fatal("last usage not isolated")
+	}
+}
+
+func TestProtoSaveFailureRebuildsFromSQLite(t *testing.T) {
+	s := edgeStore(t)
+	cfg := AIConfig{Primary: "codex", Models: map[string]string{"codex": "gpt-6.1-sol"}, Capabilities: map[string]Capability{}}
+	cfg.Capabilities["codex"] = Capability{Text: true, Fingerprint: configPrint(cfg, "codex")}
+	if err := s.writeAIConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := `#!/usr/bin/env python3
+import sys,json,os
+thread='fixture-'+str(os.getpid())
+turn=0
+for line in sys.stdin:
+ m=json.loads(line); method=m.get('method'); rid=m.get('id')
+ if method=='initialize': print(json.dumps({'id':rid,'result':{}}),flush=True)
+ elif method=='thread/start': print(json.dumps({'id':rid,'result':{'model':'gpt-6.1-sol','thread':{'id':thread}}}),flush=True)
+ elif method=='turn/start':
+  turn+=1
+  print(json.dumps({'id':rid,'result':{'turn':{'id':'t'+str(turn)}}}),flush=True)
+  print(json.dumps({'method':'item/agentMessage/delta','params':{'threadId':thread,'itemId':'msg'+str(turn),'delta':'fixture reply'}}),flush=True)
+  last={'inputTokens':100,'outputTokens':5,'totalTokens':105,'cachedInputTokens':80}
+  total={k:v*turn for k,v in last.items()}
+  print(json.dumps({'method':'thread/tokenUsage/updated','params':{'threadId':thread,'turnId':'t'+str(turn),'tokenUsage':{'last':last,'total':total}}}),flush=True)
+  print(json.dumps({'method':'turn/completed','params':{'threadId':thread,'turn':{'id':'t'+str(turn),'status':'completed'}}}),flush=True)
+`
+	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	p := &protoSession{server: s, work: dir}
+	defer p.close()
+	improvementMode = "session"
+	improvementAdapter = p
+	defer func() { improvementMode = ""; improvementAdapter = nil }()
+	if _, err := s.Store.DB.Exec("CREATE TRIGGER fail_assistant BEFORE INSERT ON messages WHEN json_extract(NEW.body,'$.role')='assistant' BEGIN SELECT RAISE(ABORT,'fixture save failure'); END"); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"provider":"codex","prompt":"first","context":"source"}`
+	first := request(t, s, "POST", "/api/documents/edge/chat", strings.NewReader(body))
+	if !strings.Contains(first.Body.String(), "event: error") || strings.Contains(first.Body.String(), "event: done") {
+		t.Fatal("save failure not propagated", first.Body.String())
+	}
+	oldThread := p.thread
+	if _, err := s.Store.DB.Exec("DROP TRIGGER fail_assistant"); err != nil {
+		t.Fatal(err)
+	}
+	second := request(t, s, "POST", "/api/documents/edge/chat", strings.NewReader(`{"provider":"codex","prompt":"second","context":"source"}`))
+	if !strings.Contains(second.Body.String(), "event: done") {
+		t.Fatal(second.Body.String())
+	}
+	if p.thread == oldThread || p.resets != 2 || p.restartReason != "persisted-history-mismatch" {
+		t.Fatal("failed save did not invalidate provider history")
+	}
+	ms := improvementHistory(s, "edge")
+	if len(ms) != 3 || ms[1].Content != "second" || ms[2].Role != "assistant" {
+		t.Fatalf("unexpected persisted history: %+v", ms)
+	}
+}
