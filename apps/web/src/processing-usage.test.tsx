@@ -53,9 +53,19 @@ it("shows actual models, stages, failure usage and cache subsets without adding 
   expect(text).toContain("Codex");
   expect(text).toContain("沉淀／图片解析");
   expect(text).toContain("正文翻译");
-  expect(text).toContain("不涉及 AI");
+  expect(text).not.toContain("学习／解析");
+  expect(text).not.toContain("调用明细");
+  expect(text).toContain("模型调用详情");
   expect(text).toContain("部分用量");
-  expect(text).toContain("缓存读取 7");
+  expect(text).toContain("缓存读取 token");
+  expect(text).toContain("关联调用累计耗时");
+  const host = document.createElement("div");
+  host.innerHTML = text;
+  expect(host.querySelectorAll("tbody > tr")).toHaveLength(2);
+  expect(host.querySelectorAll("details")).toHaveLength(2);
+  expect(
+    [...host.querySelectorAll("details")].every((item) => !item.open),
+  ).toBe(true);
 });
 it("never represents missing or historical usage as zero tokens", () => {
   const unknown: ProcessingUsage = {

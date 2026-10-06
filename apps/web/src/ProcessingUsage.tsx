@@ -16,16 +16,8 @@ import {
 } from "@reader/ui/components/dialog";
 
 const labels: Record<string, string> = {
-  learning: "学习／解析",
   settling: "沉淀／图片解析",
   translating: "正文翻译",
-};
-const statuses: Record<string, string> = {
-  running: "进行中",
-  complete: "完成",
-  failed: "失败",
-  cancelled: "已取消",
-  interrupted: "已中断",
 };
 const providers: Record<string, string> = {
   codex: "Codex",
@@ -122,35 +114,38 @@ export function UsageDetails({ report }: { report: ProcessingUsage }) {
           <caption className="sr-only">各阶段与模型的 token 用量</caption>
           <thead>
             <tr>
-              <th>阶段／模型</th>
+              <th>阶段</th>
               <th>输入</th>
               <th>输出</th>
               <th>总量</th>
             </tr>
           </thead>
           <tbody>
-            {report.stages.map((stage) => {
+            {["settling", "translating"].map((stage) => {
               const groups = report.groups.filter(
-                (g) => g.stage === stage.stage,
+                (group) => group.stage === stage,
               );
               const tokens = groups.reduce(
                 (sum, group) => add(sum, group.tokens),
                 zero,
               );
-              const stageKnown = report.calls.some(
-                (c) =>
-                  c.stage === stage.stage &&
-                  c.models.some((m) => m.tokens !== null),
+              const known = report.calls.some(
+                (call) =>
+                  call.stage === stage &&
+                  call.models.some((model) => model.tokens !== null),
               );
               return (
                 <StageRows
-                  key={stage.stage}
-                  label={labels[stage.stage]}
-                  duration={stage.durationMs}
+                  key={stage}
+                  stage={stage}
+                  duration={
+                    report.stages.find((item) => item.stage === stage)
+                      ?.durationMs ?? 0
+                  }
                   tokens={tokens}
                   groups={groups}
-                  known={stageKnown}
-                  local={stage.stage === "learning"}
+                  known={known}
+                  calls={report.calls.filter((call) => call.stage === stage)}
                 />
               );
             })}
@@ -161,104 +156,171 @@ export function UsageDetails({ report }: { report: ProcessingUsage }) {
         调用 {report.calls.length} 次 · 未成功 {report.failedCalls}{" "}
         次。总量包含失败、重试及备用连接调用。
       </p>
-      {known && (
-        <p className="usage-note">
-          缓存读取 {detail(report.total.cachedInputTokens)} · 缓存写入{" "}
-          {detail(report.total.cacheWriteInputTokens)} · 推理{" "}
-          {detail(report.total.reasoningOutputTokens)}
-          。细分项仅在服务返回时记录，包含于输入或输出，不重复计入总量。
-        </p>
-      )}
-      <details className="usage-calls">
-        <summary>调用明细</summary>
-        {report.calls.length === 0 ? (
-          <p className="usage-note">暂无已记录的 AI 调用。</p>
-        ) : (
-          report.calls.map((call) => (
-            <div className="usage-call" key={call.id}>
-              <p>
-                {labels[call.stage]} · {call.target}{" "}
-                <span>{statuses[call.status] || call.status}</span>
-              </p>
-              {call.models.map((model, i) => (
-                <p className="usage-note" key={`${model.model}-${i}`}>
-                  {providers[call.provider] || call.provider} ·{" "}
-                  {model.model || "模型未返回"} ·{" "}
-                  {model.tokens
-                    ? `${count(model.tokens.totalTokens)} tokens`
-                    : "用量未知"}
-                </p>
-              ))}
-              <p className="usage-note">
-                {new Date(call.startedAt).toLocaleString("zh-CN")}
-                {call.finishedAt
-                  ? ` · ${usageDuration(new Date(call.finishedAt).getTime() - new Date(call.startedAt).getTime())}`
-                  : " · 结束时间未记录"}
-              </p>
-            </div>
-          ))
-        )}
-      </details>
+      <p className="usage-note">
+        缓存与推理是输入或输出的细分项，不重复计入总量。
+      </p>
     </div>
   );
 }
 function StageRows({
-  label,
+  stage,
   duration,
   tokens,
   groups,
   known,
-  local,
+  calls,
 }: {
-  label: string;
+  stage: string;
   duration: number;
   tokens: TokenCounts;
   groups: ProcessingUsage["groups"];
   known: boolean;
-  local: boolean;
+  calls: ProcessingUsage["calls"];
 }) {
   return (
     <>
       <tr className="usage-stage">
-        <th scope="row">
-          {label}
-          <small>
-            {usageDuration(duration)}
-            {local ? " · 本地处理" : ""}
-          </small>
-        </th>
-        <td>{known ? count(tokens.inputTokens) : "—"}</td>
-        <td>{known ? count(tokens.outputTokens) : "—"}</td>
-        <td>
-          {known ? count(tokens.totalTokens) : local ? "不涉及 AI" : "未记录"}
+        <td colSpan={4}>
+          <details className="usage-models">
+            <summary aria-label={`${labels[stage]}模型调用详情`}>
+              <span className="usage-stage-name">
+                {labels[stage]}
+                <small>
+                  {usageDuration(duration)} · {calls.length} 次调用
+                </small>
+              </span>
+              <span>{known ? count(tokens.inputTokens) : "—"}</span>
+              <span>{known ? count(tokens.outputTokens) : "—"}</span>
+              <span>
+                {known
+                  ? count(tokens.totalTokens)
+                  : calls.length
+                    ? "未知"
+                    : "未记录"}
+              </span>
+            </summary>
+            {groups.length === 0 ? (
+              <p className="usage-note">暂无模型调用记录。</p>
+            ) : (
+              groups.map((group) => {
+                const linked = calls.filter(
+                  (call) =>
+                    call.provider === group.provider &&
+                    call.models.some((model) => model.model === group.model),
+                );
+                const complete = linked.filter(
+                  (call) => call.status === "complete",
+                ).length;
+                const running = linked.filter(
+                  (call) => call.status === "running",
+                ).length;
+                const failed = linked.length - complete - running;
+                const finished = linked.filter((call) => !!call.finishedAt);
+                const duration = finished.reduce(
+                  (sum, call) =>
+                    sum +
+                    Math.max(
+                      0,
+                      new Date(call.finishedAt!).getTime() -
+                        new Date(call.startedAt).getTime(),
+                    ),
+                  0,
+                );
+                const partial = linked.filter(
+                  (call) =>
+                    call.status !== "complete" &&
+                    call.models.some(
+                      (model) =>
+                        model.model === group.model && model.tokens !== null,
+                    ),
+                ).length;
+                const known = group.calls > group.unknownCalls;
+                return (
+                  <section
+                    className="usage-model"
+                    key={`${group.provider}:${group.model}`}
+                    aria-label={`${group.model || "模型未返回"} 调用统计`}
+                  >
+                    <div className="usage-model-heading">
+                      <strong>{group.model || "模型未返回"}</strong>
+                      <span>{providers[group.provider] || group.provider}</span>
+                    </div>
+                    <dl className="usage-model-metrics">
+                      <div>
+                        <dt>调用次数</dt>
+                        <dd>{group.calls}</dd>
+                      </div>
+                      <div>
+                        <dt>成功</dt>
+                        <dd>{complete}</dd>
+                      </div>
+                      <div>
+                        <dt>未成功</dt>
+                        <dd>{failed}</dd>
+                      </div>
+                      <div>
+                        <dt>进行中</dt>
+                        <dd>{running}</dd>
+                      </div>
+                      <div>
+                        <dt>输入 token</dt>
+                        <dd>
+                          {known ? count(group.tokens.inputTokens) : "未知"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>输出 token</dt>
+                        <dd>
+                          {known ? count(group.tokens.outputTokens) : "未知"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>总 token</dt>
+                        <dd>
+                          {known ? count(group.tokens.totalTokens) : "未知"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>关联调用累计耗时</dt>
+                        <dd>
+                          {finished.length ? usageDuration(duration) : "未记录"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>缓存读取 token</dt>
+                        <dd>{detail(group.tokens.cachedInputTokens)}</dd>
+                      </div>
+                      <div>
+                        <dt>缓存写入 token</dt>
+                        <dd>{detail(group.tokens.cacheWriteInputTokens)}</dd>
+                      </div>
+                      <div>
+                        <dt>推理 token</dt>
+                        <dd>{detail(group.tokens.reasoningOutputTokens)}</dd>
+                      </div>
+                      <div>
+                        <dt>用量未知</dt>
+                        <dd>{group.unknownCalls} 次</dd>
+                      </div>
+                    </dl>
+                    {!!partial && (
+                      <p className="usage-note">
+                        {partial} 次调用的用量可能不完整。
+                      </p>
+                    )}
+                    {finished.length < linked.length && (
+                      <p className="usage-note">
+                        {linked.length - finished.length}{" "}
+                        次调用未记录结束时间，累计耗时可能不完整。
+                      </p>
+                    )}
+                  </section>
+                );
+              })
+            )}
+          </details>
         </td>
       </tr>
-      {groups.map((group) => (
-        <tr key={`${group.provider}:${group.model}`}>
-          <th scope="row">
-            {group.model || "模型未返回"}
-            <small>
-              {providers[group.provider] || group.provider} · {group.calls} 次
-              {group.unknownCalls ? ` · ${group.unknownCalls} 次用量未知` : ""}
-            </small>
-          </th>
-          <td>
-            {group.calls > group.unknownCalls
-              ? count(group.tokens.inputTokens)
-              : "—"}
-          </td>
-          <td>
-            {group.calls > group.unknownCalls
-              ? count(group.tokens.outputTokens)
-              : "—"}
-          </td>
-          <td>
-            {group.calls > group.unknownCalls
-              ? count(group.tokens.totalTokens)
-              : "未知"}
-          </td>
-        </tr>
-      ))}
     </>
   );
 }

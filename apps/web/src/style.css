@@ -1868,23 +1868,85 @@ kbd {
   display: block;
   margin-top: 4px;
 }
-.usage-table .usage-stage th {
+.usage-table {
+  table-layout: fixed;
+}
+.usage-table thead th:first-child {
+  width: 46%;
+}
+.usage-table .usage-stage > td {
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+.usage-models summary {
+  display: grid;
+  grid-template-columns: 46% repeat(3, minmax(0, 1fr));
+  align-items: center;
+  cursor: pointer;
+  padding: 12px 0;
+  list-style: none;
+}
+.usage-models summary::-webkit-details-marker {
+  display: none;
+}
+.usage-models summary > span {
+  padding-inline: 8px;
+  text-align: right;
+}
+.usage-models summary .usage-stage-name {
+  position: relative;
+  padding-left: 24px;
+  text-align: left;
   font-weight: 600;
 }
-.usage-calls summary {
-  cursor: pointer;
-  font-size: 13px;
+.usage-stage-name::before {
+  content: "›";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  font-size: 18px;
+  line-height: 1;
 }
-.usage-call {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+.usage-models[open] .usage-stage-name::before {
+  transform: rotate(90deg);
+}
+.usage-model {
+  padding: 14px 8px;
+  border-top: 1px solid var(--border);
+}
+.usage-model-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
   overflow-wrap: anywhere;
 }
-.usage-call p {
-  margin: 4px 0;
-  font-size: 13px;
+.usage-model-heading strong {
+  font-weight: 500;
 }
-.usage-call p span {
-  float: right;
+.usage-model-heading span {
   color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.usage-model-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.usage-model-metrics dt {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.usage-model-metrics dd {
+  margin: 3px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.usage-model .usage-note {
+  margin-top: 12px;
+}
+.usage-models summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
