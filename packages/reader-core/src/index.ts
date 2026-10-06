@@ -41,7 +41,7 @@ export interface TagBoard {
 export interface Document {
   category: DocumentCategory;
   categorySource: "default" | "ai" | "manual";
-  classificationStatus: "pending" | "running" | "failed" | "done";
+  classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
   classificationError: string;
   tags: string[];
   id: string;
@@ -140,6 +140,7 @@ export interface ReaderEvents {
 export interface ReaderAdapter {
   open(document: Document): Promise<void>;
   getTOC(): Promise<TOCItem[]>;
+  getPageCount?(): number;
   getLocation(): DocumentLocation;
   goTo(location: DocumentLocation): Promise<void>;
   next(): Promise<void>;
@@ -203,13 +204,17 @@ export interface Message {
 }
 
 export interface Processing {
+  mode?: "reading" | "full";
+  enabled?: boolean;
+  pageStart?: number;
+  pageEnd?: number;
   usageTracked?: boolean;
   startedAt?: string;
   completedAt?: string;
   incomplete?: boolean;
   documentId: string;
   phase: "learning" | "settling" | "translating" | "ready";
-  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
   pagesDone: number;
   pagesTotal: number;
   assetsDone: number;

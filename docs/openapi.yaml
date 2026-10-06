@@ -849,6 +849,123 @@
                 },
             },
         },
+      "/api/documents/{id}/assistance":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved assistance state",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Processing" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved assistance state",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Processing" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "required": ["action", "page"],
+                              "properties":
+                                {
+                                  "action":
+                                    {
+                                      "type": "string",
+                                      "enum":
+                                        [
+                                          "reading",
+                                          "full",
+                                          "pause",
+                                          "follow",
+                                          "resume",
+                                        ],
+                                    },
+                                  "page":
+                                    {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 1000,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/processing":
         {
           "post":
@@ -1612,7 +1729,9 @@
                   "category": { "enum": ["book", "article", "paper"] },
                   "categorySource": { "enum": ["default", "ai", "manual"] },
                   "classificationStatus":
-                    { "enum": ["pending", "running", "failed", "done"] },
+                    {
+                      "enum": ["idle", "pending", "running", "failed", "done"],
+                    },
                   "classificationError": { "type": "string" },
                   "tags":
                     {
@@ -1878,6 +1997,10 @@
               "type": "object",
               "properties":
                 {
+                  "mode": { "type": "string", "enum": ["reading", "full"] },
+                  "enabled": { "type": "boolean" },
+                  "pageStart": { "type": "integer" },
+                  "pageEnd": { "type": "integer" },
                   "documentId": { "type": "string" },
                   "phase":
                     {
@@ -1888,7 +2011,14 @@
                     {
                       "type": "string",
                       "enum":
-                        ["queued", "running", "waiting", "failed", "complete"],
+                        [
+                          "queued",
+                          "running",
+                          "waiting",
+                          "failed",
+                          "complete",
+                          "paused",
+                        ],
                     },
                   "pagesDone": { "type": "integer" },
                   "pagesTotal": { "type": "integer" },

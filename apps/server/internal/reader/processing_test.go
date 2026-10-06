@@ -29,6 +29,14 @@ func processingFixture(t *testing.T) (*Server, Processing) {
 		t.Fatal(e)
 	}
 	p, _ := store.processing("doc")
+	p.PageStart = 1
+	p.PageEnd = 2
+	p.Mode = "full"
+	p.Enabled = true
+	p.Status = "queued"
+	if e = store.saveProcessing(p); e != nil {
+		t.Fatal(e)
+	}
 	dir := s.analysisDir("doc")
 	if e = os.MkdirAll(filepath.Join(dir, "assets"), 0700); e != nil {
 		t.Fatal(e)

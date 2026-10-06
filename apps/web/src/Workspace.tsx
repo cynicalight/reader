@@ -360,7 +360,7 @@ export function Workspace({
     return () => {
       alive = false;
     };
-  }, [doc.id, doc.type, processing?.phase]);
+  }, [doc.id, doc.type, processing?.phase, processing?.updatedAt]);
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
@@ -1005,6 +1005,7 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
+                  currentPage={location?.type === "pdf" ? location.page : 1}
                   toolbarHost={pdfToolbar}
                   pageNavigation={pageNavigation}
                   onReady={(engine, items) => {

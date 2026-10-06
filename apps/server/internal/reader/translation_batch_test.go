@@ -279,7 +279,7 @@ func TestTranslationTruncatedBatchRetainsRowsAndRetriesOnlyMissing(t *testing.T)
 	}
 	p.Status = "failed"
 	_ = s.Store.saveProcessing(p)
-	if res := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{}`)); res.Code != 202 {
+	if res := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{"blockId":"p1-b2"}`)); res.Code != 202 {
 		t.Fatal(res.Body.String())
 	}
 	configureTranslationTest(t, s, provider.URL)

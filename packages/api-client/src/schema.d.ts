@@ -715,6 +715,90 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/assistance": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Saved assistance state */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Processing"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            action: "reading" | "full" | "pause" | "follow" | "resume";
+            page: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved assistance state */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Processing"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/documents/{id}/processing": {
     parameters: {
       query?: never;
@@ -1414,7 +1498,7 @@ export interface components {
       /** @enum {unknown} */
       categorySource: "default" | "ai" | "manual";
       /** @enum {unknown} */
-      classificationStatus: "pending" | "running" | "failed" | "done";
+      classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
       classificationError: string;
       tags: string[];
       id: string;
@@ -1523,11 +1607,17 @@ export interface components {
       error: string;
     };
     Processing: {
+      /** @enum {string} */
+      mode?: "reading" | "full";
+      enabled?: boolean;
+      pageStart?: number;
+      pageEnd?: number;
       documentId: string;
       /** @enum {string} */
       phase: "learning" | "settling" | "translating" | "ready";
       /** @enum {string} */
-      status: "queued" | "running" | "waiting" | "failed" | "complete";
+      status:
+        "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
       pagesDone: number;
       pagesTotal: number;
       assetsDone: number;

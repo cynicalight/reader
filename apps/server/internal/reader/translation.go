@@ -79,12 +79,12 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 	return result, nil
 }
 
-func (s *Server) retryFailedTranslations(documentID string) error {
+func (s *Server) retryFailedTranslations(documentID string, p *Processing) error {
 	m, err := s.readLayout(documentID)
 	if err != nil {
 		return nil
 	}
-	items, err := s.translations(documentID, m)
+	items, err := s.translations(documentID, processingLayout(m, p))
 	if err != nil {
 		return err
 	}
@@ -100,39 +100,6 @@ func (s *Server) retryFailedTranslations(documentID string) error {
 	return nil
 }
 
-// Upgrade previously settled documents without changing their layout or notes.
-func (s *Server) queueUntranslatedPDFs() {
-	docs, err := s.Store.Documents()
-	if err != nil {
-		return
-	}
-	for _, doc := range docs {
-		if doc.Type != "pdf" {
-			continue
-		}
-		p, err := s.Store.processing(doc.ID)
-		if err != nil || p.Status != "complete" {
-			continue
-		}
-		m, err := s.readLayout(doc.ID)
-		if err != nil {
-			continue
-		}
-		items, err := s.translations(doc.ID, m)
-		if err != nil {
-			continue
-		}
-		for _, t := range items {
-			if t.Status != "complete" {
-				p.Phase = "translating"
-				p.Status = "queued"
-				p.Detail = "等待翻译正文"
-				_ = s.Store.saveProcessing(p)
-				break
-			}
-		}
-	}
-}
 func (s *Server) saveTranslation(documentID string, t TranslationBlock) error {
 	s.translationMu.Lock()
 	defer s.translationMu.Unlock()
@@ -186,6 +153,21 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
+	p, err := s.Store.processing(d.ID)
+	if err != nil || !p.Enabled {
+		fail(w, 409, "请先开启辅助阅读")
+		return
+	}
+	if req.BlockID == "" {
+		fail(w, 400, "请在辅助阅读菜单中选择处理整本")
+		return
+	}
+	for _, b := range m.Blocks {
+		if b.ID == req.BlockID && (b.Page < p.PageStart || b.Page > p.PageEnd) {
+			fail(w, 409, "此段不在当前处理范围，请先阅读到该页")
+			return
+		}
+	}
 	items, err := s.translations(d.ID, m)
 	if err != nil {
 		fail(w, 500, "无法读取译文")
@@ -209,11 +191,6 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 	if !found {
 		fail(w, 404, "没有可翻译的段落")
-		return
-	}
-	p, err := s.Store.processing(d.ID)
-	if err != nil {
-		fail(w, 500, "无法读取处理状态")
 		return
 	}
 	if p.Status != "running" {

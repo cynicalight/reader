@@ -30,6 +30,9 @@ type Server struct {
 	translationMu          sync.Mutex
 	translationSubscribers map[string]map[chan TranslationBlock]struct{}
 	processingMu           sync.Mutex
+	processingControlMu    sync.Mutex
+	activeProcessing       map[string]*documentTask
+	blockedProcessing      map[string]bool
 	modelMu                sync.Mutex
 	modelCache             map[string]modelCatalogEntry
 }
@@ -72,6 +75,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents", s.importDocument)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
+	mux.HandleFunc("GET /api/documents/{id}/assistance", s.getAssistance)
+	mux.HandleFunc("POST /api/documents/{id}/assistance", s.setAssistance)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
@@ -202,7 +207,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename)), Size: size, CreatedAt: now(), LastOpenedAt: now()}
-	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "pending", []string{}
+	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "idle", []string{}
 	if kind == "epub" {
 		d.Category = "book"
 	}
@@ -264,7 +269,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category) VALUES(?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category)
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,classification_status) VALUES(?,?,?,?,?,?,?,?,'idle')", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)

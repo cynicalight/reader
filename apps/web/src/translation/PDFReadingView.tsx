@@ -37,6 +37,8 @@ import { translatedSelection as captureTranslationSelection } from "./selection"
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import "./translation.css";
 
+import { AssistanceControls } from "./AssistanceControls";
+
 type Mode = "source" | "parallel" | "translation";
 export function PDFReadingView({
   document: doc,
@@ -44,6 +46,7 @@ export function PDFReadingView({
   annotations,
   blocks,
   processing,
+  currentPage = 1,
   toolbarHost,
   pageNavigation,
   onReady,
@@ -54,6 +57,7 @@ export function PDFReadingView({
   annotations: Annotation[];
   blocks: PDFBlock[];
   processing?: Processing;
+  currentPage?: number;
   toolbarHost?: HTMLElement | null;
   pageNavigation?: ReactNode;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
@@ -274,7 +278,8 @@ export function PDFReadingView({
       });
     events.location(
       { type: "pdf", page: block.page, x: block.bounds.x, y: block.bounds.y },
-      block.page / Math.max(1, ...blocks.map((b) => b.page)),
+      block.page /
+        (engine?.getPageCount?.() || Math.max(1, ...blocks.map((b) => b.page))),
     );
   };
   const focusTranslation = (block: PDFBlock) =>
@@ -530,7 +535,9 @@ export function PDFReadingView({
             x: block.bounds.x,
             y: block.bounds.y + anchor.fraction * block.bounds.height,
           },
-          block.page / Math.max(1, ...blocks.map((b) => b.page)),
+          block.page /
+            (engine?.getPageCount?.() ||
+              Math.max(1, ...blocks.map((b) => b.page))),
         );
       if (mode === "parallel") {
         control.current.following("source");
@@ -553,6 +560,12 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
+      <AssistanceControls
+        documentId={doc.id}
+        page={currentPage}
+        totalPages={engine?.getPageCount?.()}
+        processing={processing}
+      />
     </div>
   );
   return (

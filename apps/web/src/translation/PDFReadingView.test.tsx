@@ -26,6 +26,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock("@reader/api", () => ({
   api: {
+    assistance: vi.fn(async () => undefined),
     translationStream: vi.fn(
       async (
         _id: string,

@@ -19,6 +19,10 @@ import (
 )
 
 type Processing struct {
+	Mode              string `json:"mode,omitempty"`
+	Enabled           bool   `json:"enabled"`
+	PageStart         int    `json:"pageStart,omitempty"`
+	PageEnd           int    `json:"pageEnd,omitempty"`
 	UsageTracked      bool   `json:"usageTracked,omitempty"`
 	StartedAt         string `json:"startedAt,omitempty"`
 	CompletedAt       string `json:"completedAt,omitempty"`
@@ -51,6 +55,7 @@ type PDFBlock struct {
 	Caption string `json:"caption,omitempty"`
 }
 type layoutManifest struct {
+	ProcessedPages  []int      `json:"processedPages,omitempty"`
 	IncompletePages []int      `json:"incompletePages"`
 	Pages           int        `json:"pages"`
 	Blocks          []PDFBlock `json:"blocks"`
@@ -78,7 +83,7 @@ func (s *Store) saveProcessing(p Processing) error {
 	return e
 }
 func initialProcessing(id string) Processing {
-	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "queued", Detail: "等待解析文档", UpdatedAt: now()}
+	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "paused", Detail: "辅助阅读未开启", UpdatedAt: now()}
 }
 func (s *Store) enqueuePDF(d Document) error {
 	if d.Type != "pdf" {
@@ -129,13 +134,17 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法创建解析任务")
 		return
 	}
+	if !p.Enabled {
+		fail(w, 409, "请先开启辅助阅读")
+		return
+	}
 	if p.Status == "running" || p.Status == "complete" {
 		respond(w, 200, p)
 		return
 	}
 	p.Status = "queued"
 	p.Detail = "等待继续处理"
-	if e = s.retryFailedTranslations(d.ID); e != nil {
+	if e = s.retryFailedTranslations(d.ID, &p); e != nil {
 		fail(w, 500, "无法恢复翻译任务")
 		return
 	}
@@ -168,8 +177,11 @@ func (s *Server) analysisDir(id string) string {
 	return filepath.Join(s.Store.Root, "cache", id, "analysis")
 }
 func (s *Server) readLayout(id string) (layoutManifest, error) {
+	return readLayoutDirectory(s.analysisDir(id))
+}
+func readLayoutDirectory(dir string) (layoutManifest, error) {
 	var m layoutManifest
-	b, e := os.ReadFile(filepath.Join(s.analysisDir(id), "manifest.json"))
+	b, e := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if e != nil {
 		return m, e
 	}
@@ -177,12 +189,18 @@ func (s *Server) readLayout(id string) (layoutManifest, error) {
 		return m, errors.New("版面索引过大")
 	}
 	e = json.Unmarshal(b, &m)
-	if e != nil || m.Pages < 1 {
+	if e != nil || m.Pages < 1 || m.Pages > 1000 {
 		return m, errors.New("版面索引无效")
+	}
+	known := processedPages(m)
+	for _, page := range m.ProcessedPages {
+		if page < 1 || page > m.Pages {
+			return m, errors.New("缓存页码无效")
+		}
 	}
 	for _, b := range m.Blocks {
 		r := b.Bounds
-		if !blockIDPattern.MatchString(b.ID) || b.Page < 1 || b.Page > m.Pages || r.X < 0 || r.Y < 0 || r.Width <= 0 || r.Height <= 0 || r.X+r.Width > 1.001 || r.Y+r.Height > 1.001 || (b.Image != "" && b.Image != "assets/"+b.ID+".png") {
+		if !known[b.Page] || !blockIDPattern.MatchString(b.ID) || b.Page < 1 || b.Page > m.Pages || r.X < 0 || r.Y < 0 || r.Width <= 0 || r.Height <= 0 || r.X+r.Width > 1.001 || r.Y+r.Height > 1.001 || (b.Image != "" && b.Image != "assets/"+b.ID+".png") {
 			return m, errors.New("版面位置无效")
 		}
 	}
@@ -196,7 +214,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	if err := s.Store.recoverUsage(); err != nil {
 		log.Printf("cannot recover processing usage: %v", err)
 	}
-	s.queueUntranslatedPDFs()
+	s.pauseLegacyProcessing()
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running'")
 	if e == nil {
@@ -229,12 +247,23 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Lock()
 				var body string
-				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE (phase=? OR (?='settling' AND phase='translating')) AND status='queued' ORDER BY rowid LIMIT 1", phase, phase).Scan(&body)
+				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE (phase=? OR (?='settling' AND phase='translating')) AND status='queued' AND json_extract(body,'$.enabled')=1 ORDER BY rowid LIMIT 1", phase, phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)
 				}
+				if e == nil && (s.activeProcessing[p.DocumentID] != nil || s.blockedProcessing[p.DocumentID]) {
+					e = errors.New("processing still finishing")
+				}
+				var task *documentTask
+				workContext := ctx
 				if e == nil {
+					task = &documentTask{done: make(chan struct{})}
+					workContext, task.cancel = context.WithCancel(ctx)
+					if s.activeProcessing == nil {
+						s.activeProcessing = map[string]*documentTask{}
+					}
+					s.activeProcessing[p.DocumentID] = task
 					p.Status = "running"
 					if p.StartedAt == "" {
 						p.StartedAt = now()
@@ -244,10 +273,12 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Unlock()
 				if e != nil {
+					s.finishProcessingTask(p.DocumentID, task)
 					continue
 				}
-				work, finish, startErr := s.beginDocumentTask(ctx, p.DocumentID)
+				work, finish, startErr := s.beginDocumentTask(workContext, p.DocumentID)
 				if startErr != nil {
+					s.finishProcessingTask(p.DocumentID, task)
 					continue
 				}
 				if phase == "learning" {
@@ -263,6 +294,9 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				} else {
 					e = s.settlePDF(work, &p)
 				}
+				if e == nil && p.Status == "complete" {
+					e = s.advanceFullProcessing(&p)
+				}
 				if e != nil {
 					if ctx.Err() != nil {
 						p.Status = "queued"
@@ -274,6 +308,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 					_ = s.Store.saveProcessing(p)
 				}
 				finish()
+				s.finishProcessingTask(p.DocumentID, task)
 			}
 		}(phase)
 	}
@@ -310,7 +345,8 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		return e
 	}
 	m, e := s.readLayout(d.ID)
-	if e != nil {
+	missing := missingPages(m, p.PageStart, p.PageEnd)
+	if e != nil || len(missing) > 0 {
 		worker := os.Getenv("READER_PROCESSOR")
 		node := os.Getenv("READER_NODE")
 		if worker == "" || node == "" {
@@ -322,7 +358,11 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		}
 		child, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(child, node, worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models"))
+		args := []string{worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models")}
+		if p.PageStart > 0 {
+			args = append(args, "--pages", pageArguments(missing))
+		}
+		cmd := exec.CommandContext(child, node, args...)
 		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1", "NODE_USE_ENV_PROXY=1")
 		cmd.WaitDelay = 3 * time.Second
 		cmd.Dir = s.Store.Root
@@ -354,8 +394,11 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			case "model-progress":
 				p.Detail = fmt.Sprintf("正在下载版面模型 %.0f / %.0f MB", float64(event.Downloaded)/1e6, float64(event.Bytes)/1e6)
 			case "page":
-				p.PagesDone = event.Page
+				p.PagesDone++
 				p.PagesTotal = event.Total
+				if p.PageStart > 0 {
+					p.PagesTotal = min(p.PageEnd, event.Total) - p.PageStart + 1
+				}
 				p.Detail = fmt.Sprintf("已解析 %d / %d 页", event.Page, event.Total)
 			default:
 				continue
@@ -378,30 +421,38 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		if e != nil || scan.Err() != nil {
 			return errors.New("PDF 解析未完成。请检查网络、模型缓存或文件后重试")
 		}
-		// A successful worker writes its manifest last. Publish the directory once.
-		if _, e = os.Stat(s.analysisDir(d.ID)); e == nil {
-			return errors.New("已有解析目录异常，已保留，未覆盖")
+		if e = s.mergeLayout(d.ID, work, missing); e != nil {
+			return e
 		}
-		if e = os.Rename(work, s.analysisDir(d.ID)); e != nil {
-			return errors.New("无法保存解析附件")
-		}
+
 		m, e = s.readLayout(d.ID)
 		if e != nil {
 			return e
 		}
 	}
-	p.PagesDone = m.Pages
+	if p.PageStart > 0 {
+		p.PageEnd = min(p.PageEnd, m.Pages)
+	}
+	allWarnings := strings.Join(m.Warnings, " ")
+	allIncomplete := len(m.IncompletePages) > 0 || strings.Contains(allWarnings, "无可提取文字")
+	m = processingLayout(m, p)
 	p.PagesTotal = m.Pages
+	if p.PageStart > 0 {
+		p.PagesTotal = max(0, min(p.PageEnd, m.Pages)-p.PageStart+1)
+	}
+	p.PagesDone = p.PagesTotal
 	p.AssetsTotal = 0
 	for _, b := range m.Blocks {
 		if b.Image != "" {
 			p.AssetsTotal++
 		}
 	}
-	if len(m.Warnings) > 0 {
-		p.Warning = strings.Join(m.Warnings, " ")
-	}
+	p.Warning = strings.Join(m.Warnings, " ")
 	p.Incomplete = len(m.IncompletePages) > 0 || strings.Contains(p.Warning, "无可提取文字")
+	if p.Mode == "full" {
+		p.Warning = allWarnings
+		p.Incomplete = allIncomplete
+	}
 	p.Phase = "settling"
 	p.Status = "queued"
 	p.Detail = "等待解析图表与公式"
@@ -431,6 +482,7 @@ func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 	if e != nil {
 		return e
 	}
+	m = processingLayout(m, p)
 	finishStage, e := s.startUsageStage(p.DocumentID, "settling")
 	if e != nil {
 		return e

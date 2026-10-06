@@ -117,6 +117,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ blockId }),
     }),
+  assistance: (id: string) =>
+    request<Processing>(`/api/documents/${id}/assistance`),
+  setAssistance: (
+    id: string,
+    action: "reading" | "full" | "pause" | "follow" | "resume",
+    page: number,
+  ) =>
+    request<Processing>(`/api/documents/${id}/assistance`, {
+      method: "POST",
+      body: JSON.stringify({ action, page }),
+    }),
   processing: () => request<Processing[]>("/api/processing"),
   process: (id: string) =>
     request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
