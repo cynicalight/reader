@@ -44,7 +44,11 @@ export function TranslationText({
     />
   ) : null;
   const formulaFallback = image || <MessageMarkdown content={block.text} />;
-  if (formula && block.formulaMarkdown) {
+  if (
+    formula &&
+    translation?.status === "complete" &&
+    translation.formulaMarkdown
+  ) {
     return (
       <Suspense
         fallback={
@@ -52,7 +56,7 @@ export function TranslationText({
         }
       >
         <FormulaFragment
-          content={block.formulaMarkdown}
+          content={translation.formulaMarkdown}
           fallback={formulaFallback}
           number={formulaNumber}
         />
@@ -60,7 +64,25 @@ export function TranslationText({
     );
   }
   if (formula)
-    return <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>;
+    return (
+      <div>
+        <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>
+        {block.image && (
+          <div className="translation-formula-status" role="status">
+            {translation?.status === "failed" ? (
+              <>
+                <span>{translation.error || "公式转换失败"}</span>
+                <Button variant="ghost" size="sm" onClick={retry}>
+                  重试公式
+                </Button>
+              </>
+            ) : (
+              <span>公式转换中…</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
   const preserve =
     [
       "reference",

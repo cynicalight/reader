@@ -49,12 +49,12 @@ async function render(
     let i = 0;
     i < 80 &&
     host.querySelector(".translation-formula") == null &&
-    block.formulaMarkdown;
+    translation?.formulaMarkdown;
     i++
   ) {
     if (
       host.querySelector("img") &&
-      block.formulaMarkdown.includes("\\unknown")
+      translation.formulaMarkdown.includes("\\unknown")
     )
       break;
     await act(async () => {
@@ -87,11 +87,16 @@ it("renders only the translated caption alongside the table image", async () => 
   expect(host.textContent).not.toContain("INTERNAL");
 });
 it("inserts the formula-only Markdown at the formula block", async () => {
-  await render({
-    ...base,
-    label: "display_formula",
-    formulaMarkdown: "$$\nS(i,j)=\\frac{1}{2}\\log p_R(j\\mid i)\n$$\n",
-  });
+  await render(
+    { ...base, label: "display_formula" },
+    {
+      blockId: base.id,
+      sourceHash: "formula",
+      status: "complete",
+      sentences: [],
+      formulaMarkdown: "$$\nS(i,j)=\\frac{1}{2}\\log p_R(j\\mid i)\n$$\n",
+    },
+  );
   for (let i = 0; i < 80 && !host.querySelector(".katex-display"); i++) {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 25));
@@ -103,11 +108,16 @@ it("inserts the formula-only Markdown at the formula block", async () => {
   expect(host.querySelector("details")?.open).toBe(false);
 });
 it("retains the original formula image for invalid LaTeX", async () => {
-  await render({
-    ...base,
-    label: "display_formula",
-    formulaMarkdown: "$$\n\\unknowncommand{x}\n$$\n",
-  });
+  await render(
+    { ...base, label: "display_formula" },
+    {
+      blockId: base.id,
+      sourceHash: "formula",
+      status: "complete",
+      sentences: [],
+      formulaMarkdown: "$$\n\\unknowncommand{x}\n$$\n",
+    },
+  );
   expect(host.querySelector("img")).not.toBeNull();
   expect(host.querySelector(".katex-error")).toBeNull();
   expect(host.querySelector(".translation-formula")).toBeNull();
@@ -117,8 +127,16 @@ it.each(["$$\n x=1\n$$", "$$\n\\unknowncommand{x}\n$$", ""])(
   "keeps the equation number in the formula row: %s",
   async (formulaMarkdown) => {
     await render(
-      { ...base, label: "display_formula", formulaMarkdown },
-      undefined,
+      { ...base, label: "display_formula" },
+      formulaMarkdown
+        ? {
+            blockId: base.id,
+            sourceHash: "formula",
+            status: "complete",
+            sentences: [],
+            formulaMarkdown,
+          }
+        : undefined,
       "(6)",
     );
     const row = host.querySelector(".translation-formula-row");
@@ -134,3 +152,59 @@ it.each(["$$\n x=1\n$$", "$$\n\\unknowncommand{x}\n$$", ""])(
     ).toBeNull();
   },
 );
+
+it("replaces the formula image placeholder when an asynchronous result arrives", async () => {
+  const block = { ...base, label: "display_formula" };
+  await render(
+    block,
+    {
+      blockId: block.id,
+      sourceHash: "formula",
+      status: "running",
+      sentences: [],
+    },
+    "(6)",
+  );
+  expect(host.querySelector(".translation-formula-row img")).not.toBeNull();
+  expect(host.textContent).toContain("公式转换中");
+  await render(
+    block,
+    {
+      blockId: block.id,
+      sourceHash: "formula",
+      status: "complete",
+      sentences: [],
+      formulaMarkdown: "$$x=1$$",
+    },
+    "(6)",
+  );
+  expect(host.querySelector(".translation-formula-row .katex")).not.toBeNull();
+  expect(host.querySelector(".translation-formula-row img")).toBeNull();
+  expect(host.textContent).not.toContain("公式转换中");
+  expect(host.querySelector(".translation-formula-number")?.textContent).toBe(
+    "(6)",
+  );
+});
+it("retains the placeholder and exposes an independent retry after failure", async () => {
+  const retry = vi.fn();
+  await act(async () =>
+    root.render(
+      <TranslationText
+        block={{ ...base, label: "display_formula" }}
+        translation={{
+          blockId: base.id,
+          sourceHash: "formula",
+          status: "failed",
+          sentences: [],
+          error: "图片识别失败",
+        }}
+        documentId="doc"
+        retry={retry}
+      />,
+    ),
+  );
+  expect(host.querySelector("img")).not.toBeNull();
+  expect(host.textContent).toContain("图片识别失败");
+  await act(async () => host.querySelector("button")?.click());
+  expect(retry).toHaveBeenCalledOnce();
+});

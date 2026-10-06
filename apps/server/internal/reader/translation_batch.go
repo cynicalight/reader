@@ -204,17 +204,12 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 	return ctx.Err()
 }
 func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layoutManifest) error {
-	finishStage, err := s.startUsageStage(p.DocumentID, "translating")
-	if err != nil {
-		return err
-	}
-	defer finishStage()
 	doc, err := s.Store.Document(p.DocumentID)
 	if err != nil {
 		return err
 	}
 	s.processingMu.Lock()
-	items, err := s.translations(p.DocumentID, m)
+	items, err := s.textTranslations(p.DocumentID, m)
 	if err == nil {
 		for i := range items {
 			if items[i].Status == "running" {
@@ -233,7 +228,7 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		items, err = s.translations(p.DocumentID, m)
+		items, err = s.textTranslations(p.DocumentID, m)
 		if err != nil {
 			return err
 		}
@@ -339,4 +334,22 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 			}
 		}
 	}
+}
+
+// Text batches never reset or count the concurrently converted formula records.
+func (s *Server) textTranslations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+	items, err := s.translations(documentID, m)
+	textIDs := map[string]bool{}
+	for _, b := range m.Blocks {
+		if translationSource(b) != "" {
+			textIDs[b.ID] = true
+		}
+	}
+	out := []TranslationBlock{}
+	for _, t := range items {
+		if textIDs[t.BlockID] {
+			out = append(out, t)
+		}
+	}
+	return out, err
 }

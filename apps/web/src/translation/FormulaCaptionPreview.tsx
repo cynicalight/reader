@@ -23,6 +23,12 @@ export default function FormulaCaptionPreview() {
             label: "display_formula",
             text: "",
             bounds,
+          }}
+          translation={{
+            blockId: "p1-b1",
+            sourceHash: "preview",
+            status: "complete",
+            sentences: [],
             formulaMarkdown: formula,
           }}
           formulaNumber="(1)"

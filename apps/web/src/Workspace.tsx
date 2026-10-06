@@ -360,7 +360,7 @@ export function Workspace({
     return () => {
       alive = false;
     };
-  }, [doc.id, doc.type, processing?.phase, processing?.assetsDone]);
+  }, [doc.id, doc.type, processing?.phase]);
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };

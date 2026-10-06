@@ -1943,11 +1943,6 @@
                   "kind": { "enum": ["selection", "section"] },
                   "image": { "type": "string" },
                   "caption": { "type": "string" },
-                  "formulaMarkdown":
-                    {
-                      "type": "string",
-                      "description": "Formula-only display math from consolidation, excluding interpretation.",
-                    },
                 },
               "required": ["id", "page", "label", "bounds", "text"],
             },
@@ -2054,6 +2049,11 @@
                       "type": "array",
                       "items":
                         { "$ref": "#/components/schemas/TranslationSentence" },
+                    },
+                  "formulaMarkdown":
+                    {
+                      "type": "string",
+                      "description": "Formula-only Markdown converted asynchronously from the original image during translation.",
                     },
                   "error": { "type": "string" },
                 },

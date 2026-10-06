@@ -14,11 +14,12 @@ type TranslationSentence struct {
 	Target string `json:"target"`
 }
 type TranslationBlock struct {
-	BlockID    string                `json:"blockId"`
-	SourceHash string                `json:"sourceHash"`
-	Status     string                `json:"status"`
-	Sentences  []TranslationSentence `json:"sentences"`
-	Error      string                `json:"error,omitempty"`
+	BlockID         string                `json:"blockId"`
+	SourceHash      string                `json:"sourceHash"`
+	Status          string                `json:"status"`
+	Sentences       []TranslationSentence `json:"sentences"`
+	FormulaMarkdown string                `json:"formulaMarkdown,omitempty"`
+	Error           string                `json:"error,omitempty"`
 }
 
 func translationSource(b PDFBlock) string {
@@ -38,8 +39,15 @@ func translationHash(source string) string {
 	sum := sha256.Sum256([]byte("zh-CN:v1:" + source))
 	return hex.EncodeToString(sum[:])
 }
+func needsTranslation(b PDFBlock) bool {
+	return translationSource(b) != "" || (isFormula(b) && b.Image != "")
+}
 func newTranslation(b PDFBlock) TranslationBlock {
-	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(translationSource(b)), Status: "pending", Sentences: []TranslationSentence{}}
+	source := translationSource(b)
+	if isFormula(b) {
+		source = "formula-image:v1:" + b.Image + ":" + b.Text
+	}
+	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
 func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
 	rows, err := s.Store.DB.Query("SELECT body FROM translations WHERE document_id=?", documentID)
@@ -67,7 +75,7 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 	}
 	result := []TranslationBlock{}
 	for _, b := range m.Blocks {
-		if translationSource(b) == "" {
+		if !needsTranslation(b) {
 			continue
 		}
 		t := newTranslation(b)

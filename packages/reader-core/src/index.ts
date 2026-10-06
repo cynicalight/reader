@@ -228,7 +228,6 @@ export interface PDFBlock {
   text: string;
   image?: string;
   caption?: string;
-  formulaMarkdown?: string;
 }
 export interface TranslationSentence {
   source: string;
@@ -239,6 +238,7 @@ export interface TranslationBlock {
   sourceHash: string;
   status: "pending" | "running" | "complete" | "failed";
   sentences: TranslationSentence[];
+  formulaMarkdown?: string;
   error?: string;
 }
 export interface AICapability {
