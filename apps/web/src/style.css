@@ -1372,6 +1372,58 @@ kbd {
 .cover-processing[data-compact="true"] .processing-count {
   flex-shrink: 0;
 }
+/* Animate task activity and actual counter changes without adding a row. */
+.cover-processing[data-compact="true"] .processing-activity-dot {
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.cover-processing[data-compact="true"]
+  .processing-activity-dot[data-active="true"] {
+  animation: cover-activity-breathe 2s ease-in-out infinite;
+}
+.cover-processing[data-compact="true"] .processing-count-value {
+  display: inline-block;
+  animation: cover-count-enter 200ms ease-out both;
+}
+.cover-processing[data-compact="true"] .processing-complete-icon {
+  flex-shrink: 0;
+  animation: cover-complete-enter 240ms ease-out both;
+}
+@keyframes cover-activity-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+@keyframes cover-count-enter {
+  from {
+    opacity: 0.45;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cover-complete-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 .cover-processing[data-compact="true"] .cover-processing-action {
   min-width: 0;
   height: auto;
@@ -1437,7 +1489,11 @@ kbd {
   .cover-processing {
     animation: none;
   }
-  .cover-processing[data-leaving="true"] {
+  .cover-processing[data-leaving="true"],
+  .cover-processing[data-compact="true"]
+    .processing-activity-dot[data-active="true"],
+  .cover-processing[data-compact="true"] .processing-count-value,
+  .cover-processing[data-compact="true"] .processing-complete-icon {
     animation: none;
   }
 }

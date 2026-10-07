@@ -218,7 +218,16 @@ export function CoverProcessing({
             }
           >
             <div className="processing-step-heading" role="status">
-              {stage.done && <Check className="size-3" />}
+              {stage.done && (
+                <Check className="size-3 processing-complete-icon" />
+              )}
+              {phase !== "learning" && stage.active && !stage.done && (
+                <span
+                  className="processing-activity-dot"
+                  data-active={!unavailable && !leaving}
+                  aria-hidden="true"
+                />
+              )}
               {phase !== "learning" &&
               !leaving &&
               (state === "waiting" || state === "failed") ? (
@@ -241,7 +250,12 @@ export function CoverProcessing({
                 <span className="processing-label">{label}</span>
               )}
               <span className="processing-count">
-                {unavailable ? "离线" : count}
+                <span
+                  className="processing-count-value"
+                  key={`${unavailable}:${count}`}
+                >
+                  {unavailable ? "离线" : count}
+                </span>
               </span>
             </div>
             {phase === "learning" && (

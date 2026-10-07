@@ -49,6 +49,9 @@ it("shows learning first, then both parallel jobs, and hides the panel after com
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toContain("沉淀中1/4");
   expect(host.textContent).toContain("翻译中3/10");
+  expect(
+    host.querySelectorAll('.processing-activity-dot[data-active="true"]'),
+  ).toHaveLength(2);
   expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
   render({
     ...job,
@@ -73,6 +76,8 @@ it("shows learning first, then both parallel jobs, and hides the panel after com
     translating: { status: "complete", detail: "" },
   });
   expect(host.textContent).toContain("翻译完成10/10");
+  expect(host.querySelector(".processing-activity-dot")).toBeNull();
+  expect(host.querySelectorAll(".processing-complete-icon")).toHaveLength(2);
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toBe("");
 });
