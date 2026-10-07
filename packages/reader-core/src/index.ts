@@ -104,7 +104,7 @@ export interface ReaderTheme {
   zoom: number | "width";
 }
 export const defaultTheme: ReaderTheme = {
-  autoTranslatePDF: false,
+  autoTranslatePDF: true,
   appearance: "system",
   mode: "light",
   fontSize: 1.15,

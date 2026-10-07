@@ -184,7 +184,7 @@ export function Settings({
           <section className="space-y-2">
             <label className="flex items-center gap-3 text-sm">
               <Checkbox
-                checked={theme.autoTranslatePDF ?? false}
+                checked={theme.autoTranslatePDF ?? true}
                 onCheckedChange={(checked) =>
                   setTheme({ autoTranslatePDF: checked })
                 }

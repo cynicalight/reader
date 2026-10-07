@@ -108,9 +108,9 @@ func initialProcessing(id string) Processing {
 func importedProcessing(id, value string) Processing {
 	p := initialProcessing(id)
 	var settings struct {
-		AutoTranslatePDF bool `json:"autoTranslatePDF"`
+		AutoTranslatePDF *bool `json:"autoTranslatePDF"`
 	}
-	if json.Unmarshal([]byte(value), &settings) == nil && settings.AutoTranslatePDF {
+	if (value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF) {
 		p.Enabled, p.Status, p.Detail = true, "queued", "等待解析 PDF"
 	}
 	return p

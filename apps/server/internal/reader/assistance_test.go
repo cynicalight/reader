@@ -172,8 +172,12 @@ printf '%s' '{"pages":4,"processedPages":[2,3,4],"blocks":[],"warnings":[]}' > "
 		t.Fatalf("reparsed cached empty pages: %v", e)
 	}
 }
-func TestImportDoesNotStartBackgroundAI(t *testing.T) {
+func TestImportWithAutoTranslationDisabledDoesNotStartBackgroundAI(t *testing.T) {
 	s := testServer(t)
+	s.Token = "test-secret"
+	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":false}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
 	d := organizationDoc(t, s)
 	p, e := s.Store.processing(d.ID)
 	if e != nil || p.Enabled || p.Status != "paused" {
@@ -235,6 +239,9 @@ func TestFullProcessingRetainsEarlierOCRWarnings(t *testing.T) {
 func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
 	s := testServer(t)
 	s.Token = "test-secret"
+	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":false}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
 	first := organizationDoc(t, s)
 	for _, enabled := range []bool{true, false} {
 		body, _ := json.Marshal(map[string]any{"autoTranslatePDF": enabled, "appearance": "dark"})
@@ -293,5 +300,26 @@ func TestPausedParallelProgressCannotReenableProcessing(t *testing.T) {
 	got, _ := s.Store.processing("doc")
 	if got.Enabled || got.Status != "paused" || got.Settling.Status != "waiting" {
 		t.Fatalf("parallel progress or recovery lost pause: %+v", got)
+	}
+}
+
+func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
+	for _, settings := range []string{"", `{}`, `{"appearance":"dark"}`} {
+		t.Run(settings, func(t *testing.T) {
+			s := testServer(t)
+			if settings != "" {
+				if _, err := s.Store.DB.Exec("INSERT INTO settings(key,value) VALUES('reader',?)", settings); err != nil {
+					t.Fatal(err)
+				}
+			}
+			d := organizationDoc(t, s)
+			p, err := s.Store.processing(d.ID)
+			if err != nil || !p.Enabled || p.Status != "queued" {
+				t.Fatalf("default did not queue translation: %+v %v", p, err)
+			}
+			if d.ClassificationStatus != "idle" {
+				t.Fatal("translation enabled classification")
+			}
+		})
 	}
 }
