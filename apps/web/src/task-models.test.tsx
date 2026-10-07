@@ -87,31 +87,45 @@ it("defaults effort to medium and keys choices per task", () => {
     effort: "medium",
   });
 });
-// Opening a Base UI select takes about a second in jsdom; keep one per test.
+// Real Base UI selects take ~1s locally and up to ~6s on the CI runner.
+// Keep one interaction per test and allow runner variance without mocking it.
+const selectTestTimeout = 15_000;
 it("shows recommended translation defaults", async () => {
   await act(async () => root.render(<TaskModels disabled={false} />));
   expect(shown("问答模型")).toBe("Opus");
   expect(shown("翻译模型")).toBe("自动 · Sonnet");
   expect(shown("翻译 Effort")).toBe("Medium");
 });
-it("saves the translation model without touching chat", async () => {
-  await act(async () => root.render(<TaskModels disabled={false} />));
-  await choose("翻译模型", "Fable");
-  expect(config.translationModels).toEqual({ claude: "fable" });
-  expect(config.models).toEqual({ claude: "opus" });
-});
-it("saves the translation effort without touching chat", async () => {
-  config.translationModels = { claude: "fable" };
-  useReaderStore.setState({ aiConfig: config });
-  await act(async () => root.render(<TaskModels disabled={false} />));
-  await choose("翻译 Effort", "Low");
-  expect(config.translationEfforts).toEqual({ claude: { fable: "low" } });
-  expect(config.efforts).toEqual({ claude: { opus: "high" } });
-});
-it("returns translation to automatic selection", async () => {
-  config.translationModels = { claude: "fable" };
-  useReaderStore.setState({ aiConfig: config });
-  await act(async () => root.render(<TaskModels disabled={false} />));
-  await choose("翻译模型", "自动 · Sonnet");
-  expect(config.translationModels).toEqual({ claude: "" });
-});
+it(
+  "saves the translation model without touching chat",
+  async () => {
+    await act(async () => root.render(<TaskModels disabled={false} />));
+    await choose("翻译模型", "Fable");
+    expect(config.translationModels).toEqual({ claude: "fable" });
+    expect(config.models).toEqual({ claude: "opus" });
+  },
+  selectTestTimeout,
+);
+it(
+  "saves the translation effort without touching chat",
+  async () => {
+    config.translationModels = { claude: "fable" };
+    useReaderStore.setState({ aiConfig: config });
+    await act(async () => root.render(<TaskModels disabled={false} />));
+    await choose("翻译 Effort", "Low");
+    expect(config.translationEfforts).toEqual({ claude: { fable: "low" } });
+    expect(config.efforts).toEqual({ claude: { opus: "high" } });
+  },
+  selectTestTimeout,
+);
+it(
+  "returns translation to automatic selection",
+  async () => {
+    config.translationModels = { claude: "fable" };
+    useReaderStore.setState({ aiConfig: config });
+    await act(async () => root.render(<TaskModels disabled={false} />));
+    await choose("翻译模型", "自动 · Sonnet");
+    expect(config.translationModels).toEqual({ claude: "" });
+  },
+  selectTestTimeout,
+);
