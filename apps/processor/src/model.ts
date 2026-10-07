@@ -11,12 +11,24 @@ export const model = {
   bytes: 67372587,
   output: "det",
 };
+// Earlier pinned models; their cache files are dropped once this one is ready.
+const superseded = [
+  "PP-DocLayoutV3-46bbdf188bb0a772c08aed74882ce7e51a8f1ea6.onnx",
+];
 export async function digest(path: string) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
 export async function resolveModel(cache: string, explicit?: string) {
+  const path = await fetchModel(cache, explicit);
+  if (!explicit)
+    await Promise.all(
+      superseded.map((name) => rm(join(cache, name), { force: true })),
+    );
+  return path;
+}
+async function fetchModel(cache: string, explicit?: string) {
   await mkdir(cache, { recursive: true, mode: 0o700 });
   const target =
     explicit ?? join(cache, `${model.name}-${model.revision}.onnx`);
