@@ -57,7 +57,7 @@ try {
     for (const b of repaired.blocks.filter((b) => b.page === page)) {
       if (b.image)
         sections.push(
-          `<!-- block:${b.id} type:${b.label} -->\n[${b.label}: ${b.id}](${b.image})\n\n<!-- transcript:transcripts/${b.id}.md -->`,
+          `<!-- block:${b.id} type:${b.label} -->\n[${b.label}: ${b.id}](${b.image})`,
         );
       else if (b.text)
         sections.push(

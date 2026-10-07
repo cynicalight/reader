@@ -17,14 +17,12 @@ const job: Processing = {
   status: "running",
   pagesDone: 5,
   pagesTotal: 10,
-  assetsDone: 0,
-  assetsTotal: 4,
   translationsDone: 0,
   translationsTotal: 10,
   detail: "",
   updatedAt: "",
 };
-it("shows learning first, then both parallel jobs, and hides the panel after completion", () => {
+it("shows learning first, then translation, and hides the panel after completion", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   const host = document.createElement("div");
@@ -38,46 +36,29 @@ it("shows learning first, then both parallel jobs, and hides the panel after com
   expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
   render({
     ...job,
-    phase: "settling",
+    phase: "translating",
     pagesDone: 10,
-    assetsDone: 1,
     translationsDone: 3,
-    settling: { status: "running", detail: "" },
     translating: { status: "running", detail: "" },
   });
   expect(host.textContent).toContain("学习完成100%");
   act(() => vi.advanceTimersByTime(750));
-  expect(host.textContent).toContain("沉淀中1/4");
-  expect(host.textContent).toContain("翻译中3/10");
+  expect(host.textContent).toBe("翻译中3/10");
+  expect(host.textContent).not.toContain("沉淀");
   expect(
     host.querySelectorAll('.processing-activity-dot[data-active="true"]'),
-  ).toHaveLength(2);
+  ).toHaveLength(1);
   expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
-  render({
-    ...job,
-    phase: "translating",
-    assetsDone: 4,
-    translationsDone: 3,
-    settling: { status: "complete", detail: "" },
-    translating: { status: "running", detail: "" },
-  });
-  expect(host.textContent).toContain("沉淀完成4/4");
-  expect(host.textContent).toContain("翻译中3/10");
-  expect(
-    host.querySelector(".cover-processing")?.getAttribute("data-leaving"),
-  ).toBe("false");
   render({
     ...job,
     phase: "ready",
     status: "complete",
-    assetsDone: 4,
     translationsDone: 10,
-    settling: { status: "complete", detail: "" },
     translating: { status: "complete", detail: "" },
   });
   expect(host.textContent).toContain("翻译完成10/10");
   expect(host.querySelector(".processing-activity-dot")).toBeNull();
-  expect(host.querySelectorAll(".processing-complete-icon")).toHaveLength(2);
+  expect(host.querySelectorAll(".processing-complete-icon")).toHaveLength(1);
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toBe("");
 });
@@ -112,11 +93,17 @@ it("keeps a configuration action without active glow while waiting", () => {
   act(() =>
     root!.render(
       <CoverProcessing
-        job={{ ...job, phase: "settling", status: "waiting" }}
+        job={{
+          ...job,
+          phase: "translating",
+          status: "waiting",
+          translating: { status: "waiting", detail: "等待文字能力" },
+        }}
         onSettings={onSettings}
       />,
     ),
   );
+  expect(host.textContent).toContain("翻译待配置");
   expect(host.querySelector('[aria-label="等待 AI 配置"]')).not.toBeNull();
   expect(host.querySelector('[data-active="true"]')).toBeNull();
   act(() =>
@@ -126,36 +113,7 @@ it("keeps a configuration action without active glow while waiting", () => {
   );
   expect(onSettings).toHaveBeenCalledOnce();
 });
-
-it("uses independent states when translation is active while consolidation waits", async () => {
-  const { processingStages } = await import("./ProcessingStatus");
-  const stages = processingStages({
-    ...job,
-    phase: "translating",
-    settling: { status: "waiting", detail: "等待图片能力" },
-    translating: { status: "running", detail: "正在翻译" },
-    translationsDone: 4,
-  });
-  expect(stages[1].done).toBe(false);
-  expect(stages[1].active).toBe(false);
-  expect(stages[2].active).toBe(true);
-  expect(stages[2].count).toBe("4 / 10 段");
-});
-it("keeps the cover on unfinished consolidation when translation has completed", async () => {
-  const { processingStages } = await import("./ProcessingStatus");
-  const stages = processingStages({
-    ...job,
-    phase: "settling",
-    settling: { status: "running", detail: "正在沉淀" },
-    translating: { status: "complete", detail: "翻译完成" },
-    translationsDone: 10,
-  });
-  expect(stages[1].active).toBe(true);
-  expect(stages[1].done).toBe(false);
-  expect(stages[2].done).toBe(true);
-});
-
-it("exposes a failed lane while the other keeps running", () => {
+it("offers a retry when translation fails", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.createElement("div");
   root = createRoot(host);
@@ -165,20 +123,17 @@ it("exposes a failed lane while the other keeps running", () => {
         job={{
           ...job,
           phase: "translating",
-          settling: { status: "failed", detail: "图片服务失败" },
-          translating: { status: "running", detail: "" },
+          status: "failed",
+          translating: { status: "failed", detail: "文字服务失败" },
           translationsDone: 4,
         }}
         onSettings={() => {}}
       />,
     ),
   );
-  expect(host.textContent).toContain("沉淀失败0/4");
-  expect(host.textContent).toContain("翻译中4/10");
-  expect(host.querySelector('[aria-label="重试沉淀"]')).not.toBeNull();
-  expect(
-    host.querySelector('[data-stage="translating"][data-active="true"]'),
-  ).not.toBeNull();
+  expect(host.textContent).toContain("翻译失败4/10");
+  expect(host.querySelector('[aria-label="重试翻译"]')).not.toBeNull();
+  expect(host.querySelector('[data-active="true"]')).toBeNull();
 });
 it("shows queued work distinctly from a running job at zero completed items", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -189,22 +144,20 @@ it("shows queued work distinctly from a running job at zero completed items", ()
       <CoverProcessing
         job={{
           ...job,
-          phase: "settling",
-          settling: { status: "queued", detail: "" },
-          translating: { status: "running", detail: "" },
+          phase: "translating",
+          status: "queued",
+          translating: { status: "queued", detail: "" },
         }}
         onSettings={() => {}}
       />,
     ),
   );
-  expect(host.textContent).toContain("等待沉淀0/4");
-  expect(host.textContent).toContain("翻译中0/10");
+  expect(host.textContent).toContain("等待翻译0/10");
   expect(
-    host.querySelector('[data-stage="settling"][data-active="true"]'),
+    host.querySelector('[data-stage="translating"][data-active="true"]'),
   ).toBeNull();
 });
-
-it("omits a completed lane that has no work", () => {
+it("omits completed translation that had no work", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.createElement("div");
   root = createRoot(host);
@@ -213,10 +166,11 @@ it("omits a completed lane that has no work", () => {
       <CoverProcessing
         job={{
           ...job,
-          phase: "translating",
-          assetsTotal: 0,
-          settling: { status: "complete", detail: "" },
-          translating: { status: "running", detail: "" },
+          phase: "ready",
+          status: "complete",
+          pagesDone: 10,
+          translationsTotal: 0,
+          translating: { status: "complete", detail: "" },
         }}
         onSettings={() => {}}
       />,
