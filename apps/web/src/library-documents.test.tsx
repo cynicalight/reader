@@ -179,8 +179,6 @@ it("opens PDF processing statistics from the button beside edit without opening 
     status: "complete" as const,
     pagesDone: 2,
     pagesTotal: 2,
-    assetsDone: 0,
-    assetsTotal: 0,
     translationsDone: 18,
     translationsTotal: 18,
     detail: "",

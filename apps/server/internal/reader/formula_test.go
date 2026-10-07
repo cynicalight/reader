@@ -109,7 +109,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 			w.(http.Flusher).Flush()
 			<-release
 		} else {
-			sendTranslationDelta(w, "表格解析，仅供 AI。")
+			t.Error("table attachment sent to the vision provider")
 		}
 		finishTranslationStream(w)
 	}))
@@ -132,8 +132,8 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 	if err := s.learnPDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if p.AssetsTotal != 1 || p.TranslationsTotal != 2 {
-		t.Fatalf("formula counted as consolidation: %+v", p)
+	if p.TranslationsTotal != 2 {
+		t.Fatalf("wrong translation total: %+v", p)
 	}
 	done := make(chan error, 1)
 	go func() { done <- s.processPDF(context.Background(), &p) }()
@@ -160,7 +160,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	if p.Status != "complete" || p.TranslationsDone != 2 || p.AssetsDone != 1 {
+	if p.Status != "complete" || p.TranslationsDone != 2 {
 		t.Fatalf("%+v", p)
 	}
 	items, _ := s.translations("doc", m)
@@ -175,7 +175,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 	if err := s.processPDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if imageCalls.Load() != 2 {
+	if imageCalls.Load() != 1 {
 		t.Fatal("repeated completed formula conversion")
 	}
 }
