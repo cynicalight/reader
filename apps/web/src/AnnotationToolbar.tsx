@@ -8,6 +8,7 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { ColorSwatches } from "./ColorSwatches";
 
 export const annotationLabels = {
   highlight: "高亮",
@@ -26,6 +27,7 @@ export function AnnotationToolbar({
   onNote,
   onAskAI,
   onAnswer,
+  onColor,
 }: {
   annotation: Annotation;
   anchor: SelectionAnchor;
@@ -35,6 +37,7 @@ export function AnnotationToolbar({
   onNote: (annotation: Annotation) => void;
   onAskAI: (annotation: Annotation) => void;
   onAnswer?: (annotation: Annotation) => void;
+  onColor?: (annotation: Annotation, color: string) => void;
 }) {
   const hasNote = !!annotation.note.trim();
   const question = annotation.kind === "question";
@@ -59,6 +62,14 @@ export function AnnotationToolbar({
   ];
   return (
     <SelectionToolbar anchor={anchor} pane={pane} label="批注操作">
+      {onColor && annotation.kind !== "bookmark" && (
+        <ColorSwatches
+          action="标记"
+          current={annotation.color}
+          disabled={deleting}
+          onPick={(color) => onColor(annotation, color)}
+        />
+      )}
       {actions.map(({ label, Icon, onClick }) => (
         <Tooltip key={label}>
           <TooltipTrigger

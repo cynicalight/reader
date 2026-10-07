@@ -92,3 +92,19 @@ func TestPaperNote(t *testing.T) {
 		t.Fatal("note left behind")
 	}
 }
+func TestAnnotationColorChange(t *testing.T) {
+	s := testServer(t)
+	d := organizationDoc(t, s)
+	w := request(t, s, "POST", "/api/documents/"+d.ID+"/annotations", strings.NewReader(`{"kind":"highlight","location":{"type":"pdf","page":1},"quote":"q","note":"keep","color":"#e6b94c"}`))
+	var a Annotation
+	_ = json.Unmarshal(w.Body.Bytes(), &a)
+	path := "/api/documents/" + d.ID + "/annotations/" + a.ID
+	if w = request(t, s, "PATCH", path, strings.NewReader(`{"color":"red"}`)); w.Code != 400 {
+		t.Fatalf("bad color accepted: %d", w.Code)
+	}
+	w = request(t, s, "PATCH", path, strings.NewReader(`{"color":"#e8746b"}`))
+	_ = json.Unmarshal(w.Body.Bytes(), &a)
+	if w.Code != 200 || a.Color != "#e8746b" || a.Note != "keep" {
+		t.Fatalf("color: %d %+v", w.Code, a)
+	}
+}

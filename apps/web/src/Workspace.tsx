@@ -20,7 +20,6 @@ import {
   BookmarkPlus,
   Sparkles,
   Settings2,
-  Highlighter,
   Underline,
   Languages,
   MessageSquare,
@@ -102,7 +101,13 @@ import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
-import { activeAnnotation, applySavedAnnotation } from "./annotations";
+import {
+  activeAnnotation,
+  annotationContext,
+  applySavedAnnotation,
+  highlightColors,
+} from "./annotations";
+import { ColorSwatches } from "./ColorSwatches";
 import { copyText } from "./chat/clipboard";
 import { ReaderView } from "./ReaderView";
 import { NotesPanel } from "./NotesPanel";
@@ -309,6 +314,24 @@ export function Workspace({
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteKind, setNoteKind] = useState<"note" | "question">("note");
+  const [markColor, setMarkColor] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("reader.mark-color") || "";
+      return highlightColors.some((c) => c.value === saved)
+        ? saved
+        : highlightColors[0].value;
+    } catch {
+      return highlightColors[0].value;
+    }
+  });
+  const chooseColor = (color: string) => {
+    setMarkColor(color);
+    try {
+      localStorage.setItem("reader.mark-color", color);
+    } catch {
+      /* the color only lasts for this session */
+    }
+  };
   const [answering, setAnswering] = useState<Set<string>>(new Set());
   const [exportingNotes, setExportingNotes] = useState(false);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
@@ -408,7 +431,11 @@ export function Workspace({
       toast.error(e.message),
     );
   };
-  const annotate = async (kind: Annotation["kind"], noteText = "") => {
+  const annotate = async (
+    kind: Annotation["kind"],
+    noteText = "",
+    color = markColor,
+  ) => {
     const written = kind === "note" || kind === "question";
     const source = written ? noteSelection : selection;
     const target = kind === "bookmark" ? location : source?.location;
@@ -431,7 +458,7 @@ export function Workspace({
               location: target,
               quote: kind === "bookmark" ? "" : source?.text || "",
               note: noteText,
-              color: "#e6b94c",
+              color,
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
       adapter?.clearSelection();
@@ -507,6 +534,17 @@ export function Workspace({
     } catch (e) {
       toast.error((e as Error).message);
       return false;
+    }
+  };
+  const recolor = async (annotation: Annotation, color: string) => {
+    chooseColor(color);
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        color,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
   const resolveQuestion = async (annotation: Annotation, resolved: boolean) => {
@@ -624,11 +662,18 @@ export function Workspace({
           : [];
       }
       if (controller.signal.aborted) return;
+      // The reader's marks go last so they never displace the passage itself.
+      const marks = annotationContext(annotations);
+      const passage = context.slice(
+        0,
+        marks ? 21000 - marks.length - 2 : 21000,
+      );
+      context = marks ? `${passage}\n\n${marks}` : passage;
       if (!directImage) setPrompt("");
       await session.send({
         provider,
         prompt: question,
-        context: context.slice(0, 21000),
+        context,
         references,
         attachments,
       });
@@ -1118,6 +1163,7 @@ export function Workspace({
                 onNote={editAnnotationNote}
                 onAskAI={askAnnotationAI}
                 onAnswer={(annotation) => void answerQuestion(annotation)}
+                onColor={(annotation, color) => void recolor(annotation, color)}
               />
             )}
 
@@ -1126,12 +1172,13 @@ export function Workspace({
                 <Badge variant="secondary">
                   已选 {selection.text.length} 字
                 </Badge>
-                <IconButton
-                  label="高亮"
-                  onClick={() => void annotate("highlight")}
-                >
-                  <Highlighter />
-                </IconButton>
+                <ColorSwatches
+                  action="高亮"
+                  onPick={(color) => {
+                    chooseColor(color);
+                    void annotate("highlight", "", color);
+                  }}
+                />
                 <IconButton
                   label="下划线"
                   onClick={() => void annotate("underline")}

@@ -416,6 +416,7 @@ export interface paths {
             /** @description Message ID of this document; empty clears */
             answerId?: string;
             resolved?: boolean;
+            color?: string;
           };
         };
       };

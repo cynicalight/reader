@@ -37,3 +37,47 @@ export function documentOrder(a: Annotation, b: Annotation) {
     return (x.progression ?? 0) - (y.progression ?? 0);
   return a.createdAt.localeCompare(b.createdAt);
 }
+
+/** Highlight colors; the first is the default used before this palette existed. */
+export const highlightColors = [
+  { value: "#e6b94c", label: "黄色" },
+  { value: "#6cc58c", label: "绿色" },
+  { value: "#5b9fe8", label: "蓝色" },
+  { value: "#e8746b", label: "红色" },
+  { value: "#a985e0", label: "紫色" },
+] as const;
+
+export const colorLabel = (color: string) =>
+  highlightColors.find((c) => c.value.toLowerCase() === color.toLowerCase())
+    ?.label || "其他颜色";
+
+/**
+ * The reader's marks grouped by color, so questions like "how do my red
+ * formulas relate" can be answered. Bookmarks carry no text and are skipped.
+ */
+export function annotationContext(annotations: Annotation[], limit = 4000) {
+  const groups = new Map<string, Annotation[]>();
+  for (const a of [...annotations].sort(documentOrder)) {
+    if (a.kind === "bookmark" || !(a.quote || a.note)) continue;
+    const label = colorLabel(a.color || highlightColors[0].value);
+    groups.set(label, [...(groups.get(label) || []), a]);
+  }
+  if (!groups.size) return "";
+  const lines = ["[读者的标注，按颜色分组]"];
+  for (const [label, items] of groups) {
+    lines.push(`${label}（${items.length} 处）：`);
+    for (const a of items) {
+      const place =
+        a.location.type === "pdf" ? `第 ${a.location.page} 页` : "章节";
+      const quote = a.quote.replace(/\s+/g, " ").slice(0, 300);
+      const note = a.note.trim()
+        ? ` —— ${a.kind === "question" ? "问题" : "笔记"}：${a.note.replace(/\s+/g, " ").slice(0, 200)}`
+        : "";
+      lines.push(`- ${place}：${quote ? `“${quote}”` : ""}${note}`);
+    }
+  }
+  let text = lines.join("\n");
+  if (text.length > limit)
+    text = text.slice(0, limit) + "\n…（其余标注已省略）";
+  return text;
+}

@@ -229,7 +229,12 @@ export const api = {
   updateAnnotation: (
     id: string,
     annotation: string,
-    patch: { note?: string; answerId?: string; resolved?: boolean },
+    patch: {
+      note?: string;
+      answerId?: string;
+      resolved?: boolean;
+      color?: string;
+    },
   ) =>
     request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "PATCH",

@@ -493,8 +493,13 @@
                                       "description": "Message ID of this document; empty clears",
                                     },
                                   "resolved": { "type": "boolean" },
+                                  "color":
+                                    {
+                                      "type": "string",
+                                      "pattern": "^#[0-9a-fA-F]{6}$",
+                                    },
                                 },
-                              "description": "At least one of note, answerId or resolved",
+                              "description": "At least one of note, answerId, resolved or color",
                             },
                         },
                     },

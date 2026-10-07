@@ -5,19 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"unicode/utf8"
 )
+
+var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func (s *Server) updateAnnotationNote(w http.ResponseWriter, r *http.Request) {
 	var patch struct {
 		Note     *string `json:"note"`
 		AnswerID *string `json:"answerId"`
 		Resolved *bool   `json:"resolved"`
+		Color    *string `json:"color"`
 	}
 	if !decode(w, r, &patch) {
 		return
 	}
-	if patch.Note == nil && patch.AnswerID == nil && patch.Resolved == nil {
+	if patch.Color != nil && !colorPattern.MatchString(*patch.Color) {
+		fail(w, 400, "颜色须为 #rrggbb")
+		return
+	}
+	if patch.Note == nil && patch.AnswerID == nil && patch.Resolved == nil && patch.Color == nil {
 		fail(w, 400, "缺少笔记内容")
 		return
 	}
@@ -34,9 +42,10 @@ func (s *Server) updateAnnotationNote(w http.ResponseWriter, r *http.Request) {
 	var body string
 	err := s.Store.DB.QueryRow(`UPDATE annotations SET body=json_set(body,
   '$.note',COALESCE(?,json_extract(body,'$.note')),
+  '$.color',COALESCE(?,json_extract(body,'$.color')),
   '$.answerId',COALESCE(?,json_extract(body,'$.answerId'),''),
   '$.resolved',json(CASE WHEN ? IS NULL THEN (CASE WHEN json_extract(body,'$.resolved') THEN 'true' ELSE 'false' END) WHEN ? THEN 'true' ELSE 'false' END))
-  WHERE id=? AND document_id=? RETURNING body`, patch.Note, patch.AnswerID, patch.Resolved, patch.Resolved, r.PathValue("annotation"), documentID).Scan(&body)
+  WHERE id=? AND document_id=? RETURNING body`, patch.Note, patch.Color, patch.AnswerID, patch.Resolved, patch.Resolved, r.PathValue("annotation"), documentID).Scan(&body)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 404, "标注不存在，请重新选择原文")
 		return
