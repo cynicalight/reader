@@ -1350,8 +1350,36 @@ kbd {
   animation: cover-stage-leave 250ms 450ms cubic-bezier(0.23, 1, 0.32, 1) both;
   pointer-events: none;
 }
-.cover-processing .processing-step + .processing-step {
-  margin-top: 10px;
+.cover-processing[data-compact="true"] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+}
+.cover-processing[data-compact="true"] .processing-step {
+  flex: 1;
+  min-width: 0;
+}
+.cover-processing[data-compact="true"] .processing-step-heading {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.cover-processing[data-compact="true"] .processing-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cover-processing[data-compact="true"] .processing-count {
+  flex-shrink: 0;
+}
+.cover-processing[data-compact="true"] .cover-processing-action {
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  color: inherit;
+}
+.cover-processing[data-compact="true"] .cover-processing-action svg {
+  flex-shrink: 0;
 }
 .cover-processing .processing-step-heading {
   font-size: 11px;
