@@ -73,6 +73,12 @@ export function ReaderView({
         selection: (selection) => {
           if (!disposed) latest.current.events.selection(selection);
         },
+        linkPreview: (preview) => {
+          if (!disposed) latest.current.events.linkPreview?.(preview);
+        },
+        internalLink: (origin) => {
+          if (!disposed) latest.current.events.internalLink?.(origin);
+        },
       });
       await engine.open(doc);
       if (disposed) return;

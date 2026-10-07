@@ -208,7 +208,20 @@ export interface PDFSentenceLink {
   blockId: string;
   sentenceIndexes: number[];
 }
+/** The target region of a hovered internal PDF link, rendered as an image. */
+export interface LinkPreview {
+  /** The link's rectangle in viewport coordinates. */
+  anchor: { left: number; top: number; width: number; height: number };
+  page: number;
+  image: string;
+  /** Image width divided by height. */
+  ratio: number;
+}
 export interface ReaderEvents {
+  /** Show (or hide with null) a preview of an internal link's target. */
+  linkPreview?: (preview: LinkPreview | null) => void;
+  /** An internal link is about to move away from this location. */
+  internalLink?: (origin: DocumentLocation) => void;
   blockHover?: (block: PDFBlock | null) => void;
   annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
@@ -231,6 +244,8 @@ export interface ReaderAdapter {
   highlight(annotations: Annotation[]): Promise<void>;
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;
+  /** Whether most of a remembered viewport position is on screen again. */
+  isNear?(location: DocumentLocation): boolean;
   setBlocks?(blocks: PDFBlock[]): void;
   hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;

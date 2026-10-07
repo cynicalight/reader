@@ -2489,3 +2489,13 @@ textarea.paper-note-input {
 .note-card[data-kind="question"] .note-quote {
   border-left-color: color-mix(in oklch, var(--primary) 45%, transparent);
 }
+.link-preview {
+  width: min(480px, calc(100vw - 24px));
+  pointer-events: none;
+}
+.link-preview img {
+  width: 100%;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 0 0 1px var(--border);
+}

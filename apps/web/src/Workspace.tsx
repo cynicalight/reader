@@ -53,6 +53,7 @@ import {
   type PDFBlock,
   type PDFBlockAction,
   type ImageAttachment,
+  type LinkPreview,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Badge } from "@reader/ui/components/badge";
@@ -219,6 +220,9 @@ export function Workspace({
     [adapter],
   );
   const [returnLocation, setReturnLocation] = useState<DocumentLocation>();
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const navigationRef = useRef(referenceNavigation);
+  navigationRef.current = referenceNavigation;
   const [referenceBusy, setReferenceBusy] = useState(false);
   const visitReference = async (target: DocumentLocation) => {
     if (!referenceNavigation || referenceNavigation.busy) return;
@@ -378,6 +382,7 @@ export function Workspace({
   };
   const saveLocation = (next: DocumentLocation, percent: number) => {
     setLocation(next);
+    if (navigationRef.current?.settle()) setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
       toast.error(e.message),
@@ -1073,6 +1078,11 @@ export function Workspace({
                     location: saveLocation,
                     selection: selectText,
                     annotation: selectAnnotation,
+                    linkPreview: setLinkPreview,
+                    internalLink: (origin) => {
+                      navigationRef.current?.remember(origin);
+                      setReturnLocation(navigationRef.current?.origin);
+                    },
                     blockAction,
                   }}
                 />
@@ -1369,6 +1379,37 @@ export function Workspace({
         </ResizablePanel>
       </ResizablePanelGroup>
 
+      <Popover
+        open={!!linkPreview}
+        onOpenChange={(open) => !open && setLinkPreview(null)}
+      >
+        {linkPreview && (
+          <PopoverContent
+            anchor={{
+              getBoundingClientRect: () =>
+                DOMRect.fromRect({
+                  x: linkPreview.anchor.left,
+                  y: linkPreview.anchor.top,
+                  width: linkPreview.anchor.width,
+                  height: linkPreview.anchor.height,
+                }),
+            }}
+            side="bottom"
+            initialFocus={false}
+            finalFocus={false}
+            className="link-preview"
+          >
+            <img
+              src={linkPreview.image}
+              alt={`第 ${linkPreview.page} 页链接目标`}
+              style={{ aspectRatio: linkPreview.ratio }}
+            />
+            <span className="text-xs text-muted-foreground">
+              第 {linkPreview.page} 页 · 点击跳转
+            </span>
+          </PopoverContent>
+        )}
+      </Popover>
       {previewImage && (
         <ImagePreview
           key={previewImage.id}
