@@ -24,7 +24,7 @@ const job: Processing = {
   detail: "",
   updatedAt: "",
 };
-it("shows one stage, completes it before advancing, and removes finished background work", () => {
+it("shows learning first, then both parallel jobs, and hides the panel after completion", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   const host = document.createElement("div");
@@ -36,23 +36,43 @@ it("shows one stage, completes it before advancing, and removes finished backgro
   render(job);
   expect(host.textContent).toContain("学习中50%");
   expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
-  render({ ...job, phase: "settling", pagesDone: 10, assetsDone: 1 });
+  render({
+    ...job,
+    phase: "settling",
+    pagesDone: 10,
+    assetsDone: 1,
+    translationsDone: 3,
+    settling: { status: "running", detail: "" },
+    translating: { status: "running", detail: "" },
+  });
   expect(host.textContent).toContain("学习完成100%");
   act(() => vi.advanceTimersByTime(750));
-  expect(host.textContent).toContain("沉淀中25%");
-  render({ ...job, phase: "translating", assetsDone: 4, translationsDone: 3 });
-  expect(host.textContent).toContain("沉淀完成100%");
-  act(() => vi.advanceTimersByTime(750));
-  expect(host.textContent).toContain("翻译中30%");
-  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+  expect(host.textContent).toContain("沉淀中1/4");
+  expect(host.textContent).toContain("翻译中3/10");
+  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(2);
+  render({
+    ...job,
+    phase: "translating",
+    assetsDone: 4,
+    translationsDone: 3,
+    settling: { status: "complete", detail: "" },
+    translating: { status: "running", detail: "" },
+  });
+  expect(host.textContent).toContain("沉淀完成4/4");
+  expect(host.textContent).toContain("翻译中3/10");
+  expect(
+    host.querySelector(".cover-processing")?.getAttribute("data-leaving"),
+  ).toBe("false");
   render({
     ...job,
     phase: "ready",
     status: "complete",
     assetsDone: 4,
     translationsDone: 10,
+    settling: { status: "complete", detail: "" },
+    translating: { status: "complete", detail: "" },
   });
-  expect(host.textContent).toContain("翻译完成100%");
+  expect(host.textContent).toContain("翻译完成10/10");
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toBe("");
 });
@@ -74,7 +94,7 @@ it("shows persisted translation progress and detail when a parsing warning exist
       />,
     ),
   );
-  expect(host.textContent).toContain("翻译中60%");
+  expect(host.textContent).toContain("翻译中6/10");
   expect(
     host.querySelector(".cover-processing")?.getAttribute("title"),
   ).toContain("正在翻译正文 · 6 / 10 段");
@@ -93,4 +113,103 @@ it("keeps a configuration action without active glow while waiting", () => {
   );
   expect(host.textContent).toContain("等待 AI 配置");
   expect(host.querySelector('[data-active="true"]')).toBeNull();
+});
+
+it("uses independent states when translation is active while consolidation waits", async () => {
+  const { processingStages } = await import("./ProcessingStatus");
+  const stages = processingStages({
+    ...job,
+    phase: "translating",
+    settling: { status: "waiting", detail: "等待图片能力" },
+    translating: { status: "running", detail: "正在翻译" },
+    translationsDone: 4,
+  });
+  expect(stages[1].done).toBe(false);
+  expect(stages[1].active).toBe(false);
+  expect(stages[2].active).toBe(true);
+  expect(stages[2].count).toBe("4 / 10 段");
+});
+it("keeps the cover on unfinished consolidation when translation has completed", async () => {
+  const { processingStages } = await import("./ProcessingStatus");
+  const stages = processingStages({
+    ...job,
+    phase: "settling",
+    settling: { status: "running", detail: "正在沉淀" },
+    translating: { status: "complete", detail: "翻译完成" },
+    translationsDone: 10,
+  });
+  expect(stages[1].active).toBe(true);
+  expect(stages[1].done).toBe(false);
+  expect(stages[2].done).toBe(true);
+});
+
+it("exposes a failed lane while the other keeps running", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  root = createRoot(host);
+  act(() =>
+    root!.render(
+      <CoverProcessing
+        job={{
+          ...job,
+          phase: "translating",
+          settling: { status: "failed", detail: "图片服务失败" },
+          translating: { status: "running", detail: "" },
+          translationsDone: 4,
+        }}
+        onSettings={() => {}}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("沉淀失败0/4");
+  expect(host.textContent).toContain("翻译中4/10");
+  expect(host.textContent).toContain("重试沉淀");
+  expect(
+    host.querySelector('[data-stage="translating"][data-active="true"]'),
+  ).not.toBeNull();
+});
+it("shows queued work distinctly from a running job at zero completed items", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  root = createRoot(host);
+  act(() =>
+    root!.render(
+      <CoverProcessing
+        job={{
+          ...job,
+          phase: "settling",
+          settling: { status: "queued", detail: "" },
+          translating: { status: "running", detail: "" },
+        }}
+        onSettings={() => {}}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("等待沉淀0/4");
+  expect(host.textContent).toContain("翻译中0/10");
+  expect(
+    host.querySelector('[data-stage="settling"][data-active="true"]'),
+  ).toBeNull();
+});
+
+it("omits a completed lane that has no work", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  root = createRoot(host);
+  act(() =>
+    root!.render(
+      <CoverProcessing
+        job={{
+          ...job,
+          phase: "translating",
+          assetsTotal: 0,
+          settling: { status: "complete", detail: "" },
+          translating: { status: "running", detail: "" },
+        }}
+        onSettings={() => {}}
+      />,
+    ),
+  );
+  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+  expect(host.textContent).not.toContain("0/0");
 });

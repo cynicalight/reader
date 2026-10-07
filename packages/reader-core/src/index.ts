@@ -202,7 +202,14 @@ export interface Message {
   createdAt: string;
 }
 
+export interface ProcessingStage {
+  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  detail: string;
+  warning?: string;
+}
 export interface Processing {
+  settling?: ProcessingStage;
+  translating?: ProcessingStage;
   usageTracked?: boolean;
   startedAt?: string;
   completedAt?: string;
@@ -238,6 +245,7 @@ export interface TranslationBlock {
   sourceHash: string;
   status: "pending" | "running" | "complete" | "failed";
   sentences: TranslationSentence[];
+  formulaMarkdown?: string;
   error?: string;
 }
 export interface AICapability {

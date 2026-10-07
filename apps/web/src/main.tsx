@@ -23,4 +23,12 @@ if (import.meta.env.DEV && location.pathname === "/__streaming-benchmark") {
   void import("./chat/StreamingPreview").then(({ default: Preview }) =>
     root.render(<Preview />),
   );
+} else if (import.meta.env.DEV && location.pathname === "/__formula-caption") {
+  void import("./translation/FormulaCaptionPreview").then(
+    ({ default: Preview }) => root.render(<Preview />),
+  );
+} else if (import.meta.env.DEV && location.pathname === "/__processing-cover") {
+  void import("./CoverProcessingPreview").then(({ default: Preview }) =>
+    root.render(<Preview />),
+  );
 } else root.render(<App />);

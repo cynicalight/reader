@@ -1522,7 +1522,15 @@ export interface components {
     Error: {
       error: string;
     };
+    ProcessingStage: {
+      /** @enum {unknown} */
+      status: "queued" | "running" | "waiting" | "failed" | "complete";
+      detail: string;
+      warning?: string;
+    };
     Processing: {
+      settling?: components["schemas"]["ProcessingStage"];
+      translating?: components["schemas"]["ProcessingStage"];
       documentId: string;
       /** @enum {string} */
       phase: "learning" | "settling" | "translating" | "ready";
@@ -1608,6 +1616,8 @@ export interface components {
       /** @enum {unknown} */
       status: "pending" | "running" | "complete" | "failed";
       sentences: components["schemas"]["TranslationSentence"][];
+      /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
+      formulaMarkdown?: string;
       error?: string;
     };
     TagBoardInput: {

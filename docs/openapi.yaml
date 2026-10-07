@@ -1873,11 +1873,30 @@
               "properties": { "error": { "type": "string" } },
               "required": ["error"],
             },
+          "ProcessingStage":
+            {
+              "type": "object",
+              "required": ["status", "detail"],
+              "properties":
+                {
+                  "status":
+                    {
+                      "enum":
+                        ["queued", "running", "waiting", "failed", "complete"],
+                    },
+                  "detail": { "type": "string" },
+                  "warning": { "type": "string" },
+                },
+            },
           "Processing":
             {
               "type": "object",
               "properties":
                 {
+                  "settling":
+                    { "$ref": "#/components/schemas/ProcessingStage" },
+                  "translating":
+                    { "$ref": "#/components/schemas/ProcessingStage" },
                   "documentId": { "type": "string" },
                   "phase":
                     {
@@ -2049,6 +2068,11 @@
                       "type": "array",
                       "items":
                         { "$ref": "#/components/schemas/TranslationSentence" },
+                    },
+                  "formulaMarkdown":
+                    {
+                      "type": "string",
+                      "description": "Formula-only Markdown converted asynchronously from the original image during translation.",
                     },
                   "error": { "type": "string" },
                 },

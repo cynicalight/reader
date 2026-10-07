@@ -1350,6 +1350,9 @@ kbd {
   animation: cover-stage-leave 250ms 450ms cubic-bezier(0.23, 1, 0.32, 1) both;
   pointer-events: none;
 }
+.cover-processing .processing-step + .processing-step {
+  margin-top: 10px;
+}
 .cover-processing .processing-step-heading {
   font-size: 11px;
   gap: 5px;
