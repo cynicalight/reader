@@ -6,7 +6,7 @@ The processor is now connected to the desktop two-stage import UI, with separate
 
 The planned default installer includes PDF.js, the native Canvas runtime, ONNX Runtime and the processor code. The PP-DocLayoutV3 weights are downloaded automatically on first use and cached once per local library. Users do not install Python or PaddlePaddle. An installer containing the weights could support offline first use; that packaging variant is not implemented.
 
-The desktop import flow now starts the worker automatically for PDFs. The UI exposes model download status, per-page learning progress, per-asset consolidation progress, connection waits and retries. Desktop installer distribution is not implemented yet.
+The desktop import flow now starts the worker automatically for PDFs. The UI exposes model download status, per-page learning progress, translation progress, connection waits and retries. Per-asset image consolidation has since been removed; the consolidation results below are a historical record. Desktop installer distribution is not implemented yet.
 
 Weights: `PaddlePaddle/PP-DocLayoutV3_onnx`, revision `46bbdf188bb0a772c08aed74882ce7e51a8f1ea6`, 130,502,049 bytes (about 130 MB / 124.5 MiB). SHA256: `45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba`. Weights and generated user documents are not committed. The download is checked before inference; partial downloads never become the cached model.
 
@@ -23,7 +23,7 @@ node apps/processor/dist/main.mjs \
   --debug
 ```
 
-Use a fresh output directory for each run. `--model FILE` accepts an already-downloaded copy, still checked against the pinned hash. Without `--debug`, full-page and diagnostic images are not saved. `manifest.json` is written last and records source hash, page count, normalized coordinates, model revision, timing and warnings. `paper.md` references crops in `assets/`; transcript references remain placeholders until a later analysis job creates them. The sample PDF is supplied locally by the user and is not distributed in this repository.
+Use a fresh output directory for each run. `--model FILE` accepts an already-downloaded copy, still checked against the pinned hash. Without `--debug`, full-page and diagnostic images are not saved. `manifest.json` is written last and records source hash, page count, normalized coordinates, model revision, timing and warnings. `paper.md` references crops in `assets/`. The sample PDF is supplied locally by the user and is not distributed in this repository.
 
 Opt-in real Codex test (uses the existing CLI login and subscription):
 
