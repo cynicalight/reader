@@ -217,6 +217,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "idle", []string{}
 	if kind == "epub" {
 		d.Category = "book"
+		d.ClassificationStatus = "pending"
 	}
 	var texts map[string]string
 	cache := filepath.Join(s.Store.Root, "cache", docID)
@@ -276,7 +277,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,classification_status) VALUES(?,?,?,?,?,?,?,?,'idle')", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category)
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,classification_status) VALUES(?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.ClassificationStatus)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)

@@ -322,3 +322,28 @@ func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
 		})
 	}
 }
+
+func TestPDFProcessingMigrationPreservesEPUBClassification(t *testing.T) {
+	s := testServer(t)
+	w := upload(t, s, "the-art-of-reading.epub", sample(t, "the-art-of-reading.epub"))
+	if w.Code != 201 {
+		t.Fatal(w.Body.String())
+	}
+	var epub Document
+	if err := json.Unmarshal(w.Body.Bytes(), &epub); err != nil {
+		t.Fatal(err)
+	}
+	if epub.ClassificationStatus != "pending" {
+		t.Fatal("PDF controls changed EPUB import classification")
+	}
+	pdf := organizationDoc(t, s)
+	if _, err := s.Store.DB.Exec("UPDATE documents SET classification_status='pending' WHERE id=?", pdf.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.pauseLegacyProcessing()
+	gotEPUB, _ := s.Store.Document(epub.ID)
+	gotPDF, _ := s.Store.Document(pdf.ID)
+	if gotEPUB.ClassificationStatus != "pending" || gotPDF.ClassificationStatus != "idle" {
+		t.Fatalf("wrong migration scope: EPUB=%s PDF=%s", gotEPUB.ClassificationStatus, gotPDF.ClassificationStatus)
+	}
+}

@@ -138,7 +138,7 @@ func (s *Server) pauseLegacyProcessing() {
 	// Run once: imported documents are idle; explicit classification still works.
 	var migrated string
 	if s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='manual-processing-v1'").Scan(&migrated) != nil {
-		_, _ = s.Store.DB.Exec("UPDATE documents SET classification_status='idle' WHERE classification_status IN ('pending','running')")
+		_, _ = s.Store.DB.Exec("UPDATE documents SET classification_status='idle' WHERE type='pdf' AND classification_status IN ('pending','running')")
 		_, _ = s.Store.DB.Exec("INSERT OR IGNORE INTO settings(key,value) VALUES('manual-processing-v1','true')")
 	}
 }
