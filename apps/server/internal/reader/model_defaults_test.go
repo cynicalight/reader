@@ -2,6 +2,7 @@ package reader
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,11 @@ func TestDefaultTaskModelPerAgent(t *testing.T) {
 		{"general beats code variant", taskTranslation, "codex", catalog("gpt-7-codex-mini", "gpt-6-mini"), "gpt-6-mini"},
 		{"whole tokens only", taskTranslation, "codex", catalog("gemini-pro", "lunar-x"), ""},
 		{"empty catalog", taskChat, "claude", nil, ""},
+		{"6.1 beats 6", taskChat, "codex", catalog("gpt-6-sol", "gpt-6.1-sol", "gpt-5.6-sol"), "gpt-6.1-sol"},
+		{"6.10 beats 6.9", taskChat, "codex", catalog("gpt-6.9-sol", "gpt-6.10-sol"), "gpt-6.10-sol"},
+		{"6 beats 5.6", taskTranslation, "codex", catalog("gpt-5.6-luna", "gpt-6-luna"), "gpt-6-luna"},
+		{"date snapshot is not a version", taskChat, "codex", catalog("gpt-6-sol-2026-01-15", "gpt-6.1-sol"), "gpt-6.1-sol"},
+		{"claude dated id", taskTranslation, "claude", catalog("claude-haiku-4-5-20251001", "claude-haiku-4-6"), "claude-haiku-4-6"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := defaultTaskModel(tt.task, tt.provider, tt.models); got != tt.want {
@@ -131,5 +137,19 @@ func TestTranslationFailureKeepsChatCapability(t *testing.T) {
 	s.taskGenerationService(c, taskChat).attemptFailed("claude", false, errors.New("unknown model"))
 	if capable(s.aiConfig(), "claude", false) {
 		t.Fatal("chat failure was not recorded")
+	}
+}
+
+func TestModelVersion(t *testing.T) {
+	for id, want := range map[string]string{
+		"gpt-6.1-sol":                "[6 1]",
+		"gpt-6-sol-2026-01-15":       "[6]",
+		"claude-haiku-4-5-20251001":  "[4 5]",
+		"claude-3-5-sonnet-20241022": "[3 5]",
+		"moonshot-cn/kimi-k2.7-code": "[2 7]",
+	} {
+		if got := fmt.Sprint(modelVersion(id)); got != want {
+			t.Fatalf("%s: got %s want %s", id, got, want)
+		}
 	}
 }

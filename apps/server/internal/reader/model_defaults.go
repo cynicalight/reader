@@ -47,18 +47,18 @@ func modelTokens(m AgentModel) map[string]bool {
 	return tokens
 }
 
-// Versions come from the ID: claude-sonnet-5-5 → 5.5, gpt-5.6-luna → 5.6.
-// Date snapshots such as -20251001 are not versions.
+// The generation is the first numeric run in the ID, compared part by part:
+// gpt-6.1-sol → 6.1 beats gpt-6-sol → 6, and 6.10 beats 6.9. Later numbers
+// and date snapshots (-20251001, -2026-01-15) never count as a newer version.
 func modelVersion(id string) []int {
+	match := modelVersionPattern.FindString(id)
 	var version []int
-	for _, match := range modelVersionPattern.FindAllString(id, -1) {
-		for _, part := range strings.FieldsFunc(match, func(r rune) bool { return r == '.' || r == '-' }) {
-			if len(part) >= 6 {
-				return version
-			}
-			n, _ := strconv.Atoi(part)
-			version = append(version, n)
+	for _, part := range strings.FieldsFunc(match, func(r rune) bool { return r == '.' || r == '-' }) {
+		if len(part) >= 4 {
+			break
 		}
+		n, _ := strconv.Atoi(part)
+		version = append(version, n)
 	}
 	return version
 }
