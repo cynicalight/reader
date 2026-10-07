@@ -2,8 +2,10 @@ import { useState } from "react";
 import {
   BookOpen,
   ExternalLink,
+  Loader2,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Star,
   X,
 } from "lucide-react";
@@ -34,6 +36,7 @@ import {
 } from "@reader/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
 import {
+  lookupPaper,
   openLink,
   patchPapers,
   setReadingStatus,
@@ -136,6 +139,7 @@ export function PaperDetail({
   );
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [editingAbstract, setEditingAbstract] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
   const m = doc.metadata;
   const link = paperLink(m);
   const percent = Math.round(doc.percentage * 100);
@@ -251,6 +255,28 @@ export function PaperDetail({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        <div className="paper-fields-heading">
+          <h3>文献信息</h3>
+          {m.lookup === "pending" && (
+            <span className="text-xs text-muted-foreground">
+              解析后自动查找
+            </span>
+          )}
+          <Button
+            size="xs"
+            variant="ghost"
+            className="ml-auto"
+            disabled={lookingUp}
+            title="按 DOI、arXiv 编号或标题查找"
+            onClick={() => {
+              setLookingUp(true);
+              void lookupPaper(doc).finally(() => setLookingUp(false));
+            }}
+          >
+            {lookingUp ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            查找文献信息
+          </Button>
+        </div>
         <dl className="paper-fields">
           <dt>类型</dt>
           <dd>

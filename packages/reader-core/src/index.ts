@@ -71,11 +71,13 @@ export interface PaperMetadata {
   language?: string;
   /** Where each field came from; lookups never replace manual values. */
   sources?: Partial<Record<string, MetadataSource>>;
+  /** Automatic lookup state for papers imported from files. */
+  lookup?: "pending" | "done" | "notFound" | "failed";
   lookedUpAt?: string;
 }
 export type PaperMetadataField = Exclude<
   keyof PaperMetadata,
-  "sources" | "lookedUpAt"
+  "sources" | "lookup" | "lookedUpAt"
 >;
 export type ReadingStatus = "unread" | "reading" | "done";
 export type PaperSort = "opened" | "added" | "year" | "title";
@@ -87,6 +89,8 @@ export interface PaperLibraryPreferences {
   /** Hidden built-in views ("view:<id>") and categories ("tag:<name>"). */
   hidden?: string[];
   sort?: PaperSort;
+  /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
+  autoLookup?: boolean;
 }
 export interface LibraryPreferences {
   mode?: LibraryMode;

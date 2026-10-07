@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"reader.local/server/internal/scholar"
 )
 
 type Server struct {
@@ -34,6 +36,8 @@ type Server struct {
 	processingMu           sync.Mutex
 	modelMu                sync.Mutex
 	modelCache             map[string]modelCatalogEntry
+	scholarMu              sync.Mutex
+	scholar                *scholar.Client
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -72,6 +76,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
+	mux.HandleFunc("POST /api/documents/resolve", s.resolveDocument)
+	mux.HandleFunc("POST /api/documents/{id}/metadata/lookup", s.lookupMetadata)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
@@ -317,7 +323,12 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		return failure(500, "无法写入书库")
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,category_source,classification_status,library) VALUES(?,?,?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.CategorySource, d.ClassificationStatus, d.Library)
+	metadata := "{}"
+	if library == "papers" {
+		// Papers imported from files look up their metadata once parsed.
+		metadata = `{"lookup":"pending"}`
+	}
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,category_source,classification_status,library,metadata) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.CategorySource, d.ClassificationStatus, d.Library, metadata)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)
@@ -454,6 +465,12 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 			// Moving into the paper library is an explicit classification.
 			if category == nil {
 				category = "paper"
+			}
+			if metadata == nil && d.Metadata.Lookup == "" {
+				m := d.Metadata
+				m.Lookup = "pending"
+				b, _ := json.Marshal(m)
+				metadata = string(b)
 			}
 		}
 		library = *v.Library

@@ -60,10 +60,12 @@ type PDFBlock struct {
 	Caption string `json:"caption,omitempty"`
 }
 type layoutManifest struct {
-	IncompletePages []int      `json:"incompletePages"`
-	Pages           int        `json:"pages"`
-	Blocks          []PDFBlock `json:"blocks"`
-	Warnings        []string   `json:"warnings"`
+	// PDF document information (Title, Author, …) as read by PDF.js.
+	Metadata        map[string]any `json:"metadata"`
+	IncompletePages []int          `json:"incompletePages"`
+	Pages           int            `json:"pages"`
+	Blocks          []PDFBlock     `json:"blocks"`
+	Warnings        []string       `json:"warnings"`
 }
 
 var blockIDPattern = regexp.MustCompile(`^p[1-9][0-9]*-b[1-9][0-9]*$`)
@@ -308,6 +310,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	}
 	workers.Add(1)
 	go func() { defer workers.Done(); s.classificationWorker(ctx) }()
+	workers.Add(1)
+	go func() { defer workers.Done(); s.metadataWorker(ctx) }()
 	return func() { cancel(); workers.Wait() }
 }
 func (s *Server) wakeProcessing() {

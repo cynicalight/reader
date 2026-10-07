@@ -44,6 +44,7 @@ import { TrashView } from "./TrashView";
 import { PaperLibrary } from "./papers/PaperLibrary";
 import { PaperSidebar } from "./papers/PaperSidebar";
 import { usePaperUI } from "./papers/state";
+import { ImportPaperDialog } from "./papers/ImportPaperDialog";
 import { LibraryModeSwitcher, libraryModes } from "./LibraryModeSwitcher";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
@@ -89,6 +90,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [command, setCommand] = useState(false);
+  const [importingPaper, setImportingPaper] = useState(false);
   const [nav, setNav] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const hydrated = useRef(false);
@@ -403,7 +405,7 @@ export function App() {
                 <Button
                   variant="ghost"
                   className="mb-2 h-10 w-full gap-2 rounded-full bg-foreground/7 text-foreground/80 hover:bg-foreground/12 hover:text-foreground dark:hover:bg-foreground/12"
-                  onClick={chooseFiles}
+                  onClick={papers ? () => setImportingPaper(true) : chooseFiles}
                   disabled={busy}
                 >
                   {busy ? (
@@ -625,6 +627,11 @@ export function App() {
           />
         )}
         <Settings open={settings} onOpenChange={setSettings} />
+        <ImportPaperDialog
+          open={importingPaper}
+          onOpenChange={setImportingPaper}
+          onChooseFiles={chooseFiles}
+        />
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>

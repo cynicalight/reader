@@ -32,7 +32,8 @@ import {
   TooltipContent,
 } from "@reader/ui/components/tooltip";
 import { Separator } from "@reader/ui/components/separator";
-import { useReaderStore } from "./store";
+import { updateLibraryPreferences, useReaderStore } from "./store";
+import { Checkbox } from "@reader/ui/components/checkbox";
 import { toast } from "sonner";
 export function Settings({
   open,
@@ -57,6 +58,8 @@ export function Settings({
     setAIConfig,
     aiModelSaving,
   } = useReaderStore();
+  const paperPreferences =
+    useReaderStore((s) => s.libraryPreferences.papers) || {};
   const refresh = async (force = false) => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -179,6 +182,28 @@ export function Settings({
                 </Button>
               ))}
             </div>
+          </section>
+          <Separator />
+          <section>
+            <h3 className="mb-3 text-sm font-medium">文献库</h3>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={paperPreferences.autoLookup !== false}
+                onCheckedChange={(checked) =>
+                  void updateLibraryPreferences({
+                    papers: { ...paperPreferences, autoLookup: !!checked },
+                  }).catch((e) => toast.error(e.message))
+                }
+              />
+              <span>
+                导入 PDF 后自动补全文献信息
+                <span className="block text-xs text-muted-foreground">
+                  只把文中的 DOI 或 arXiv 编号发送给 arXiv、Crossref 与 Semantic
+                  Scholar
+                </span>
+              </span>
+            </label>
           </section>
           <Separator />
           <section>

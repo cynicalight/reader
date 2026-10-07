@@ -39,7 +39,10 @@ type PaperMetadata struct {
 	Abstract        string            `json:"abstract,omitempty"`
 	Language        string            `json:"language,omitempty"`
 	Sources         map[string]string `json:"sources,omitempty"`
-	LookedUpAt      string            `json:"lookedUpAt,omitempty"`
+	// Lookup is "pending" until the automatic lookup ran, then "done",
+	// "notFound" or "failed".
+	Lookup     string `json:"lookup,omitempty"`
+	LookedUpAt string `json:"lookedUpAt,omitempty"`
 }
 
 var itemTypes = map[string]bool{"journal": true, "conference": true, "preprint": true, "thesis": true, "book": true, "chapter": true, "report": true, "other": true}

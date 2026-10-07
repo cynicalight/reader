@@ -1910,6 +1910,111 @@
                 },
             },
         },
+      "/api/documents/resolve":
+        {
+          "post":
+            {
+              "summary": "Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags",
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties": { "ref": { "type": "string" } },
+                              "required": ["ref"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The same file already exists",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "201":
+                    {
+                      "description": "Imported",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/metadata/lookup":
+        {
+          "post":
+            {
+              "summary": "Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Updated",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -2758,6 +2863,11 @@
                         { "enum": ["file", "lookup", "manual"] },
                     },
                   "lookedUpAt": { "type": "string" },
+                  "lookup":
+                    {
+                      "enum": ["pending", "done", "notFound", "failed"],
+                      "description": "Automatic lookup state for papers imported from files",
+                    },
                 },
             },
         },

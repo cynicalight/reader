@@ -153,6 +153,17 @@ export const api = {
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
+  /** Import a paper from an arXiv ID, DOI, paper link, PDF link or title. */
+  resolveDocument: (ref: string) =>
+    request<Document>("/api/documents/resolve", {
+      method: "POST",
+      body: JSON.stringify({ ref }),
+    }),
+  lookupMetadata: (id: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/metadata/lookup`,
+      { method: "POST" },
+    ),
   removeDocument: (id: string) =>
     request<void>(`/api/documents/${encodeURIComponent(id)}`, {
       method: "DELETE",

@@ -1728,6 +1728,113 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            ref: string;
+          };
+        };
+      };
+      responses: {
+        /** @description The same file already exists */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Imported */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/metadata/lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Updated */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2085,6 +2192,11 @@ export interface components {
         [key: string]: "file" | "lookup" | "manual";
       };
       lookedUpAt?: string;
+      /**
+       * @description Automatic lookup state for papers imported from files
+       * @enum {unknown}
+       */
+      lookup?: "pending" | "done" | "notFound" | "failed";
     };
   };
   responses: never;

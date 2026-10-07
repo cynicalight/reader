@@ -198,3 +198,32 @@ export function revealFile(doc: Document, open = false) {
     doc.type,
   ).catch((e) => toast.error((e as Error).message));
 }
+
+const referencePattern =
+  /^(?:https?:\/\/\S+|(?:arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?|(?:doi:\s*)?10\.\d{4,9}\/\S+)$/i;
+/** A pasted arXiv ID, DOI or link; plain titles are only imported on request. */
+export const looksLikeReference = (text: string) =>
+  text.length <= 500 && referencePattern.test(text.trim());
+
+/** Download a paper by identifier, link or title and show it in the list. */
+export async function importReference(ref: string) {
+  const doc = await api.resolveDocument(ref.trim());
+  await refreshLibrary().catch(() => {});
+  const ui = usePaperUI.getState();
+  if (doc.library === "papers") {
+    ui.setView("all");
+    ui.setQuery("");
+    ui.select(doc.id);
+  }
+  return doc;
+}
+
+export async function lookupPaper(doc: Document) {
+  try {
+    await api.lookupMetadata(doc.id);
+    await refreshLibrary().catch(() => {});
+    toast.success("已更新文献信息");
+  } catch (e) {
+    toast.error((e as Error).message);
+  }
+}

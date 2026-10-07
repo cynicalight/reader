@@ -44,9 +44,12 @@ import {
 import { useReaderStore } from "../store";
 import { TrashView } from "../TrashView";
 import { trashWithUndo } from "../library-actions";
+import { toast } from "sonner";
 import {
   addToCategory,
   createCategory,
+  importReference,
+  looksLikeReference,
   removeFromCategory,
   savePaperPreferences,
   setReadingStatus,
@@ -117,6 +120,34 @@ export function PaperLibrary({
     view === "trash"
       ? "回收站"
       : category || viewLabels[view as BuiltinView] || "全部论文";
+  useEffect(() => {
+    // Pasting an arXiv ID, DOI or link anywhere outside a field imports it.
+    const paste = (e: ClipboardEvent) => {
+      const target = e.target as Element | null;
+      if (
+        target?.closest?.(
+          'input, textarea, [contenteditable="true"], [role="dialog"]',
+        )
+      )
+        return;
+      const text = e.clipboardData?.getData("text/plain")?.trim() || "";
+      if (!looksLikeReference(text)) return;
+      e.preventDefault();
+      const id = toast.loading("正在查找并下载论文…");
+      void importReference(text)
+        .then((doc) =>
+          toast.success(
+            doc.library === "papers"
+              ? `已导入《${doc.title}》`
+              : "这篇论文已在图书库中，可在那里移动",
+            { id },
+          ),
+        )
+        .catch((error) => toast.error((error as Error).message, { id }));
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  }, []);
   useEffect(() => {
     // A paper that left the library (trash, move) cannot stay selected.
     if (selectedId && !selected) ui.select(null);
