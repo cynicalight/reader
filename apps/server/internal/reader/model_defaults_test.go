@@ -29,7 +29,7 @@ func TestDefaultTaskModelPerAgent(t *testing.T) {
 		models   []AgentModel
 		want     string
 	}{
-		{"codex chat takes the frontier tier", taskChat, "codex", codex, "gpt-6-astra"},
+		{"codex chat takes the newest sol, never astra", taskChat, "codex", codex, "gpt-6.1-sol"},
 		{"codex translation takes the newest luna", taskTranslation, "codex", codex, "gpt-6-luna"},
 		{"claude chat takes the newest opus, never fable", taskChat, "claude", claude, "claude-opus-5-5"},
 		{"claude translation takes the newest sonnet", taskTranslation, "claude", claude, "claude-sonnet-5-5"},

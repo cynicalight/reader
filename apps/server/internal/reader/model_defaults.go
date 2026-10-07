@@ -14,13 +14,14 @@ const (
 )
 
 // Families are ordered by preference for each task. Chat prefers the most
-// capable tier; translation prefers the fast tier with acceptable quality.
+// capable everyday tier; translation prefers the fast tier with acceptable quality.
 // Kimi names carry no tier for chat, so its CLI default (the flagship) stays.
 // Matching uses whole tokens, so "mini" never matches "gemini".
 var taskFamilies = map[modelTask]map[string][]string{
 	taskChat: {
-		"codex": {"astra", "sol", "terra"},
-		// Fable is usually unavailable, so it is never a default; users can still pick it.
+		// Astra is too expensive and Fable is usually unavailable, so neither
+		// is a default; users can still pick them.
+		"codex":  {"sol", "terra"},
 		"claude": {"opus", "sonnet"},
 	},
 	taskTranslation: {
