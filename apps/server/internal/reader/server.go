@@ -338,6 +338,9 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		return failure(500, "书库保存失败")
 	}
 	success = true
+	if saved, e := s.Store.Document(d.ID); e == nil {
+		d = saved
+	}
 	return d, 201, nil
 }
 func validLocation(data json.RawMessage, kind string) bool {
@@ -363,19 +366,21 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v struct {
-		Title      json.RawMessage `json:"title"`
-		Author     json.RawMessage `json:"author"`
-		Category   json.RawMessage `json:"category"`
-		Tags       json.RawMessage `json:"tags"`
-		Favorite   *bool           `json:"favorite"`
-		Progress   json.RawMessage `json:"progress"`
-		Percentage *float64        `json:"percentage"`
-		Library    *string         `json:"library"`
+		Title      json.RawMessage            `json:"title"`
+		Author     json.RawMessage            `json:"author"`
+		Category   json.RawMessage            `json:"category"`
+		Tags       json.RawMessage            `json:"tags"`
+		Favorite   *bool                      `json:"favorite"`
+		Progress   json.RawMessage            `json:"progress"`
+		Percentage *float64                   `json:"percentage"`
+		Library    *string                    `json:"library"`
+		Metadata   map[string]json.RawMessage `json:"metadata"`
+		Status     *string                    `json:"readingStatus"`
 	}
 	if !decode(w, r, &v) {
 		return
 	}
-	var title, author, category, tags, library any
+	var title, author, category, tags, library, metadata, status any
 	if v.Title != nil {
 		title, err = metadataText(v.Title, 300, false)
 		if err != nil {
@@ -389,6 +394,34 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "作者最多 200 个字符，不能包含控制字符")
 			return
 		}
+	}
+	if v.Metadata != nil || v.Title != nil {
+		m := d.Metadata
+		if err = m.ApplyManual(v.Metadata); err != nil {
+			fail(w, 400, err.Error())
+			return
+		}
+		if v.Title != nil {
+			if m.Sources == nil {
+				m.Sources = map[string]string{}
+			}
+			m.Sources["title"] = "manual"
+		}
+		if _, ok := v.Metadata["creators"]; ok && v.Author == nil {
+			author = CreatorNames(m.Creators)
+		}
+		b, _ := json.Marshal(m)
+		metadata = string(b)
+	}
+	if v.Status != nil {
+		if !validReadingStatus(*v.Status) {
+			fail(w, 400, "阅读状态须为未读、在读或已读")
+			return
+		}
+		status = *v.Status
+	} else if v.Percentage != nil && *v.Percentage > 0 && d.ReadingStatus == "unread" {
+		// Reading starts on the first progress; finishing stays a user decision.
+		status = "reading"
 	}
 	if v.Category != nil {
 		var c string
@@ -443,14 +476,14 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var openedAt any
 	// Organization and favorites must not move a document into recent reading.
-	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil && v.Library == nil) {
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil && v.Library == nil && v.Metadata == nil && v.Status == nil) {
 		openedAt = now()
 	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),library=COALESCE(?,library),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, library, category, category, category, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, library, metadata, status, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return

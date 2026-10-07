@@ -21,6 +21,10 @@ const makeDoc = (patch: Partial<Document>): Document => ({
   classificationStatus: "done",
   classificationError: "",
   library: "books",
+  metadata: {},
+  readingStatus: "unread",
+  noteCount: 0,
+  highlightCount: 0,
   tags: [],
   ...patch,
 });

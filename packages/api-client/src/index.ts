@@ -24,6 +24,9 @@ import type {
   AgentModel,
   LibraryMode,
   LibraryPreferences,
+  PaperMetadata,
+  PaperMetadataField,
+  ReadingStatus,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -183,6 +186,8 @@ export const api = {
       progress?: DocumentLocation;
       percentage?: number;
       library?: LibraryMode;
+      metadata?: Partial<Pick<PaperMetadata, PaperMetadataField>>;
+      readingStatus?: ReadingStatus;
     },
   ) =>
     request<Document>(`/api/documents/${id}`, {

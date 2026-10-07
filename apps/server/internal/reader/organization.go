@@ -46,6 +46,8 @@ func (s *Store) migrateOrganization() error {
 		{"tags", "TEXT NOT NULL DEFAULT '[]'"},
 		{"library", "TEXT NOT NULL DEFAULT 'books' CHECK(library IN ('books','papers'))"},
 		{"deleted_at", "TEXT NOT NULL DEFAULT ''"},
+		{"metadata", "TEXT NOT NULL DEFAULT '{}'"},
+		{"reading_status", "TEXT NOT NULL DEFAULT 'unread' CHECK(reading_status IN ('unread','reading','done'))"},
 	} {
 		if !columns[column.name] {
 			if _, err = tx.Exec("ALTER TABLE documents ADD COLUMN " + column.name + " " + column.definition); err != nil {
@@ -64,7 +66,15 @@ func (s *Store) migrateOrganization() error {
 			return err
 		}
 	}
+	if !columns["reading_status"] {
+		if _, err = tx.Exec("UPDATE documents SET reading_status=CASE WHEN percentage>=0.98 THEN 'done' WHEN percentage>0 THEN 'reading' ELSE 'unread' END"); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
+}
+func validReadingStatus(status string) bool {
+	return status == "unread" || status == "reading" || status == "done"
 }
 func validCategory(c string) bool { return c == "book" || c == "article" || c == "paper" }
 func normalizeTags(raw json.RawMessage) ([]string, error) {

@@ -188,6 +188,64 @@
                                   "author":
                                     { "type": "string", "maxLength": 200 },
                                   "library": { "enum": ["books", "papers"] },
+                                  "metadata":
+                                    {
+                                      "type": "object",
+                                      "description": "Fields to replace; each becomes a manual value. Empty strings clear a field.",
+                                      "properties":
+                                        {
+                                          "itemType":
+                                            {
+                                              "enum":
+                                                [
+                                                  "journal",
+                                                  "conference",
+                                                  "preprint",
+                                                  "thesis",
+                                                  "book",
+                                                  "chapter",
+                                                  "report",
+                                                  "other",
+                                                ],
+                                            },
+                                          "translatedTitle":
+                                            { "type": "string" },
+                                          "shortTitle": { "type": "string" },
+                                          "creators":
+                                            {
+                                              "type": "array",
+                                              "maxItems": 200,
+                                              "items":
+                                                {
+                                                  "$ref": "#/components/schemas/Creator",
+                                                },
+                                            },
+                                          "affiliation": { "type": "string" },
+                                          "date":
+                                            {
+                                              "type": "string",
+                                              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+                                            },
+                                          "venue": { "type": "string" },
+                                          "volume": { "type": "string" },
+                                          "issue": { "type": "string" },
+                                          "pages": { "type": "string" },
+                                          "publisher": { "type": "string" },
+                                          "doi": { "type": "string" },
+                                          "arxiv": { "type": "string" },
+                                          "isbn": { "type": "string" },
+                                          "url": { "type": "string" },
+                                          "abstract":
+                                            {
+                                              "type": "string",
+                                              "maxLength": 20000,
+                                            },
+                                          "language": { "type": "string" },
+                                        },
+                                      "additionalProperties": false,
+                                    },
+                                  "readingStatus":
+                                    { "enum": ["unread", "reading", "done"] },
                                 },
                               "required": [],
                             },
@@ -1932,6 +1990,14 @@
                       "type": "string",
                       "description": "Set while the document is in the trash",
                     },
+                  "metadata": { "$ref": "#/components/schemas/PaperMetadata" },
+                  "readingStatus": { "enum": ["unread", "reading", "done"] },
+                  "noteCount": { "type": "number" },
+                  "highlightCount":
+                    {
+                      "type": "number",
+                      "description": "Highlights and underlines",
+                    },
                 },
               "required":
                 [
@@ -1950,6 +2016,10 @@
                   "favorite",
                   "percentage",
                   "library",
+                  "metadata",
+                  "readingStatus",
+                  "noteCount",
+                  "highlightCount",
                 ],
             },
           "Annotation":
@@ -2551,6 +2621,71 @@
                   "partialCalls",
                   "elapsedMs",
                 ],
+            },
+          "Creator":
+            {
+              "type": "object",
+              "description": "CSL-style name: given/family for split names, name for a single literal name",
+              "properties":
+                {
+                  "given": { "type": "string" },
+                  "family": { "type": "string" },
+                  "name": { "type": "string" },
+                },
+            },
+          "PaperMetadata":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "itemType":
+                    {
+                      "enum":
+                        [
+                          "journal",
+                          "conference",
+                          "preprint",
+                          "thesis",
+                          "book",
+                          "chapter",
+                          "report",
+                          "other",
+                        ],
+                    },
+                  "translatedTitle": { "type": "string" },
+                  "shortTitle": { "type": "string" },
+                  "creators":
+                    {
+                      "type": "array",
+                      "maxItems": 200,
+                      "items": { "$ref": "#/components/schemas/Creator" },
+                    },
+                  "affiliation": { "type": "string" },
+                  "date":
+                    {
+                      "type": "string",
+                      "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+                    },
+                  "venue": { "type": "string" },
+                  "volume": { "type": "string" },
+                  "issue": { "type": "string" },
+                  "pages": { "type": "string" },
+                  "publisher": { "type": "string" },
+                  "doi": { "type": "string" },
+                  "arxiv": { "type": "string" },
+                  "isbn": { "type": "string" },
+                  "url": { "type": "string" },
+                  "abstract": { "type": "string", "maxLength": 20000 },
+                  "language": { "type": "string" },
+                  "sources":
+                    {
+                      "type": "object",
+                      "description": "Origin per field; lookups never replace manual values",
+                      "additionalProperties":
+                        { "enum": ["file", "lookup", "manual"] },
+                    },
+                  "lookedUpAt": { "type": "string" },
+                },
             },
         },
     },

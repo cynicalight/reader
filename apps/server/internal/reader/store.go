@@ -18,6 +18,10 @@ type Document struct {
 	Tags                 []string        `json:"tags"`
 	Library              string          `json:"library"`
 	DeletedAt            string          `json:"deletedAt,omitempty"`
+	Metadata             PaperMetadata   `json:"metadata"`
+	ReadingStatus        string          `json:"readingStatus"`
+	NoteCount            int             `json:"noteCount"`
+	HighlightCount       int             `json:"highlightCount"`
 	ID                   string          `json:"id"`
 	Type                 string          `json:"type"`
 	Title                string          `json:"title"`
@@ -96,16 +100,21 @@ func OpenStore(root string) (*Store, error) {
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
-const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library,deleted_at`
+const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library,deleted_at,metadata,reading_status,` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='note'),` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline'))`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanDocument(row rowScanner) (Document, error) {
 	var d Document
-	var progress, tags string
-	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt)
+	var progress, tags, metadata string
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount)
 	if err == nil {
 		err = json.Unmarshal([]byte(tags), &d.Tags)
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(metadata), &d.Metadata)
 	}
 	if progress != "" {
 		d.Progress = json.RawMessage(progress)

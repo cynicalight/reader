@@ -34,6 +34,50 @@ export type DocumentLocation = PDFLocation | EPUBLocation;
 export type DocumentCategory = "book" | "article" | "paper";
 /** Books and papers are separate libraries; papers are PDFs up to 150 pages and 50 MB. */
 export type LibraryMode = "books" | "papers";
+export type PaperItemType =
+  | "journal"
+  | "conference"
+  | "preprint"
+  | "thesis"
+  | "book"
+  | "chapter"
+  | "report"
+  | "other";
+/** CSL-style name: given/family for split names, name for one literal name. */
+export interface Creator {
+  given?: string;
+  family?: string;
+  name?: string;
+}
+export type MetadataSource = "file" | "lookup" | "manual";
+export interface PaperMetadata {
+  itemType?: PaperItemType;
+  translatedTitle?: string;
+  shortTitle?: string;
+  creators?: Creator[];
+  affiliation?: string;
+  /** YYYY, YYYY-MM or YYYY-MM-DD. */
+  date?: string;
+  venue?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  publisher?: string;
+  doi?: string;
+  arxiv?: string;
+  isbn?: string;
+  url?: string;
+  abstract?: string;
+  language?: string;
+  /** Where each field came from; lookups never replace manual values. */
+  sources?: Partial<Record<string, MetadataSource>>;
+  lookedUpAt?: string;
+}
+export type PaperMetadataField = Exclude<
+  keyof PaperMetadata,
+  "sources" | "lookedUpAt"
+>;
+export type ReadingStatus = "unread" | "reading" | "done";
 export interface LibraryPreferences {
   mode?: LibraryMode;
 }
@@ -52,6 +96,11 @@ export interface Document {
   library: LibraryMode;
   /** Set while the document is in the trash. */
   deletedAt?: string;
+  metadata: PaperMetadata;
+  readingStatus: ReadingStatus;
+  noteCount: number;
+  /** Highlights and underlines. */
+  highlightCount: number;
   id: string;
   type: "epub" | "pdf";
   title: string;

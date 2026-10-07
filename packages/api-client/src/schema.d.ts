@@ -161,6 +161,37 @@ export interface paths {
             author?: string;
             /** @enum {unknown} */
             library?: "books" | "papers";
+            /** @description Fields to replace; each becomes a manual value. Empty strings clear a field. */
+            metadata?: {
+              /** @enum {unknown} */
+              itemType?:
+                | "journal"
+                | "conference"
+                | "preprint"
+                | "thesis"
+                | "book"
+                | "chapter"
+                | "report"
+                | "other";
+              translatedTitle?: string;
+              shortTitle?: string;
+              creators?: components["schemas"]["Creator"][];
+              affiliation?: string;
+              date?: string;
+              venue?: string;
+              volume?: string;
+              issue?: string;
+              pages?: string;
+              publisher?: string;
+              doi?: string;
+              arxiv?: string;
+              isbn?: string;
+              url?: string;
+              abstract?: string;
+              language?: string;
+            };
+            /** @enum {unknown} */
+            readingStatus?: "unread" | "reading" | "done";
           };
         };
       };
@@ -1707,6 +1738,12 @@ export interface components {
       library: "books" | "papers";
       /** @description Set while the document is in the trash */
       deletedAt?: string;
+      metadata: components["schemas"]["PaperMetadata"];
+      /** @enum {unknown} */
+      readingStatus: "unread" | "reading" | "done";
+      noteCount: number;
+      /** @description Highlights and underlines */
+      highlightCount: number;
     };
     Annotation: {
       id: string;
@@ -1953,6 +1990,45 @@ export interface components {
       failedCalls: number;
       partialCalls: number;
       elapsedMs: number;
+    };
+    /** @description CSL-style name: given/family for split names, name for a single literal name */
+    Creator: {
+      given?: string;
+      family?: string;
+      name?: string;
+    };
+    PaperMetadata: {
+      /** @enum {unknown} */
+      itemType?:
+        | "journal"
+        | "conference"
+        | "preprint"
+        | "thesis"
+        | "book"
+        | "chapter"
+        | "report"
+        | "other";
+      translatedTitle?: string;
+      shortTitle?: string;
+      creators?: components["schemas"]["Creator"][];
+      affiliation?: string;
+      date?: string;
+      venue?: string;
+      volume?: string;
+      issue?: string;
+      pages?: string;
+      publisher?: string;
+      doi?: string;
+      arxiv?: string;
+      isbn?: string;
+      url?: string;
+      abstract?: string;
+      language?: string;
+      /** @description Origin per field; lookups never replace manual values */
+      sources?: {
+        [key: string]: "file" | "lookup" | "manual";
+      };
+      lookedUpAt?: string;
     };
   };
   responses: never;
