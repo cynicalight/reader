@@ -15,6 +15,8 @@ export const useReaderStore = create<{
   aiConfig?: AIConfig;
   aiModelSaving: boolean;
   libraryPreferences: LibraryPreferences;
+  trash: Document[];
+  setTrash: (trash: Document[]) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: AIConfig) => void;
   setAIModelSaving: (saving: boolean) => void;
@@ -27,6 +29,8 @@ export const useReaderStore = create<{
   theme: defaultTheme,
   aiModelSaving: false,
   libraryPreferences: {},
+  trash: [],
+  setTrash: (trash) => set({ trash }),
   setLibraryPreferences: (libraryPreferences) => set({ libraryPreferences }),
   setAIConfig: (aiConfig) => set({ aiConfig }),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),
@@ -73,4 +77,12 @@ export function updateLibraryPreferences(patch: Partial<LibraryPreferences>) {
     .then(() => api.saveLibraryPreferences(next))
     .then(() => {});
   return preferenceWrite;
+}
+let trashRevision = 0;
+/** The trash of the current library; older responses never overwrite newer ones. */
+export async function refreshTrash() {
+  const revision = ++trashRevision;
+  const state = useReaderStore.getState();
+  const trash = await api.trash(libraryMode(state.libraryPreferences));
+  if (revision === trashRevision) useReaderStore.getState().setTrash(trash);
 }

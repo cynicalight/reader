@@ -197,7 +197,7 @@
             },
           "delete":
             {
-              "summary": "Delete a document and its library-owned data after stopping background tasks",
+              "summary": "Permanently delete a document and its library-owned data after stopping background tasks",
               "parameters":
                 [
                   {
@@ -1602,6 +1602,183 @@
                 },
             },
         },
+      "/api/documents/{id}/trash":
+        {
+          "post":
+            {
+              "summary": "Move to the trash, keeping files and records; idempotent",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Trashed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/restore":
+        {
+          "post":
+            {
+              "summary": "Restore from the trash; idempotent",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Restored",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/trash":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "query",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Trashed documents, newest first",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/Document" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Permanently delete every trashed document in a library",
+              "parameters":
+                [
+                  {
+                    "in": "query",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Emptied",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "removed": { "type": "number" } },
+                                  "required": ["removed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1750,6 +1927,11 @@
                   "progress":
                     { "$ref": "#/components/schemas/DocumentLocation" },
                   "library": { "enum": ["books", "papers"] },
+                  "deletedAt":
+                    {
+                      "type": "string",
+                      "description": "Set while the document is in the trash",
+                    },
                 },
               "required":
                 [

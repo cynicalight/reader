@@ -3,17 +3,23 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
+import { toast } from "sonner";
 import type { Document } from "@reader/core";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { useReaderStore } from "./store";
 vi.mock("@reader/api", () => ({
   api: {
-    removeDocument: vi.fn(),
+    trashDocument: vi.fn(),
+    restoreDocument: vi.fn(),
+    trash: vi.fn(async () => []),
+    documents: vi.fn(async () => []),
     processingUsage: vi.fn(),
     chatUsage: vi.fn(),
   },
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 vi.mock("./ProcessingStatus", () => ({ CoverProcessing: () => null }));
 const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
   id: String(i),
@@ -94,7 +100,7 @@ const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent?.trim() === label,
   )!;
-it("selects all current results and waits for explicit confirmation before deleting", async () => {
+it("moves selected documents to the trash, keeps failures and offers an undo", async () => {
   await act(async () => button("编辑").click());
   await act(async () =>
     host.querySelector("article")!.dispatchEvent(
@@ -107,23 +113,22 @@ it("selects all current results and waits for explicit confirmation before delet
     ),
   );
   expect(host.textContent).toContain("已选 2 份");
-  await act(async () => button("删除所选").click());
-  expect(api.removeDocument).not.toHaveBeenCalled();
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-    "删除 2 份文档",
-  );
-  vi.mocked(api.removeDocument).mockImplementation(async (id) => {
+  vi.mocked(api.trashDocument).mockImplementation(async (id) => {
     if (id === "1") throw Error("offline");
+    return docs[0];
   });
-  await act(async () => button("删除文档").click());
+  await act(async () => button("移到回收站").click());
   expect(useReaderStore.getState().documents.map((d) => d.id)).toEqual(["1"]);
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-    "删除 1 份文档",
+  expect(toast.error).toHaveBeenCalledWith(
+    "1 份未能移到回收站，已保留，可重试",
   );
+  const undo = vi.mocked(toast.success).mock.calls[0];
+  expect(undo[0]).toBe("已将 1 份移到回收站");
+  const action = (undo[1] as unknown as { action: { onClick: () => void } })
+    .action;
+  await act(async () => action.onClick());
+  expect(api.restoreDocument).toHaveBeenCalledExactlyOnceWith("0");
   expect(open).not.toHaveBeenCalled();
-  vi.mocked(api.removeDocument).mockResolvedValue(undefined);
-  await act(async () => button("删除文档").click());
-  expect(useReaderStore.getState().documents).toEqual([]);
 });
 it("opens the context menu on the targeted document and edits that document", async () => {
   const card = host.querySelectorAll("article")[1];

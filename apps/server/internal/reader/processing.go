@@ -257,7 +257,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Lock()
 				var body string
-				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE phase=? AND status='queued' ORDER BY rowid LIMIT 1", phase).Scan(&body)
+				// Documents in the trash keep their queue position until restored.
+				e := s.Store.DB.QueryRow("SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id WHERE p.phase=? AND p.status='queued' AND d.deleted_at='' ORDER BY p.rowid LIMIT 1", phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)

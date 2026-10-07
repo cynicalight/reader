@@ -50,6 +50,8 @@ export interface Document {
   classificationError: string;
   tags: string[];
   library: LibraryMode;
+  /** Set while the document is in the trash. */
+  deletedAt?: string;
   id: string;
   type: "epub" | "pdf";
   title: string;

@@ -17,6 +17,7 @@ type Document struct {
 	ClassificationError  string          `json:"classificationError"`
 	Tags                 []string        `json:"tags"`
 	Library              string          `json:"library"`
+	DeletedAt            string          `json:"deletedAt,omitempty"`
 	ID                   string          `json:"id"`
 	Type                 string          `json:"type"`
 	Title                string          `json:"title"`
@@ -95,14 +96,14 @@ func OpenStore(root string) (*Store, error) {
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
-const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library`
+const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library,deleted_at`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanDocument(row rowScanner) (Document, error) {
 	var d Document
 	var progress, tags string
-	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library)
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt)
 	if err == nil {
 		err = json.Unmarshal([]byte(tags), &d.Tags)
 	}
@@ -112,7 +113,7 @@ func scanDocument(row rowScanner) (Document, error) {
 	return d, err
 }
 func (s *Store) Documents() ([]Document, error) {
-	rows, err := s.DB.Query(`SELECT ` + documentColumns + ` FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
+	rows, err := s.DB.Query(`SELECT ` + documentColumns + ` FROM documents WHERE deleted_at='' ORDER BY last_opened_at DESC,created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

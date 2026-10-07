@@ -16,6 +16,7 @@ import {
   Check,
   CirclePlus,
   Info,
+  Trash2,
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
 import { api } from "@reader/api";
@@ -37,7 +38,9 @@ import {
   libraryMode,
   loadLibraryPreferences,
   updateLibraryPreferences,
+  refreshTrash,
 } from "./store";
+import { TrashView } from "./TrashView";
 import { LibraryModeSwitcher, libraryModes } from "./LibraryModeSwitcher";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
@@ -58,6 +61,7 @@ export function App() {
     setTheme,
     open,
     libraryPreferences,
+    trash,
   } = useReaderStore();
   const mode = libraryMode(libraryPreferences);
   const papers = mode === "papers";
@@ -93,6 +97,10 @@ export function App() {
         hydrated.current = true;
       });
   }, [setTheme]);
+  useEffect(() => {
+    if (loading) return;
+    void refreshTrash().catch((e) => toast.error(e.message));
+  }, [mode, loading]);
   useEffect(() => {
     if (!hydrated.current) return;
     const timer = setTimeout(() => {
@@ -348,6 +356,16 @@ export function App() {
                     icon: Star,
                     count: documents.filter((d) => d.favorite).length,
                   },
+                  ...(trash.length || filter === "trash"
+                    ? [
+                        {
+                          id: "trash",
+                          label: "回收站",
+                          icon: Trash2,
+                          count: trash.length,
+                        },
+                      ]
+                    : []),
                 ].map((item) => (
                   <Button
                     key={item.id}
@@ -418,11 +436,13 @@ export function App() {
                   <h1 className="library-title">
                     {filter === "tags"
                       ? "标签看板"
-                      : filter === "favorites"
-                        ? "收藏"
-                        : papers
-                          ? "全部论文"
-                          : "全部文档"}
+                      : filter === "trash"
+                        ? "回收站"
+                        : filter === "favorites"
+                          ? "收藏"
+                          : papers
+                            ? "全部论文"
+                            : "全部文档"}
                   </h1>
                 </div>
                 {filter === "tags" ? (
@@ -435,7 +455,7 @@ export function App() {
                       onChange={(e) => setQuery(e.target.value)}
                     />
                   </div>
-                ) : (
+                ) : filter === "trash" ? null : (
                   <Button
                     variant={editingLibrary ? "secondary" : "outline"}
                     aria-pressed={editingLibrary}
@@ -461,7 +481,7 @@ export function App() {
                     </div>
                   </div>
                 )}
-                {filter !== "tags" && (
+                {filter !== "tags" && filter !== "trash" && (
                   <LibraryFilterBar
                     documents={documents}
                     filters={filters}
@@ -489,6 +509,8 @@ export function App() {
                     <Loader2 className="animate-spin text-muted-foreground" />
                     <p>正在打开本地书库</p>
                   </div>
+                ) : filter === "trash" ? (
+                  <TrashView documents={trash} />
                 ) : filter === "tags" ? (
                   <TagBoards
                     documents={documents}

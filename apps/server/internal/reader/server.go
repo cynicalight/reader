@@ -80,6 +80,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("DELETE /api/documents/{id}", s.deleteDocument)
+	mux.HandleFunc("POST /api/documents/{id}/trash", s.trashDocument)
+	mux.HandleFunc("POST /api/documents/{id}/restore", s.restoreDocument)
+	mux.HandleFunc("GET /api/trash", s.trashList)
+	mux.HandleFunc("DELETE /api/trash", s.emptyTrash)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
@@ -236,6 +240,10 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 	}
 	docID := hex.EncodeToString(hash.Sum(nil))[:32]
 	if d, e := s.Store.Document(docID); e == nil {
+		// Importing a file again brings it back from the trash.
+		if d, err = s.restore(docID); err != nil {
+			return failure(500, "无法恢复回收站中的文档")
+		}
 		if err = s.Store.enqueuePDF(d); err != nil {
 			return failure(500, "无法创建解析任务")
 		}

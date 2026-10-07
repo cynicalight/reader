@@ -154,6 +154,20 @@ export const api = {
     request<void>(`/api/documents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+  trashDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/trash`, {
+      method: "POST",
+    }),
+  restoreDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+    }),
+  trash: (library: LibraryMode) =>
+    request<Document[]>(`/api/trash?library=${library}`),
+  emptyTrash: (library: LibraryMode) =>
+    request<{ removed: number }>(`/api/trash?library=${library}`, {
+      method: "DELETE",
+    }),
   classify: (id: string) =>
     request<Document>(`/api/documents/${id}/classification`, {
       method: "POST",

@@ -45,6 +45,7 @@ func (s *Store) migrateOrganization() error {
 		{"classification_error", "TEXT NOT NULL DEFAULT ''"},
 		{"tags", "TEXT NOT NULL DEFAULT '[]'"},
 		{"library", "TEXT NOT NULL DEFAULT 'books' CHECK(library IN ('books','papers'))"},
+		{"deleted_at", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		if !columns[column.name] {
 			if _, err = tx.Exec("ALTER TABLE documents ADD COLUMN " + column.name + " " + column.definition); err != nil {
@@ -128,7 +129,7 @@ func (s *Server) classificationWorker(ctx context.Context) {
 		var id string
 		// Wait for PDF extraction; failed extraction becomes an actionable classification failure.
 		err := s.Store.DB.QueryRow(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
-   WHERE d.classification_status='pending' AND d.category_source!='manual'
+   WHERE d.classification_status='pending' AND d.category_source!='manual' AND d.deleted_at=''
    AND (d.type='epub' OR p.document_id IS NULL OR p.phase!='learning' OR p.status='failed')
    ORDER BY d.created_at LIMIT 1`).Scan(&id)
 		if err != nil {

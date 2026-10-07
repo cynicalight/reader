@@ -22,20 +22,10 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@reader/ui/components/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@reader/ui/components/dialog";
 import { DocumentBadges } from "./DocumentManagement";
 import { ProcessingUsageDialog } from "./ProcessingUsage";
 import { CoverProcessing } from "./ProcessingStatus";
-import {
-  removeLibraryDocuments,
-  toggleDocumentSelection,
-} from "./library-actions";
+import { toggleDocumentSelection, trashWithUndo } from "./library-actions";
 
 export function LibraryDocuments({
   documents,
@@ -65,8 +55,6 @@ export function LibraryDocuments({
   const [usageDocument, setUsageDocument] = useState<Document | null>(null);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState(false);
-  const [removing, setRemoving] = useState<Document[]>([]);
-  const [deleting, setDeleting] = useState(false);
   const pending = useRef(false);
   const anchor = useRef<string | null>(null);
   const selected = new Set(
@@ -92,30 +80,20 @@ export function LibraryDocuments({
     );
     anchor.current = id;
   };
-  const removeSelected = () =>
-    setRemoving(documents.filter((d) => selected.has(d.id)));
-  const confirmDelete = async () => {
+  const trash = async (ids: string[]) => {
     if (pending.current) return;
     pending.current = true;
-    setDeleting(true);
     try {
-      const result = await removeLibraryDocuments(removing.map((d) => d.id));
+      const result = await trashWithUndo(ids);
       setSelection(
         (current) =>
           new Set([...current].filter((id) => !result.deleted.includes(id))),
       );
-      setRemoving((current) =>
-        current.filter((d) => result.failed.includes(d.id)),
-      );
-      if (result.deleted.length)
-        toast.success(`已删除 ${result.deleted.length} 份文档`);
-      if (result.failed.length)
-        toast.error(`${result.failed.length} 份文档删除失败，已保留，可重试`);
     } finally {
       pending.current = false;
-      setDeleting(false);
     }
   };
+  const removeSelected = () => void trash([...selected]);
   return (
     <section
       aria-label="文档列表"
@@ -178,7 +156,7 @@ export function LibraryDocuments({
                 onClick={removeSelected}
               >
                 <Trash2 />
-                删除所选
+                移到回收站
               </Button>
             </>
           )}
@@ -365,15 +343,15 @@ export function LibraryDocuments({
               <ContextMenuSeparator />
               <ContextMenuItem
                 variant="destructive"
-                onClick={() => setRemoving([doc])}
+                onClick={() => void trash([doc.id])}
               >
                 <Trash2 />
-                删除文档
+                移到回收站
               </ContextMenuItem>
               {selecting && selected.has(doc.id) && selected.size > 1 && (
                 <ContextMenuItem variant="destructive" onClick={removeSelected}>
                   <Trash2 />
-                  删除所选 {selected.size} 份文档
+                  将所选 {selected.size} 份移到回收站
                 </ContextMenuItem>
               )}
             </ContextMenuContent>
@@ -385,44 +363,6 @@ export function LibraryDocuments({
         job={jobs.find((job) => job.documentId === usageDocument?.id)}
         onClose={() => setUsageDocument(null)}
       />
-      <Dialog
-        open={removing.length > 0}
-        onOpenChange={(open) => {
-          if (!open && !deleting) setRemoving([]);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>删除 {removing.length} 份文档？</DialogTitle>
-            <DialogDescription>
-              将删除书库中的文档副本、笔记和阅读记录。导入前的原始文件会保留，此操作无法撤销。
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="max-h-48 overflow-auto space-y-1 text-sm">
-            {removing.map((d) => (
-              <li key={d.id} className="truncate" title={d.title}>
-                {d.title}
-              </li>
-            ))}
-          </ul>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              disabled={deleting}
-              onClick={() => setRemoving([])}
-            >
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleting}
-              onClick={() => void confirmDelete()}
-            >
-              {deleting ? "删除中…" : "删除文档"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
