@@ -2,11 +2,14 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, open, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
+// Byte-identical mirror of stefanj0/PP-DocLayoutV3-FP16-ONNX@ca51555, an FP16
+// export of PaddlePaddle/PP-DocLayoutV3_safetensors without the mask head.
 export const model = {
-  name: "PP-DocLayoutV3",
-  revision: "46bbdf188bb0a772c08aed74882ce7e51a8f1ea6",
-  sha256: "45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba",
-  bytes: 130502049,
+  name: "PP-DocLayoutV3-FP16",
+  revision: "58dfa00ba1135e027817cbd5802f1f0df62aa5c0",
+  sha256: "8bb693ed3b5dcc1cf926b15d89dfe6abf62bc11cdd0afd33c8ffe039db6f8209",
+  bytes: 67372587,
+  output: "det",
 };
 export async function digest(path: string) {
   const hash = createHash("sha256");
@@ -28,7 +31,7 @@ export async function resolveModel(cache: string, explicit?: string) {
     JSON.stringify({ event: "model-download", bytes: model.bytes }) + "\n",
   );
   const response = await fetch(
-    `https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx/resolve/${model.revision}/inference.onnx`,
+    `https://huggingface.co/bu44er/PP-DocLayoutV3-FP16-ONNX/resolve/${model.revision}/PP-DocLayoutV3-fp16.onnx`,
     { signal: AbortSignal.timeout(300_000) },
   );
   if (!response.ok || !response.body)
