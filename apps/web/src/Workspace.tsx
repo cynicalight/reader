@@ -28,8 +28,6 @@ import {
   StickyNote,
   Send,
   Square,
-  Trash2,
-  Download,
   Quote,
   Type,
   Sun,
@@ -106,6 +104,7 @@ import { activeAnnotation, applySavedAnnotation } from "./annotations";
 import { copyText } from "./chat/clipboard";
 import { ReaderView } from "./ReaderView";
 import { NotesPanel } from "./NotesPanel";
+import { ExportNotesDialog } from "./ExportNotesDialog";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -304,6 +303,7 @@ export function Workspace({
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteKind, setNoteKind] = useState<"note" | "question">("note");
   const [answering, setAnswering] = useState<Set<string>>(new Set());
+  const [exportingNotes, setExportingNotes] = useState(false);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
     null,
   );
@@ -721,24 +721,6 @@ export function Workspace({
       ))}
     </div>
   );
-  const exportNotes = () => {
-    const text =
-      `# ${doc.title}\n\n` +
-      annotations
-        .map(
-          (a) =>
-            `## ${a.kind} · ${locationLabel(a.location)}\n\n${a.quote ? "> " + a.quote.replaceAll("\n", "\n> ") + "\n\n" : ""}${a.note}\n`,
-        )
-        .join("\n");
-    const url = URL.createObjectURL(
-      new Blob([text], { type: "text/markdown" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${doc.title.replace(/[/\\:]/g, "-")}-notes.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
   const pageNavigation = (
     <div className="page-navigation">
       <IconButton
@@ -1379,7 +1361,7 @@ export function Workspace({
                   onAnswer={(a) => void answerQuestion(a)}
                   onResolve={(a, resolved) => void resolveQuestion(a, resolved)}
                   onShowAnswer={showAnswer}
-                  onExport={exportNotes}
+                  onExport={() => setExportingNotes(true)}
                 />
               </TabsContent>
             </Tabs>
@@ -1474,6 +1456,14 @@ export function Workspace({
           )}
         </DialogContent>
       </Dialog>
+      {exportingNotes && (
+        <ExportNotesDialog
+          document={doc}
+          annotations={annotations}
+          messages={chat.messages}
+          onClose={() => setExportingNotes(false)}
+        />
+      )}
       <ProcessingUsageDialog
         document={usageOpen ? doc : null}
         onClose={() => setUsageOpen(false)}

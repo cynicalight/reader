@@ -29,6 +29,7 @@ import {
   ToggleGroupItem,
 } from "@reader/ui/components/toggle-group";
 import { copyText } from "../chat/clipboard";
+import { downloadText } from "../download";
 import { useReaderStore } from "../store";
 import { savePaperPreferences } from "./actions";
 import {
@@ -40,17 +41,6 @@ import {
   type CitationOrder,
   type CitationStyle,
 } from "./citation";
-
-export function downloadText(text: string, name: string, mime: string) {
-  const url = URL.createObjectURL(
-    new Blob([text], { type: `${mime};charset=utf-8` }),
-  );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 const safeName = (name: string) =>
   // eslint-disable-next-line no-control-regex

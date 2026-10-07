@@ -22,3 +22,18 @@ export function applySavedAnnotation(
   else next[index] = annotation;
   return next;
 }
+
+/** Reading order: page and vertical position for PDFs, progression for EPUBs. */
+export function documentOrder(a: Annotation, b: Annotation) {
+  const x = a.location,
+    y = b.location;
+  if (x.type === "pdf" && y.type === "pdf")
+    return (
+      x.page - y.page ||
+      (x.rects?.[0]?.y ?? x.y ?? 0) - (y.rects?.[0]?.y ?? y.y ?? 0) ||
+      (x.rects?.[0]?.x ?? 0) - (y.rects?.[0]?.x ?? 0)
+    );
+  if (x.type === "epub" && y.type === "epub" && x.href === y.href)
+    return (x.progression ?? 0) - (y.progression ?? 0);
+  return a.createdAt.localeCompare(b.createdAt);
+}
