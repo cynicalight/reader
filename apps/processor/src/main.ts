@@ -174,7 +174,7 @@ try {
     for (const block of pageBlocks) {
       if (block.image)
         sections.push(
-          `<!-- block:${block.id} type:${block.label} -->\n[${block.label}: ${block.id}](${block.image})\n\n<!-- transcript:transcripts/${block.id}.md -->`,
+          `<!-- block:${block.id} type:${block.label} -->\n[${block.label}: ${block.id}](${block.image})`,
         );
       else if (block.text)
         sections.push(
