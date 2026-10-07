@@ -3,75 +3,15 @@ package reader
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"sync"
-	"sync/atomic"
+	"strings"
 	"testing"
-	"time"
 )
 
-func TestProcessingProgressMergesConcurrentLanes(t *testing.T) {
+func TestProcessingWakeDoesNotResetFailedTranslation(t *testing.T) {
 	s, p := processingFixture(t)
 	if err := s.learnPDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	p.Settling = &ProcessingStage{Status: "running"}
-	p.Translating = &ProcessingStage{Status: "running"}
-	if err := s.Store.saveProcessing(p); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	for _, lane := range []string{"settling", "translating"} {
-		work := p
-		work.lane = lane
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 1; i <= 50; i++ {
-				work.AssetsDone, work.TranslationsDone = i, i
-				if err := s.Store.saveProcessing(work); err != nil {
-					t.Error(err)
-					return
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	state, _ := s.Store.processing("doc")
-	if state.AssetsDone != 50 || state.TranslationsDone != 50 {
-		t.Fatalf("progress overwritten: %+v", state)
-	}
-}
-func TestProcessingRecoveryPreservesCompletedLane(t *testing.T) {
-	s, p := processingFixture(t)
-	if err := s.learnPDF(context.Background(), &p); err != nil {
-		t.Fatal(err)
-	}
-	p.Settling = &ProcessingStage{Status: "running"}
-	p.Translating = &ProcessingStage{Status: "complete"}
-	p.TranslationsDone = 7
-	p.Status = "running"
-	if err := s.Store.saveProcessing(p); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	stop := s.StartProcessing(ctx)
-	stop()
-	state, _ := s.Store.processing("doc")
-	if state.Settling.Status != "queued" || state.Translating.Status != "complete" || state.TranslationsDone != 7 {
-		t.Fatalf("completed lane reset: %+v", state)
-	}
-}
-func TestProcessingWakeDoesNotResetFailedOrCompletedLane(t *testing.T) {
-	s, p := processingFixture(t)
-	if err := s.learnPDF(context.Background(), &p); err != nil {
-		t.Fatal(err)
-	}
-	p.Settling = &ProcessingStage{Status: "waiting"}
 	p.Translating = &ProcessingStage{Status: "failed", Detail: "text failed"}
 	aggregateProcessing(&p)
 	if err := s.Store.saveProcessing(p); err != nil {
@@ -79,8 +19,8 @@ func TestProcessingWakeDoesNotResetFailedOrCompletedLane(t *testing.T) {
 	}
 	s.wakeProcessing()
 	state, _ := s.Store.processing("doc")
-	if state.Settling.Status != "queued" || state.Translating.Status != "failed" {
-		t.Fatalf("wake altered other lane: %+v", state)
+	if state.Translating.Status != "failed" || state.Status != "failed" {
+		t.Fatalf("wake altered failed translation: %+v", state)
 	}
 }
 func TestProcessingRetryKeepsCompletedTranslation(t *testing.T) {
@@ -89,7 +29,6 @@ func TestProcessingRetryKeepsCompletedTranslation(t *testing.T) {
 	if err := s.learnPDF(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	p.Settling = &ProcessingStage{Status: "failed", Detail: "image failed"}
 	p.Translating = &ProcessingStage{Status: "complete"}
 	p.TranslationsDone = 5
 	aggregateProcessing(&p)
@@ -101,106 +40,59 @@ func TestProcessingRetryKeepsCompletedTranslation(t *testing.T) {
 		t.Fatalf("%s", w.Body.String())
 	}
 	state, _ := s.Store.processing("doc")
-	if state.Settling.Status != "queued" || state.Translating.Status != "complete" || state.TranslationsDone != 5 {
+	if state.Translating.Status != "complete" || state.TranslationsDone != 5 {
 		t.Fatalf("retry altered completed translation: %+v", state)
 	}
 }
 
-func TestTranslationFailureDoesNotCancelConsolidation(t *testing.T) {
-	s, p, m := formulaFixture(t)
-	// Use only the captioned table, so the failure belongs to text translation.
-	m.Blocks = m.Blocks[1:]
-	data, _ := json.Marshal(m)
-	if err := os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), data, 0600); err != nil {
-		t.Fatal(err)
+// Rows saved while image consolidation existed must not stay blocked on it.
+func TestStartupDropsLegacyConsolidationState(t *testing.T) {
+	cases := []struct {
+		name, phase, status, body string
+		wantPhase, wantStatus     string
+	}{
+		{"waiting consolidation, translated", "settling", "waiting",
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"waiting","settling":{"status":"waiting","detail":"请选择主 Agent"},"translating":{"status":"complete","detail":"已完成"},"assetsDone":0,"assetsTotal":3}`,
+			"ready", "complete"},
+		{"failed consolidation, translation running", "settling", "failed",
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"failed","settling":{"status":"failed","detail":"image failed"},"translating":{"status":"running","detail":"翻译中"}}`,
+			"translating", "queued"},
+		{"queued before translation lane existed", "settling", "queued",
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"queued","detail":"等待解析图表"}`,
+			"translating", "queued"},
+		{"completed before translation lane existed", "ready", "complete",
+			`{"enabled":true,"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
+			"ready", "complete"},
+		{"unauthorized legacy queued task remains paused", "settling", "queued",
+			`{"documentId":"doc","phase":"settling","status":"queued","settling":{"status":"queued"}}`,
+			"translating", "paused"},
+		{"unauthorized legacy completed task stays complete", "ready", "complete",
+			`{"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
+			"ready", "complete"},
 	}
-	images := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		sendTranslationDelta(w, "saved table")
-		finishTranslationStream(w)
-	}))
-	defer images.Close()
-	text := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "text unavailable", http.StatusServiceUnavailable)
-	}))
-	defer text.Close()
-	configureFormulaTest(t, s, text.URL, images.URL)
-	if err := s.learnPDF(context.Background(), &p); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.processPDF(context.Background(), &p); err == nil {
-		t.Fatal("translation failure ignored")
-	}
-	if p.Settling.Status != "complete" || p.Translating.Status != "failed" || p.AssetsDone != 1 {
-		t.Fatalf("consolidation was lost: %+v", p)
-	}
-	if !s.attachmentReady("doc", m.Blocks[0]) {
-		t.Fatal("consolidation result missing")
-	}
-}
-func TestParallelCancellationPreservesFinishedTranslationAndResumesOnlyAssets(t *testing.T) {
-	s, p, m := formulaFixture(t)
-	m.Blocks = m.Blocks[1:]
-	data, _ := json.Marshal(m)
-	if err := os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	started := make(chan struct{})
-	release := make(chan struct{})
-	var once sync.Once
-	unblock := func() { once.Do(func() { close(release) }) }
-	var imageCalls, textCalls atomic.Int32
-	images := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if imageCalls.Add(1) == 1 {
-			close(started)
-			<-release
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		sendTranslationDelta(w, "saved table")
-		finishTranslationStream(w)
-	}))
-	defer images.Close()
-	defer unblock()
-	text := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		textCalls.Add(1)
-		w.Header().Set("Content-Type", "text/event-stream")
-		for _, para := range readTranslationInput(t, r).Batch.Paragraphs {
-			sendTranslationDelta(w, translationParagraphLine(para))
-		}
-		finishTranslationStream(w)
-	}))
-	defer text.Close()
-	configureFormulaTest(t, s, text.URL, images.URL)
-	if err := s.learnPDF(context.Background(), &p); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- s.processPDF(ctx, &p) }()
-	waitFormulaSignal(t, started)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		state, _ := s.Store.processing("doc")
-		if state.Translating.Status == "complete" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("translation did not finish independently")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
-	if err := <-done; err == nil {
-		t.Fatal("cancellation ignored")
-	}
-	unblock()
-	if p.Settling.Status != "queued" || p.Translating.Status != "complete" {
-		t.Fatalf("lost completed stage: %+v", p)
-	}
-	if err := s.processPDF(context.Background(), &p); err != nil {
-		t.Fatal(err)
-	}
-	if p.Status != "complete" || imageCalls.Load() != 2 || textCalls.Load() != 1 {
-		t.Fatalf("resume repeated translation: %+v image=%d text=%d", p, imageCalls.Load(), textCalls.Load())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, _ := processingFixture(t)
+			if _, err := s.Store.DB.Exec("UPDATE document_processing SET phase=?, status=?, body=? WHERE document_id='doc'", c.phase, c.status, c.body); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			s.StartProcessing(ctx)()
+			var phase, status, body string
+			if err := s.Store.DB.QueryRow("SELECT phase,status,body FROM document_processing WHERE document_id='doc'").Scan(&phase, &status, &body); err != nil {
+				t.Fatal(err)
+			}
+			if phase != c.wantPhase || status != c.wantStatus || strings.Contains(body, "settling") || strings.Contains(body, "assets") {
+				t.Fatalf("phase=%s status=%s body=%s", phase, status, body)
+			}
+			var p Processing
+			if err := json.Unmarshal([]byte(body), &p); err != nil || p.Translating == nil {
+				t.Fatalf("translation stage missing: %s", body)
+			}
+			if strings.Contains(c.name, "completed") && p.CompletedAt != "2026-01-01T00:00:00Z" {
+				t.Fatalf("completion time rewritten: %s", p.CompletedAt)
+			}
+		})
 	}
 }

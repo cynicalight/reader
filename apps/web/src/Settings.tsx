@@ -193,7 +193,7 @@ export function Settings({
               导入后自动翻译
             </label>
             <p className="text-xs leading-5 text-muted-foreground">
-              开启后，新导入的 PDF 会自动翻译全文并解析图表。
+              开启后，新导入的 PDF 会自动翻译全文。
             </p>
           </section>
           <Separator />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ScanLine, Sparkles, RefreshCw, Languages } from "lucide-react";
+import { Check, ScanLine, RefreshCw, Languages } from "lucide-react";
 import type { Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Progress } from "@reader/ui/components/progress";
@@ -35,9 +35,6 @@ export function useProcessing() {
 }
 export function processingStages(job: Processing) {
   const learned = job.phase !== "learning";
-  const settled = job.settling
-    ? job.settling.status === "complete"
-    : job.phase === "translating" || job.phase === "ready";
   const translated = job.translating
     ? job.translating.status === "complete"
     : job.phase === "ready";
@@ -62,25 +59,6 @@ export function processingStages(job: Processing) {
         : "解析正文与版面",
     },
     {
-      key: "settling",
-      label: settled ? "沉淀完成" : "沉淀中",
-      icon: Sparkles,
-      done: settled,
-      active: job.settling
-        ? job.settling.status === "running"
-        : job.phase === "settling" && job.status === "running",
-      value: settled
-        ? 100
-        : job.assetsTotal
-          ? Math.min(100, (job.assetsDone / job.assetsTotal) * 100)
-          : 0,
-      count: learned
-        ? job.assetsTotal
-          ? `${job.assetsDone} / ${job.assetsTotal} 个附件`
-          : "无需解析图片"
-        : "等待学习完成",
-    },
-    {
       key: "translating",
       label: translated ? "翻译完成" : "翻译中",
       icon: Languages,
@@ -99,8 +77,7 @@ export function processingStages(job: Processing) {
     },
   ];
 }
-// Learning advances to one parallel-processing panel; hide it only after both
-// jobs finish, rather than treating a change of active lane as completion.
+// Learning advances to a compact translation row; hide it once translation finishes.
 function coverPhase(job: Processing) {
   return job.phase === "learning"
     ? "learning"
@@ -109,11 +86,7 @@ function coverPhase(job: Processing) {
       : "processing";
 }
 function stageLabel(label: string, status: Processing["status"]) {
-  const name = label.startsWith("沉淀")
-    ? "沉淀"
-    : label.startsWith("翻译")
-      ? "翻译"
-      : "学习";
+  const name = label.startsWith("翻译") ? "翻译" : "学习";
   if (status === "queued") return `等待${name}`;
   if (status === "waiting") return `${name}待配置`;
   if (status === "failed") return `${name}失败`;
@@ -147,17 +120,10 @@ export function CoverProcessing({
   const stages = processingStages(job).filter((stage) => {
     if (phase === "learning") return stage.key === "learning";
     if (stage.key === "learning") return false;
-    if (
-      stage.done &&
-      (stage.key === "settling" ? job.assetsTotal : job.translationsTotal) === 0
-    )
-      return false;
-    return true;
+    return !(stage.done && job.translationsTotal === 0);
   });
-  if (phase !== "learning") stages.reverse();
   const status = (key: string, done: boolean): Processing["status"] => {
     if (done) return "complete";
-    if (key === "settling" && job.settling) return job.settling.status;
     if (key === "translating" && job.translating) return job.translating.status;
     return key === job.phase ? job.status : "queued";
   };
@@ -183,9 +149,7 @@ export function CoverProcessing({
           : [
               job.detail,
               job.warning,
-              job.settling?.detail,
               job.translating?.detail,
-              job.settling?.warning,
               job.translating?.warning,
             ]
               .filter(Boolean)
@@ -200,9 +164,7 @@ export function CoverProcessing({
             ? stage.value === null
               ? ""
               : `${Math.floor(stage.value)}%`
-            : stage.key === "settling"
-              ? `${job.assetsDone}/${job.assetsTotal}`
-              : `${job.translationsDone}/${job.translationsTotal}`;
+            : `${job.translationsDone}/${job.translationsTotal}`;
         return (
           <div
             key={stage.key}
@@ -211,11 +173,7 @@ export function CoverProcessing({
             data-active={!unavailable && !leaving && stage.active}
             data-done={stage.done || undefined}
             title={
-              stage.key === "settling"
-                ? job.settling?.detail
-                : stage.key === "translating"
-                  ? job.translating?.detail
-                  : job.detail
+              stage.key === "translating" ? job.translating?.detail : job.detail
             }
           >
             <div className="processing-step-heading" role="status">
@@ -236,11 +194,7 @@ export function CoverProcessing({
                   size="xs"
                   variant="ghost"
                   className="cover-processing-action"
-                  aria-label={
-                    state === "waiting"
-                      ? "等待 AI 配置"
-                      : `重试${stage.key === "settling" ? "沉淀" : "翻译"}`
-                  }
+                  aria-label={state === "waiting" ? "等待 AI 配置" : "重试翻译"}
                   disabled={state === "failed" && (retrying || unavailable)}
                   onClick={state === "waiting" ? onSettings : retry}
                 >
@@ -286,11 +240,7 @@ export function CoverProcessing({
               >
                 <RefreshCw className="size-3" />
                 重试
-                {stage.key === "settling"
-                  ? "沉淀"
-                  : stage.key === "translating"
-                    ? "翻译"
-                    : "学习"}
+                {stage.key === "translating" ? "翻译" : "学习"}
               </Button>
             )}
           </div>

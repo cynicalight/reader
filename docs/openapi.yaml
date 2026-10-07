@@ -2000,15 +2000,13 @@
               "properties":
                 {
                   "enabled": { "type": "boolean" },
-                  "settling":
-                    { "$ref": "#/components/schemas/ProcessingStage" },
                   "translating":
                     { "$ref": "#/components/schemas/ProcessingStage" },
                   "documentId": { "type": "string" },
                   "phase":
                     {
                       "type": "string",
-                      "enum": ["learning", "settling", "translating", "ready"],
+                      "enum": ["learning", "translating", "ready"],
                     },
                   "status":
                     {
@@ -2025,8 +2023,6 @@
                     },
                   "pagesDone": { "type": "integer" },
                   "pagesTotal": { "type": "integer" },
-                  "assetsDone": { "type": "integer" },
-                  "assetsTotal": { "type": "integer" },
                   "translationsDone": { "type": "integer" },
                   "translationsTotal": { "type": "integer" },
                   "detail": { "type": "string" },
@@ -2044,8 +2040,6 @@
                   "status",
                   "pagesDone",
                   "pagesTotal",
-                  "assetsDone",
-                  "assetsTotal",
                   "translationsDone",
                   "translationsTotal",
                   "detail",

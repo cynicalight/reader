@@ -1613,18 +1613,15 @@ export interface components {
     };
     Processing: {
       enabled?: boolean;
-      settling?: components["schemas"]["ProcessingStage"];
       translating?: components["schemas"]["ProcessingStage"];
       documentId: string;
       /** @enum {string} */
-      phase: "learning" | "settling" | "translating" | "ready";
+      phase: "learning" | "translating" | "ready";
       /** @enum {string} */
       status:
         "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
       pagesDone: number;
       pagesTotal: number;
-      assetsDone: number;
-      assetsTotal: number;
       translationsDone: number;
       translationsTotal: number;
       detail: string;

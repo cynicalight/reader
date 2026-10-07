@@ -212,19 +212,16 @@ export interface ProcessingStage {
 }
 export interface Processing {
   enabled?: boolean;
-  settling?: ProcessingStage;
   translating?: ProcessingStage;
   usageTracked?: boolean;
   startedAt?: string;
   completedAt?: string;
   incomplete?: boolean;
   documentId: string;
-  phase: "learning" | "settling" | "translating" | "ready";
+  phase: "learning" | "translating" | "ready";
   status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
   pagesDone: number;
   pagesTotal: number;
-  assetsDone: number;
-  assetsTotal: number;
   translationsDone: number;
   translationsTotal: number;
   detail: string;

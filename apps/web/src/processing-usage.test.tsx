@@ -110,3 +110,15 @@ it("adds chat below processing and combines totals without counting cache subset
   expect(text).toContain("正文翻译");
   expect(text).toContain("沉淀／图片解析");
 });
+it("omits the removed consolidation row when it has no past usage", () => {
+  const translated: ProcessingUsage = {
+    ...report,
+    calls: report.calls.map((call) => ({ ...call, stage: "translating" })),
+    groups: report.groups.map((group) => ({ ...group, stage: "translating" })),
+  };
+  const text = renderToStaticMarkup(<UsageDetails report={translated} />);
+  const host = document.createElement("div");
+  host.innerHTML = text;
+  expect(text).not.toContain("沉淀");
+  expect(host.querySelectorAll("tbody > tr")).toHaveLength(2);
+});

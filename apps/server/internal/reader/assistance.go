@@ -84,10 +84,10 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	if p.Enabled {
 		p.Status, p.Detail = "queued", "等待继续处理"
 		// Always prepare the complete manifest, including caches from older partial jobs.
-		// Completed translations and transcripts are reused by both processing lanes.
+		// Completed translations and formula results are reused.
 		p.Phase = "learning"
 		p.PagesDone = 0
-		p.Settling, p.Translating = nil, nil
+		p.Translating = nil
 		if e = s.retryFailedTranslations(d.ID); e != nil {
 			fail(w, 500, "无法恢复译文")
 			return
@@ -243,7 +243,7 @@ func (s *Server) mergeLayout(id, work string, allowed []int) error {
 			}
 			dest := filepath.Join(target, b.Image)
 			if _, e = os.Stat(dest); os.IsNotExist(e) {
-				if e = writeTranscript(dest, content); e != nil {
+				if e = publishAnalysisAsset(dest, content); e != nil {
 					return e
 				}
 			}
@@ -288,4 +288,28 @@ func (s *Server) mergeLayout(id, work string, allowed []int) error {
 		return e
 	}
 	return os.Rename(temp.Name(), filepath.Join(target, "manifest.json"))
+}
+
+// Atomically publish new cache assets without overwriting existing files.
+func publishAnalysisAsset(target string, content []byte) error {
+	f, e := os.CreateTemp(filepath.Dir(target), ".asset-*")
+	if e != nil {
+		return e
+	}
+	defer os.Remove(f.Name())
+	if _, e = f.Write(content); e != nil {
+		f.Close()
+		return e
+	}
+	if e = f.Sync(); e != nil {
+		f.Close()
+		return e
+	}
+	if e = f.Close(); e != nil {
+		return e
+	}
+	if e = os.Link(f.Name(), target); e != nil {
+		return errors.New("解析附件已存在或无法保存，原文件未被覆盖")
+	}
+	return nil
 }

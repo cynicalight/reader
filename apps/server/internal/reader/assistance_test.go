@@ -163,7 +163,7 @@ printf '%s' '{"pages":4,"processedPages":[2,3,4],"blocks":[],"warnings":[]}' > "
 	if len(got.Blocks) != 1 || got.Blocks[0].ID != m.Blocks[0].ID || len(got.ProcessedPages) != 4 {
 		t.Fatalf("cache lost: %+v", got)
 	}
-	if p.PagesDone != 4 || p.PagesTotal != 4 || p.AssetsTotal != 1 {
+	if p.PagesDone != 4 || p.PagesTotal != 4 {
 		t.Fatalf("range progress counted whole document: %+v", p)
 	}
 	// Empty/scanned pages are cached too, and must not be re-extracted.
@@ -282,7 +282,6 @@ func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
 
 func TestPausedParallelProgressCannotReenableProcessing(t *testing.T) {
 	s, p := processingFixture(t)
-	p.Settling = &ProcessingStage{Status: "waiting"}
 	p.Translating = &ProcessingStage{Status: "running"}
 	p.Enabled, p.Status = false, "paused"
 	if err := s.Store.saveProcessing(p); err != nil {
@@ -298,7 +297,7 @@ func TestPausedParallelProgressCannotReenableProcessing(t *testing.T) {
 	cancel()
 	s.StartProcessing(ctx)()
 	got, _ := s.Store.processing("doc")
-	if got.Enabled || got.Status != "paused" || got.Settling.Status != "waiting" {
+	if got.Enabled || got.Status != "paused" {
 		t.Fatalf("parallel progress or recovery lost pause: %+v", got)
 	}
 }

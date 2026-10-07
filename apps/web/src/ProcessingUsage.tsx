@@ -140,34 +140,41 @@ export function UsageDetails({ report }: { report: ProcessingUsage }) {
             </tr>
           </thead>
           <tbody>
-            {["settling", "translating", "chat"].map((stage) => {
-              const groups = report.groups.filter(
-                (group) => group.stage === stage,
-              );
-              const tokens = groups.reduce(
-                (sum, group) => add(sum, group.tokens),
-                zero,
-              );
-              const known = report.calls.some(
-                (call) =>
-                  call.stage === stage &&
-                  call.models.some((model) => model.tokens !== null),
-              );
-              return (
-                <StageRows
-                  key={stage}
-                  stage={stage}
-                  duration={
-                    report.stages.find((item) => item.stage === stage)
-                      ?.durationMs ?? 0
-                  }
-                  tokens={tokens}
-                  groups={groups}
-                  known={known}
-                  calls={report.calls.filter((call) => call.stage === stage)}
-                />
-              );
-            })}
+            {["settling", "translating", "chat"]
+              // Image consolidation was removed; keep its row only for past usage.
+              .filter(
+                (stage) =>
+                  stage !== "settling" ||
+                  report.calls.some((call) => call.stage === "settling"),
+              )
+              .map((stage) => {
+                const groups = report.groups.filter(
+                  (group) => group.stage === stage,
+                );
+                const tokens = groups.reduce(
+                  (sum, group) => add(sum, group.tokens),
+                  zero,
+                );
+                const known = report.calls.some(
+                  (call) =>
+                    call.stage === stage &&
+                    call.models.some((model) => model.tokens !== null),
+                );
+                return (
+                  <StageRows
+                    key={stage}
+                    stage={stage}
+                    duration={
+                      report.stages.find((item) => item.stage === stage)
+                        ?.durationMs ?? 0
+                    }
+                    tokens={tokens}
+                    groups={groups}
+                    known={known}
+                    calls={report.calls.filter((call) => call.stage === stage)}
+                  />
+                );
+              })}
           </tbody>
         </table>
       </div>

@@ -20,8 +20,6 @@ const paused: Processing = {
   enabled: false,
   pagesDone: 0,
   pagesTotal: 0,
-  assetsDone: 0,
-  assetsTotal: 0,
   translationsDone: 0,
   translationsTotal: 0,
   detail: "辅助阅读未开启",

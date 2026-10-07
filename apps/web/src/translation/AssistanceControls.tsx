@@ -42,7 +42,7 @@ export function AssistanceControls({
         variant="ghost"
         size="sm"
         disabled={busy || !job || complete}
-        title={job?.enabled ? job.detail : "使用当前 AI 连接翻译全文并解析图表"}
+        title={job?.enabled ? job.detail : "使用当前 AI 连接翻译全文与公式"}
         onClick={async () => {
           const operation = ++serial.current;
           setBusy(true);
