@@ -61,7 +61,6 @@ type PDFBlock struct {
 	Caption string `json:"caption,omitempty"`
 }
 type layoutManifest struct {
-	ProcessedPages  []int      `json:"processedPages,omitempty"`
 	IncompletePages []int      `json:"incompletePages"`
 	Pages           int        `json:"pages"`
 	Blocks          []PDFBlock `json:"blocks"`
@@ -212,11 +211,8 @@ func (s *Server) analysisDir(id string) string {
 	return filepath.Join(s.Store.Root, "cache", id, "analysis")
 }
 func (s *Server) readLayout(id string) (layoutManifest, error) {
-	return readLayoutDirectory(s.analysisDir(id))
-}
-func readLayoutDirectory(dir string) (layoutManifest, error) {
 	var m layoutManifest
-	b, e := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	b, e := os.ReadFile(filepath.Join(s.analysisDir(id), "manifest.json"))
 	if e != nil {
 		return m, e
 	}
@@ -224,18 +220,12 @@ func readLayoutDirectory(dir string) (layoutManifest, error) {
 		return m, errors.New("版面索引过大")
 	}
 	e = json.Unmarshal(b, &m)
-	if e != nil || m.Pages < 1 || m.Pages > 1000 {
+	if e != nil || m.Pages < 1 {
 		return m, errors.New("版面索引无效")
-	}
-	known := processedPages(m)
-	for _, page := range m.ProcessedPages {
-		if page < 1 || page > m.Pages {
-			return m, errors.New("缓存页码无效")
-		}
 	}
 	for _, b := range m.Blocks {
 		r := b.Bounds
-		if !known[b.Page] || !blockIDPattern.MatchString(b.ID) || b.Page < 1 || b.Page > m.Pages || r.X < 0 || r.Y < 0 || r.Width <= 0 || r.Height <= 0 || r.X+r.Width > 1.001 || r.Y+r.Height > 1.001 || (b.Image != "" && b.Image != "assets/"+b.ID+".png") {
+		if !blockIDPattern.MatchString(b.ID) || b.Page < 1 || b.Page > m.Pages || r.X < 0 || r.Y < 0 || r.Width <= 0 || r.Height <= 0 || r.X+r.Width > 1.001 || r.Y+r.Height > 1.001 || (b.Image != "" && b.Image != "assets/"+b.ID+".png") {
 			return m, errors.New("版面位置无效")
 		}
 	}
@@ -252,7 +242,6 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	if err := s.Store.dropSettlingState(); err != nil {
 		log.Printf("cannot migrate processing state: %v", err)
 	}
-	s.pauseLegacyProcessing()
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running' OR json_extract(body,'$.translating.status')='running'")
 	if e == nil {
@@ -388,8 +377,7 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		return e
 	}
 	m, e := s.readLayout(d.ID)
-	missing := missingPages(m, 1, m.Pages)
-	if e != nil || len(missing) > 0 {
+	if e != nil {
 		worker := os.Getenv("READER_PROCESSOR")
 		node := os.Getenv("READER_NODE")
 		if worker == "" || node == "" {
@@ -401,11 +389,7 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		}
 		child, cancel := context.WithTimeout(ctx, 30*time.Minute)
 		defer cancel()
-		args := []string{worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models")}
-		if len(missing) > 0 {
-			args = append(args, "--pages", pageArguments(missing))
-		}
-		cmd := exec.CommandContext(child, node, args...)
+		cmd := exec.CommandContext(child, node, worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models"))
 		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1", "NODE_USE_ENV_PROXY=1")
 		cmd.WaitDelay = 3 * time.Second
 		cmd.Dir = s.Store.Root
@@ -437,7 +421,7 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			case "model-progress":
 				p.Detail = fmt.Sprintf("正在下载版面模型 %.0f / %.0f MB", float64(event.Downloaded)/1e6, float64(event.Bytes)/1e6)
 			case "page":
-				p.PagesDone++
+				p.PagesDone = event.Page
 				p.PagesTotal = event.Total
 				p.Detail = fmt.Sprintf("已解析 %d / %d 页", event.Page, event.Total)
 			default:
@@ -461,18 +445,23 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		if e != nil || scan.Err() != nil {
 			return errors.New("PDF 解析未完成。请检查网络、模型缓存或文件后重试")
 		}
-		if e = s.mergeLayout(d.ID, work, missing); e != nil {
-			return e
+		// A successful worker writes its manifest last. Publish the directory once.
+		if _, e = os.Stat(s.analysisDir(d.ID)); e == nil {
+			return errors.New("已有解析目录异常，已保留，未覆盖")
 		}
-
+		if e = os.Rename(work, s.analysisDir(d.ID)); e != nil {
+			return errors.New("无法保存解析附件")
+		}
 		m, e = s.readLayout(d.ID)
 		if e != nil {
 			return e
 		}
 	}
+	p.PagesDone = m.Pages
 	p.PagesTotal = m.Pages
-	p.PagesDone = p.PagesTotal
-	p.Warning = strings.Join(m.Warnings, " ")
+	if len(m.Warnings) > 0 {
+		p.Warning = strings.Join(m.Warnings, " ")
+	}
 	p.Incomplete = len(m.IncompletePages) > 0 || strings.Contains(p.Warning, "无可提取文字")
 	p.TranslationsTotal = 0
 	for _, b := range m.Blocks {

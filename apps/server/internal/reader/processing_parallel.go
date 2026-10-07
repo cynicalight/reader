@@ -32,7 +32,7 @@ func mergeProcessing(current, update Processing) Processing {
 	return current
 }
 func aggregateProcessing(p *Processing) {
-	if !p.Enabled && p.Status != "complete" {
+	if !p.Enabled {
 		p.Status, p.Detail = "paused", "翻译已暂停"
 		return
 	}
@@ -131,9 +131,6 @@ func (s *Store) dropSettlingState() error {
 			if p.Status == "complete" {
 				p.Translating.Status = "complete"
 			}
-		}
-		if p.Phase == "settling" {
-			p.Phase = "translating"
 		}
 		aggregateProcessing(&p)
 		if err = s.saveProcessing(p); err != nil {

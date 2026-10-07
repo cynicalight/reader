@@ -13,7 +13,6 @@ import {
 } from "./layout";
 import { extractTextSpans } from "./text";
 import { digest, model, resolveModel } from "./model";
-import { selectProcessingPages } from "./page-selection";
 
 Object.assign(globalThis, { DOMMatrix, ImageData, Path2D });
 const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -30,7 +29,6 @@ const { values } = parseArgs({
     output: { type: "string" },
     "model-cache": { type: "string" },
     model: { type: "string" },
-    pages: { type: "string" },
     debug: { type: "boolean", default: false },
   },
 });
@@ -83,9 +81,9 @@ const timings: {
 const start = performance.now();
 try {
   const pdf = await loading.promise;
-  const processedPages = selectProcessingPages(pdf.numPages, values.pages);
+  if (pdf.numPages > 1000) throw new Error("PDF 超过本轮处理上限（1000 页）");
   const metadata = await pdf.getMetadata();
-  for (const number of processedPages) {
+  for (let number = 1; number <= pdf.numPages; number++) {
     const pageStart = performance.now();
     const page = await pdf.getPage(number);
     const original = page.getViewport({ scale: 1 });
@@ -240,7 +238,6 @@ try {
     inputSHA256: await digest(input),
     model,
     pages: pdf.numPages,
-    processedPages,
     metadata: metadata.info,
     blocks,
     warnings,
@@ -265,7 +262,6 @@ try {
     JSON.stringify({
       event: "done",
       pages: pdf.numPages,
-      processedPages,
       assets: blocks.filter((b) => b.image).length,
       elapsedMilliseconds: manifest.elapsedMilliseconds,
       peakRSSBytes: manifest.peakRSSBytes,

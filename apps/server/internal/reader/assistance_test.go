@@ -27,18 +27,11 @@ func assistanceRequest(t *testing.T, s *Server, action string) Processing {
 	}
 	return p
 }
-func TestAssistanceDefaultLegacyAndPauseSurviveRestart(t *testing.T) {
+func TestAssistancePauseSurvivesRestart(t *testing.T) {
 	s, p := processingFixture(t)
-	p.Enabled = false
-	p.Status = "running"
-	_ = s.Store.saveProcessing(p)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	s.StartProcessing(ctx)()
-	got, _ := s.Store.processing("doc")
-	if got.Enabled || got.Status != "paused" {
-		t.Fatalf("legacy task resumed: %+v", got)
-	}
+	var got Processing
 	p = assistanceRequest(t, s, "start")
 	if !p.Enabled || p.Status != "queued" {
 		t.Fatalf("wrong scope: %+v", p)
@@ -130,48 +123,6 @@ func TestWholeDocumentTranslationReusesCachedResults(t *testing.T) {
 		t.Fatal("explicit cached paragraph request failed")
 	}
 }
-func TestPartialExtractionPassesOnlyMissingPagesAndPreservesCache(t *testing.T) {
-	s, p := processingFixture(t)
-	m, _ := s.readLayout("doc")
-	m.Pages = 4
-	m.ProcessedPages = []int{1}
-	raw, _ := json.Marshal(m)
-	_ = os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), raw, 0600)
-	script := filepath.Join(t.TempDir(), "worker.sh")
-	// The fake processor fails if the server omits or broadens --pages.
-	contents := `#!/bin/sh
-while [ "$#" -gt 0 ]; do
- case "$1" in --output) out="$2";; --pages) pages="$2";; esac
- shift 2
-done
-[ "$pages" = "2,3,4" ] || exit 42
-mkdir -p "$out/assets"
-printf '%s' '{"pages":4,"processedPages":[2,3,4],"blocks":[],"warnings":[]}' > "$out/manifest.json"
-`
-	if e := os.WriteFile(script, []byte(contents), 0700); e != nil {
-		t.Fatal(e)
-	}
-	t.Setenv("READER_NODE", "/bin/sh")
-	t.Setenv("READER_PROCESSOR", script)
-	if e := s.learnPDF(context.Background(), &p); e != nil {
-		t.Fatal(e)
-	}
-	got, e := s.readLayout("doc")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if len(got.Blocks) != 1 || got.Blocks[0].ID != m.Blocks[0].ID || len(got.ProcessedPages) != 4 {
-		t.Fatalf("cache lost: %+v", got)
-	}
-	if p.PagesDone != 4 || p.PagesTotal != 4 {
-		t.Fatalf("range progress counted whole document: %+v", p)
-	}
-	// Empty/scanned pages are cached too, and must not be re-extracted.
-	t.Setenv("READER_PROCESSOR", "/does/not/exist")
-	if e := s.learnPDF(context.Background(), &p); e != nil {
-		t.Fatalf("reparsed cached empty pages: %v", e)
-	}
-}
 func TestImportWithAutoTranslationDisabledDoesNotStartBackgroundAI(t *testing.T) {
 	s := testServer(t)
 	s.Token = "test-secret"
@@ -193,30 +144,6 @@ func TestImportWithAutoTranslationDisabledDoesNotStartBackgroundAI(t *testing.T)
 	p, _ = s.Store.processing(d.ID)
 	if p.Enabled || p.Status != "paused" {
 		t.Fatalf("background claimed imported PDF: %+v", p)
-	}
-}
-
-func TestInvalidPartialManifestCannotReplaceExistingCache(t *testing.T) {
-	s, _ := processingFixture(t)
-	before, e := os.ReadFile(filepath.Join(s.analysisDir("doc"), "manifest.json"))
-	if e != nil {
-		t.Fatal(e)
-	}
-	work := t.TempDir()
-	for _, body := range []string{
-		`{"pages":2,"processedPages":[2],"blocks":[{"id":"p2-b1","page":2,"bounds":{"width":1,"height":1},"image":"../../outside.png"}]}`,
-		`{"pages":2,"processedPages":[1,2],"blocks":[]}`,
-	} {
-		if e = os.WriteFile(filepath.Join(work, "manifest.json"), []byte(body), 0600); e != nil {
-			t.Fatal(e)
-		}
-		if e = s.mergeLayout("doc", work, []int{2}); e == nil {
-			t.Fatal("invalid/out-of-scope partial manifest accepted")
-		}
-		after, e := os.ReadFile(filepath.Join(s.analysisDir("doc"), "manifest.json"))
-		if e != nil || string(after) != string(before) {
-			t.Fatal("invalid candidate replaced existing cache")
-		}
 	}
 }
 
@@ -323,7 +250,7 @@ func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
 	}
 }
 
-func TestPDFProcessingMigrationPreservesEPUBClassification(t *testing.T) {
+func TestPDFTranslationControlsPreserveEPUBImportClassification(t *testing.T) {
 	s := testServer(t)
 	w := upload(t, s, "the-art-of-reading.epub", sample(t, "the-art-of-reading.epub"))
 	if w.Code != 201 {
@@ -337,13 +264,7 @@ func TestPDFProcessingMigrationPreservesEPUBClassification(t *testing.T) {
 		t.Fatal("PDF controls changed EPUB import classification")
 	}
 	pdf := organizationDoc(t, s)
-	if _, err := s.Store.DB.Exec("UPDATE documents SET classification_status='pending' WHERE id=?", pdf.ID); err != nil {
-		t.Fatal(err)
-	}
-	s.pauseLegacyProcessing()
-	gotEPUB, _ := s.Store.Document(epub.ID)
-	gotPDF, _ := s.Store.Document(pdf.ID)
-	if gotEPUB.ClassificationStatus != "pending" || gotPDF.ClassificationStatus != "idle" {
-		t.Fatalf("wrong migration scope: EPUB=%s PDF=%s", gotEPUB.ClassificationStatus, gotPDF.ClassificationStatus)
+	if pdf.ClassificationStatus != "idle" {
+		t.Fatal("PDF import queued automatic classification")
 	}
 }

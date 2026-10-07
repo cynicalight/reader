@@ -36,7 +36,7 @@ export function AssistanceControls({
       serial.current++;
     };
   }, [documentId]);
-  const complete = job?.enabled && job.status === "complete";
+  const complete = job?.status === "complete";
   const action = job?.enabled ? "pause" : job?.startedAt ? "resume" : "start";
   return (
     <div className="assistance-controls">

@@ -63,12 +63,6 @@ func TestStartupDropsLegacyConsolidationState(t *testing.T) {
 		{"completed before translation lane existed", "ready", "complete",
 			`{"enabled":true,"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
 			"ready", "complete"},
-		{"unauthorized legacy queued task remains paused", "settling", "queued",
-			`{"documentId":"doc","phase":"settling","status":"queued","settling":{"status":"queued"}}`,
-			"translating", "paused"},
-		{"unauthorized legacy completed task stays complete", "ready", "complete",
-			`{"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
-			"ready", "complete"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -90,7 +84,7 @@ func TestStartupDropsLegacyConsolidationState(t *testing.T) {
 			if err := json.Unmarshal([]byte(body), &p); err != nil || p.Translating == nil {
 				t.Fatalf("translation stage missing: %s", body)
 			}
-			if strings.Contains(c.name, "completed") && p.CompletedAt != "2026-01-01T00:00:00Z" {
+			if c.name == "completed before translation lane existed" && p.CompletedAt != "2026-01-01T00:00:00Z" {
 				t.Fatalf("completion time rewritten: %s", p.CompletedAt)
 			}
 		})
