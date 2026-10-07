@@ -6,6 +6,7 @@ import (
 	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -47,8 +48,9 @@ type Message struct {
 	CreatedAt   string            `json:"createdAt"`
 }
 type Store struct {
-	DB   *sql.DB
-	Root string
+	processingWriteMu sync.Mutex
+	DB                *sql.DB
+	Root              string
 }
 
 func OpenStore(root string) (*Store, error) {
@@ -79,7 +81,7 @@ func OpenStore(root string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	store := &Store{db, root}
+	store := &Store{DB: db, Root: root}
 	if err = store.migrateOrganization(); err != nil {
 		db.Close()
 		return nil, err

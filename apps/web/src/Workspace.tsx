@@ -1005,7 +1005,6 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
-                  currentPage={location?.type === "pdf" ? location.page : 1}
                   toolbarHost={pdfToolbar}
                   pageNavigation={pageNavigation}
                   onReady={(engine, items) => {

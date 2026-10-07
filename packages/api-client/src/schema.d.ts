@@ -767,8 +767,7 @@ export interface paths {
         content: {
           "application/json": {
             /** @enum {string} */
-            action: "reading" | "full" | "pause" | "follow" | "resume";
-            page: number;
+            action: "start" | "pause" | "resume";
           };
         };
       };
@@ -1606,12 +1605,16 @@ export interface components {
     Error: {
       error: string;
     };
+    ProcessingStage: {
+      /** @enum {unknown} */
+      status: "queued" | "running" | "waiting" | "failed" | "complete";
+      detail: string;
+      warning?: string;
+    };
     Processing: {
-      /** @enum {string} */
-      mode?: "reading" | "full";
       enabled?: boolean;
-      pageStart?: number;
-      pageEnd?: number;
+      settling?: components["schemas"]["ProcessingStage"];
+      translating?: components["schemas"]["ProcessingStage"];
       documentId: string;
       /** @enum {string} */
       phase: "learning" | "settling" | "translating" | "ready";
@@ -1698,6 +1701,8 @@ export interface components {
       /** @enum {unknown} */
       status: "pending" | "running" | "complete" | "failed";
       sentences: components["schemas"]["TranslationSentence"][];
+      /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
+      formulaMarkdown?: string;
       error?: string;
     };
     TagBoardInput: {

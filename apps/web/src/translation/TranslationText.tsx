@@ -1,7 +1,9 @@
+import { FormulaRow } from "./FormulaRow";
 import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { lazy, Suspense } from "react";
+const FormulaFragment = lazy(() => import("./FormulaFragment"));
 const Markdown = lazy(() =>
   import("../chat/MessageMarkdown").then((module) => ({
     default: module.MessageMarkdown,
@@ -21,13 +23,66 @@ export function TranslationText({
   documentId,
   retry,
   linked = [],
+  formulaNumber,
 }: {
   block: PDFBlock;
   translation?: TranslationBlock;
   documentId: string;
   retry: () => void;
   linked?: number[];
+  formulaNumber?: string;
 }) {
+  const formula = ["display_formula", "inline_formula"].includes(block.label);
+  const asset =
+    !!block.image || ["table", "chart", "image"].includes(block.label);
+  const image = block.image ? (
+    <img
+      className="translation-image"
+      src={blockImageURL(documentId, block.id)}
+      alt={block.caption || block.label}
+      loading="lazy"
+    />
+  ) : null;
+  const formulaFallback = image || <MessageMarkdown content={block.text} />;
+  if (
+    formula &&
+    translation?.status === "complete" &&
+    translation.formulaMarkdown
+  ) {
+    return (
+      <Suspense
+        fallback={
+          <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>
+        }
+      >
+        <FormulaFragment
+          content={translation.formulaMarkdown}
+          fallback={formulaFallback}
+          number={formulaNumber}
+        />
+      </Suspense>
+    );
+  }
+  if (formula)
+    return (
+      <div>
+        <FormulaRow number={formulaNumber}>{formulaFallback}</FormulaRow>
+        {block.image && (
+          <div className="translation-formula-status" role="status">
+            {translation?.status === "failed" ? (
+              <>
+                <span>{translation.error || "公式转换失败"}</span>
+                <Button variant="ghost" size="sm" onClick={retry}>
+                  重试公式
+                </Button>
+              </>
+            ) : (
+              <span>公式转换中…</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
   const preserve =
     [
       "reference",
@@ -40,19 +95,12 @@ export function TranslationText({
       "footer",
       "number",
     ].includes(block.label) ||
-    (!!block.image && block.label !== "table" && !block.caption);
+    (asset && !block.caption);
   return (
     <>
-      {block.image && (
-        <img
-          className="translation-image"
-          src={blockImageURL(documentId, block.id)}
-          alt={block.caption || block.label}
-          loading="lazy"
-        />
-      )}
+      {image}
       {preserve ? (
-        !block.image &&
+        !asset &&
         (block.label === "algorithm" ? (
           <pre>{block.text}</pre>
         ) : (

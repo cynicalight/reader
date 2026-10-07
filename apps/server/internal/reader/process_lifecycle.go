@@ -58,3 +58,6 @@ func (p *rpcLifecycle) send(v any) error {
 }
 func (p *rpcLifecycle) setCancel(v any) { p.stateMu.Lock(); p.cancelFrame = v; p.stateMu.Unlock() }
 func (p *rpcLifecycle) close()          { close(p.done); p.force(); <-p.stopped }
+
+// finish stops the per-turn cancellation watcher without closing a reusable connection.
+func (p *rpcLifecycle) finish() { close(p.done); <-p.stopped }

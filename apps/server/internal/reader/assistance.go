@@ -3,7 +3,6 @@ package reader
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,17 +28,12 @@ func (s *Server) getAssistance(w http.ResponseWriter, r *http.Request) {
 func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Action string `json:"action"`
-		Page   int    `json:"page"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	if req.Action != "reading" && req.Action != "full" && req.Action != "pause" && req.Action != "follow" && req.Action != "resume" {
+	if req.Action != "start" && req.Action != "pause" && req.Action != "resume" {
 		fail(w, 400, "无效的辅助阅读操作")
-		return
-	}
-	if req.Action != "pause" && (req.Page < 1 || req.Page > 1000) {
-		fail(w, 400, "无效的 PDF 页码")
 		return
 	}
 	s.processingControlMu.Lock()
@@ -53,17 +47,6 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	p, e := s.Store.processing(d.ID)
 	if e != nil {
 		p = initialProcessing(d.ID)
-	}
-	if req.Action == "follow" && (!p.Enabled || p.Mode != "reading" || p.PageStart == req.Page) {
-		s.processingMu.Unlock()
-		respond(w, 200, p)
-		return
-	}
-	m, layoutErr := s.readLayout(d.ID)
-	if layoutErr == nil && req.Action != "pause" && req.Page > m.Pages {
-		s.processingMu.Unlock()
-		fail(w, 400, "页码超出文档范围")
-		return
 	}
 	if s.blockedProcessing == nil {
 		s.blockedProcessing = map[string]bool{}
@@ -99,32 +82,20 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	p.Enabled = req.Action != "pause"
 	p.CompletedAt = ""
 	if p.Enabled {
-		if req.Action == "resume" && p.Mode == "full" {
-			// Continue the paused batch without revisiting earlier pages.
-		} else if req.Action == "full" {
-			p.Mode = "full"
-			p.PageStart = 1
-		} else {
-			p.Mode = "reading"
-			p.PageStart = req.Page
-		}
-		p.PageEnd = min(1000, p.PageStart+2)
-		if layoutErr == nil {
-			p.PageEnd = min(m.Pages, p.PageEnd)
-		}
+		p.Status, p.Detail = "queued", "等待继续处理"
+		// Always prepare the complete manifest, including caches from older partial jobs.
+		// Completed translations and transcripts are reused by both processing lanes.
 		p.Phase = "learning"
-		p.Status = "queued"
 		p.PagesDone = 0
-		p.PagesTotal = p.PageEnd - p.PageStart + 1
-		p.Detail = fmt.Sprintf("等待准备第 %d–%d 页", p.PageStart, p.PageEnd)
-		if e = s.retryFailedTranslations(d.ID, &p); e != nil {
+		p.Settling, p.Translating = nil, nil
+		if e = s.retryFailedTranslations(d.ID); e != nil {
 			fail(w, 500, "无法恢复译文")
 			return
 		}
 	} else {
-		p.Status = "paused"
-		p.Detail = "辅助阅读已暂停"
+		p.Status, p.Detail = "paused", "翻译已暂停"
 	}
+
 	if e = s.Store.saveProcessing(p); e != nil {
 		fail(w, 500, "无法保存辅助阅读设置")
 		return
@@ -143,7 +114,7 @@ func (s *Server) finishProcessingTask(id string, t *documentTask) {
 	close(t.done)
 }
 func (s *Server) pauseLegacyProcessing() {
-	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE COALESCE(json_extract(body,'$.mode'),'')=''")
+	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE json_extract(body,'$.enabled') IS NULL OR json_extract(body,'$.enabled')=0")
 	if e != nil {
 		return
 	}
@@ -160,7 +131,7 @@ func (s *Server) pauseLegacyProcessing() {
 		p.Enabled = false
 		if p.Status != "complete" {
 			p.Status = "paused"
-			p.Detail = "辅助阅读未开启"
+			p.Detail = "翻译未开始"
 		}
 		_ = s.Store.saveProcessing(p)
 	}
@@ -206,58 +177,6 @@ func missingPages(m layoutManifest, start, end int) []int {
 		}
 	}
 	return pages
-}
-func processingLayout(m layoutManifest, p *Processing) layoutManifest {
-	if p.PageStart == 0 {
-		return m
-	}
-	blocks := []PDFBlock{}
-	for _, b := range m.Blocks {
-		if b.Page >= p.PageStart && b.Page <= p.PageEnd {
-			blocks = append(blocks, b)
-		}
-	}
-	m.Blocks = blocks
-	incomplete := []int{}
-	for _, page := range m.IncompletePages {
-		if page >= p.PageStart && page <= p.PageEnd {
-			incomplete = append(incomplete, page)
-		}
-	}
-	m.IncompletePages = incomplete
-	// Warnings are page-specific in the processor; avoid marking an unrelated range.
-	warnings := []string{}
-	for _, v := range m.Warnings {
-		for page := p.PageStart; page <= p.PageEnd; page++ {
-			if strings.HasPrefix(v, fmt.Sprintf("第 %d 页", page)) {
-				warnings = append(warnings, v)
-				break
-			}
-		}
-	}
-	m.Warnings = warnings
-	return m
-}
-func (s *Server) advanceFullProcessing(p *Processing) error {
-	if !p.Enabled || p.Mode != "full" {
-		return nil
-	}
-	m, e := s.readLayout(p.DocumentID)
-	if e != nil {
-		return e
-	}
-	if p.PageEnd < m.Pages {
-		p.PageStart = p.PageEnd + 1
-		p.PageEnd = min(m.Pages, p.PageStart+2)
-		p.Phase = "learning"
-		p.Status = "queued"
-		p.CompletedAt = ""
-		p.PagesDone = 0
-		p.PagesTotal = p.PageEnd - p.PageStart + 1
-		p.Detail = fmt.Sprintf("等待准备第 %d–%d 页", p.PageStart, p.PageEnd)
-		return s.Store.saveProcessing(*p)
-	}
-	return nil
 }
 
 // Publish new page assets before atomically publishing the merged manifest.

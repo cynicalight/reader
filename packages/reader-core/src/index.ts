@@ -93,6 +93,7 @@ export interface ReaderAnnotationTarget {
 }
 export type Appearance = "light" | "dark" | "system";
 export interface ReaderTheme {
+  autoTranslatePDF?: boolean;
   appearance?: Appearance;
   mode: "light" | "sepia" | "dark";
   fontSize: number;
@@ -103,6 +104,7 @@ export interface ReaderTheme {
   zoom: number | "width";
 }
 export const defaultTheme: ReaderTheme = {
+  autoTranslatePDF: false,
   appearance: "system",
   mode: "light",
   fontSize: 1.15,
@@ -203,11 +205,15 @@ export interface Message {
   createdAt: string;
 }
 
+export interface ProcessingStage {
+  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  detail: string;
+  warning?: string;
+}
 export interface Processing {
-  mode?: "reading" | "full";
   enabled?: boolean;
-  pageStart?: number;
-  pageEnd?: number;
+  settling?: ProcessingStage;
+  translating?: ProcessingStage;
   usageTracked?: boolean;
   startedAt?: string;
   completedAt?: string;
@@ -243,6 +249,7 @@ export interface TranslationBlock {
   sourceHash: string;
   status: "pending" | "running" | "complete" | "failed";
   sentences: TranslationSentence[];
+  formulaMarkdown?: string;
   error?: string;
 }
 export interface AICapability {

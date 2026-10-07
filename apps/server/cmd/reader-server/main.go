@@ -50,6 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 	server := reader.NewServer(store, token, *web)
+	defer server.Close()
 	runContext, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
 	stopProcessing := server.StartProcessing(runContext)

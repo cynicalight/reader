@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@reader/ui/components/tooltip";
+import { Checkbox } from "@reader/ui/components/checkbox";
 import { Separator } from "@reader/ui/components/separator";
 import { useReaderStore } from "./store";
 import { toast } from "sonner";
@@ -180,6 +181,21 @@ export function Settings({
               ))}
             </div>
           </section>
+          <section className="space-y-2">
+            <label className="flex items-center gap-3 text-sm">
+              <Checkbox
+                checked={theme.autoTranslatePDF ?? false}
+                onCheckedChange={(checked) =>
+                  setTheme({ autoTranslatePDF: checked })
+                }
+                aria-label="导入后自动翻译"
+              />
+              导入后自动翻译
+            </label>
+            <p className="text-xs leading-5 text-muted-foreground">
+              开启后，新导入的 PDF 会自动翻译全文并解析图表。
+            </p>
+          </section>
           <Separator />
           <section>
             <div className="mb-4 flex items-center justify-between">
@@ -243,9 +259,8 @@ export function Settings({
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  对话使用此
-                  SDK，具体模型在对话框中选择。图片理解检测通过后，导入的 PDF
-                  将自动生成图表解析稿；图片会发送给此 Agent。
+                  对话使用此 SDK，具体模型在对话框中选择。开始翻译后，PDF
+                  中的图片会发送给此 Agent 进行解析。
                 </p>
               </div>
             )}

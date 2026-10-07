@@ -43,11 +43,7 @@ afterEach(async () => {
 async function render(page: number, processing: Processing = paused) {
   await act(async () =>
     root.render(
-      <AssistanceControls
-        documentId="book"
-        page={page}
-        processing={processing}
-      />,
+      <AssistanceControls documentId="book" processing={processing} />,
     ),
   );
 }
@@ -56,52 +52,23 @@ it("opening and changing pages do not authorize processing", async () => {
   await render(40);
   await act(async () => vi.advanceTimersByTime(1000));
   expect(api.setAssistance).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("开启辅助阅读");
+  expect(host.textContent).toContain("开始翻译");
   vi.mocked(api.setAssistance).mockResolvedValue({
     ...paused,
     enabled: true,
-    mode: "reading",
-    pageStart: 40,
-    pageEnd: 42,
     status: "queued",
     updatedAt: "2026-10-07T00:00:01Z",
   });
   await act(async () =>
     host.querySelector<HTMLButtonElement>("button")!.click(),
   );
-  expect(api.setAssistance).toHaveBeenCalledWith("book", "reading", 40);
-  expect(host.textContent).toContain("暂停辅助阅读");
-});
-it("debounces navigation to the latest reading page after consent", async () => {
-  const running: Processing = {
-    ...paused,
-    enabled: true,
-    mode: "reading",
-    pageStart: 1,
-    pageEnd: 3,
-    status: "complete",
-  };
-  vi.mocked(api.setAssistance).mockImplementation(
-    async (_id, _action, page) => ({
-      ...running,
-      pageStart: page,
-      pageEnd: page + 2,
-      updatedAt: "2026-10-07T00:00:02Z",
-    }),
-  );
-  await render(1, running);
-  await render(10, running);
-  await render(50, running);
-  await act(async () => vi.advanceTimersByTime(600));
-  expect(api.setAssistance).toHaveBeenCalledTimes(1);
-  expect(api.setAssistance).toHaveBeenCalledWith("book", "follow", 50);
+  expect(api.setAssistance).toHaveBeenCalledWith("book", "start");
+  expect(host.textContent).toContain("暂停翻译");
 });
 it("a paused whole-book job resumes instead of restarting its scope", async () => {
   const job: Processing = {
     ...paused,
-    mode: "full",
-    pageStart: 40,
-    pageEnd: 42,
+    startedAt: "2026-10-07T00:00:01Z",
   };
   vi.mocked(api.setAssistance).mockResolvedValue({
     ...job,
@@ -109,9 +76,9 @@ it("a paused whole-book job resumes instead of restarting its scope", async () =
     status: "queued",
   });
   await render(7, job);
-  expect(host.textContent).toContain("继续整本处理");
+  expect(host.textContent).toContain("继续翻译");
   await act(async () =>
     host.querySelector<HTMLButtonElement>("button")!.click(),
   );
-  expect(api.setAssistance).toHaveBeenCalledWith("book", "resume", 7);
+  expect(api.setAssistance).toHaveBeenCalledWith("book", "resume");
 });

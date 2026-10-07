@@ -18,6 +18,7 @@ import (
 )
 
 type Server struct {
+	codexChat              codexChatCache
 	Store                  *Store
 	Token                  string
 	Web                    string
@@ -118,6 +119,12 @@ func (s *Server) Handler() http.Handler {
 		var v map[string]any
 		if !decode(w, r, &v) {
 			return
+		}
+		if value, exists := v["autoTranslatePDF"]; exists {
+			if _, ok := value.(bool); !ok {
+				fail(w, 400, "自动翻译设置必须为布尔值")
+				return
+			}
 		}
 		b, _ := json.Marshal(v)
 		_, err := s.Store.DB.Exec("INSERT INTO settings VALUES('reader',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", string(b))
@@ -279,7 +286,9 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err == nil && kind == "pdf" {
-		p := initialProcessing(d.ID)
+		var settings string
+		_ = tx.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&settings)
+		p := importedProcessing(d.ID, settings)
 		b, _ := json.Marshal(p)
 		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}

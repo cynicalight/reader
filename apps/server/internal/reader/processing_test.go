@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func processingFixture(t *testing.T) (*Server, Processing) {
@@ -29,9 +30,6 @@ func processingFixture(t *testing.T) (*Server, Processing) {
 		t.Fatal(e)
 	}
 	p, _ := store.processing("doc")
-	p.PageStart = 1
-	p.PageEnd = 2
-	p.Mode = "full"
 	p.Enabled = true
 	p.Status = "queued"
 	if e = store.saveProcessing(p); e != nil {
@@ -60,7 +58,7 @@ func TestProcessingWaitsForVisionAndKeepsBlocks(t *testing.T) {
 	if p.Phase != "settling" || p.PagesDone != 2 || p.AssetsTotal != 1 {
 		t.Fatalf("wrong learning result: %+v", p)
 	}
-	if e := s.settlePDF(context.Background(), &p); e != nil {
+	if e := s.processPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if p.Status != "waiting" || p.AssetsDone != 0 {
@@ -90,7 +88,7 @@ func TestProcessingResumesSavedTranscriptsWithoutCallingAI(t *testing.T) {
 	if e := writeTranscript(target, []byte("replacement")); e == nil {
 		t.Fatal("overwrote a transcript")
 	}
-	if e := s.settlePDF(context.Background(), &p); e != nil {
+	if e := s.processPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if p.Status != "complete" || p.AssetsDone != 1 {
@@ -102,55 +100,52 @@ func TestProcessingResumesSavedTranscriptsWithoutCallingAI(t *testing.T) {
 	}
 }
 
-func TestProcessingCompletesAttachmentsBeforeTranslation(t *testing.T) {
-	for _, mode := range []string{"success", "saved", "waiting", "failed"} {
+func TestProcessingTranslatesIndependentlyOfAttachments(t *testing.T) {
+	for _, mode := range []string{"slow", "saved", "waiting", "failed"} {
 		t.Run(mode, func(t *testing.T) {
 			s, p := processingFixture(t)
-			m, err := s.readLayout("doc")
-			if err != nil {
-				t.Fatal(err)
-			}
+			m, _ := s.readLayout("doc")
 			m.Blocks[0].Caption = "Figure one."
 			dir := s.analysisDir("doc")
 			data, _ := json.Marshal(m)
-			if err = os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0600); err != nil {
 				t.Fatal(err)
 			}
-			if err = os.WriteFile(filepath.Join(dir, m.Blocks[0].Image), []byte("image fixture"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, m.Blocks[0].Image), []byte("fixture"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			target := filepath.Join(dir, "transcripts", "p1-b1.md")
 			if mode == "saved" {
-				if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
-					t.Fatal(err)
-				}
-				if err = writeTranscript(target, []byte("saved interpretation\n")); err != nil {
+				_ = os.MkdirAll(filepath.Dir(target), 0700)
+				if err := writeTranscript(target, []byte("saved interpretation\n")); err != nil {
 					t.Fatal(err)
 				}
 			}
-			var imageCalls, textCalls atomic.Int32
+			release := make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			textStarted := make(chan struct{})
+			var imageCalls atomic.Int32
 			images := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				imageCalls.Add(1)
-				if textCalls.Load() != 0 {
-					t.Error("translation started before attachment interpretation")
-				}
 				if mode == "failed" {
 					http.Error(w, "image provider unavailable", http.StatusServiceUnavailable)
 					return
+				}
+				if mode == "slow" {
+					<-release
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
 				sendTranslationDelta(w, "saved interpretation")
 				finishTranslationStream(w)
 			}))
 			defer images.Close()
+			defer unblock()
 			text := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				textCalls.Add(1)
+				close(textStarted)
 				saved, err := s.Store.processing("doc")
-				if err != nil || saved.Phase != "translating" || saved.AssetsDone != 1 || saved.TranslationsTotal != 1 {
-					t.Errorf("translation stage was not published: %+v, %v", saved, err)
-				}
-				if data, err := os.ReadFile(target); err != nil || string(data) != "saved interpretation\n" {
-					t.Error("translation started before attachment transcript was saved")
+				if err != nil || saved.Translating == nil || saved.Translating.Status != "running" {
+					t.Error("independent translation state was not published")
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
 				for _, paragraph := range readTranslationInput(t, r).Batch.Paragraphs {
@@ -165,27 +160,49 @@ func TestProcessingCompletesAttachmentsBeforeTranslation(t *testing.T) {
 			if mode != "waiting" {
 				config.Capabilities["image-api"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(config, "image-api")}
 			}
-			if err = s.writeAIConfig(config); err != nil {
+			if err := s.writeAIConfig(config); err != nil {
 				t.Fatal(err)
 			}
-			if err = s.learnPDF(context.Background(), &p); err != nil {
+			if err := s.learnPDF(context.Background(), &p); err != nil {
 				t.Fatal(err)
 			}
-			err = s.settlePDF(context.Background(), &p)
-			if mode == "waiting" || mode == "failed" {
-				if textCalls.Load() != 0 {
-					t.Fatal("translated while attachments were unfinished")
+			done := make(chan error, 1)
+			go func() { done <- s.processPDF(context.Background(), &p) }()
+			waitFormulaSignal(t, textStarted)
+			if mode == "slow" {
+				deadline := time.Now().Add(5 * time.Second)
+				for {
+					state, _ := s.Store.processing("doc")
+					if state.Translating.Status == "complete" {
+						if state.Settling.Status != "running" || state.AssetsDone != 0 || state.TranslationsDone != 1 || state.Status != "running" {
+							t.Fatalf("lost parallel progress: %+v", state)
+						}
+						if _, err := os.Stat(target); !os.IsNotExist(err) {
+							t.Fatal("test did not hold up consolidation")
+						}
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("translation blocked by consolidation")
+					}
+					time.Sleep(5 * time.Millisecond)
 				}
-				if mode == "waiting" && (err != nil || p.Status != "waiting") {
-					t.Fatalf("did not wait for vision: %+v, %v", p, err)
-				}
-				if mode == "failed" && err == nil {
-					t.Fatal("attachment failure was ignored")
-				}
-				return
 			}
-			if err != nil || p.Phase != "ready" || p.AssetsDone != 1 || p.TranslationsDone != 1 || textCalls.Load() != 1 {
-				t.Fatalf("processing did not complete: %+v, %v, text calls=%d", p, err, textCalls.Load())
+			unblock()
+			err := <-done
+			if p.Translating.Status != "complete" || p.TranslationsDone != 1 {
+				t.Fatalf("lost completed translation: %+v", p)
+			}
+			if mode == "waiting" {
+				if err != nil || p.Settling.Status != "waiting" || p.Status != "waiting" {
+					t.Fatalf("%+v %v", p, err)
+				}
+			} else if mode == "failed" {
+				if err == nil || p.Settling.Status != "failed" || p.Status != "failed" {
+					t.Fatalf("%+v %v", p, err)
+				}
+			} else if err != nil || p.Status != "complete" || p.AssetsDone != 1 {
+				t.Fatalf("%+v %v", p, err)
 			}
 			if mode == "saved" && imageCalls.Load() != 0 {
 				t.Fatal("regenerated saved attachment")
@@ -242,7 +259,7 @@ func TestMissingPrimaryWaitsEvenWithVerifiedImageAPI(t *testing.T) {
 	c := AIConfig{Models: map[string]string{}, ImageAPI: APIConnection{URL: "https://example.com/v1", Model: "image"}, Capabilities: map[string]Capability{}}
 	c.Capabilities["image-api"] = Capability{Text: true, Vision: true, Fingerprint: configPrint(c, "image-api")}
 	_ = s.writeAIConfig(c)
-	if e := s.settlePDF(context.Background(), &p); e != nil {
+	if e := s.processPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if p.Status != "waiting" {

@@ -1350,6 +1350,89 @@ kbd {
   animation: cover-stage-leave 250ms 450ms cubic-bezier(0.23, 1, 0.32, 1) both;
   pointer-events: none;
 }
+.cover-processing[data-compact="true"] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+}
+.cover-processing[data-compact="true"] .processing-step {
+  flex: 1;
+  min-width: 0;
+}
+.cover-processing[data-compact="true"] .processing-step-heading {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.cover-processing[data-compact="true"] .processing-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cover-processing[data-compact="true"] .processing-count {
+  flex-shrink: 0;
+}
+/* Animate task activity and actual counter changes without adding a row. */
+.cover-processing[data-compact="true"] .processing-activity-dot {
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.cover-processing[data-compact="true"]
+  .processing-activity-dot[data-active="true"] {
+  animation: cover-activity-breathe 2s ease-in-out infinite;
+}
+.cover-processing[data-compact="true"] .processing-count-value {
+  display: inline-block;
+  animation: cover-count-enter 200ms ease-out both;
+}
+.cover-processing[data-compact="true"] .processing-complete-icon {
+  flex-shrink: 0;
+  animation: cover-complete-enter 240ms ease-out both;
+}
+@keyframes cover-activity-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+@keyframes cover-count-enter {
+  from {
+    opacity: 0.45;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cover-complete-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.cover-processing[data-compact="true"] .cover-processing-action {
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  color: inherit;
+}
+.cover-processing[data-compact="true"] .cover-processing-action svg {
+  flex-shrink: 0;
+}
 .cover-processing .processing-step-heading {
   font-size: 11px;
   gap: 5px;
@@ -1406,7 +1489,11 @@ kbd {
   .cover-processing {
     animation: none;
   }
-  .cover-processing[data-leaving="true"] {
+  .cover-processing[data-leaving="true"],
+  .cover-processing[data-compact="true"]
+    .processing-activity-dot[data-active="true"],
+  .cover-processing[data-compact="true"] .processing-count-value,
+  .cover-processing[data-compact="true"] .processing-complete-icon {
     animation: none;
   }
 }

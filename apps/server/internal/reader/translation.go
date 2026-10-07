@@ -14,11 +14,12 @@ type TranslationSentence struct {
 	Target string `json:"target"`
 }
 type TranslationBlock struct {
-	BlockID    string                `json:"blockId"`
-	SourceHash string                `json:"sourceHash"`
-	Status     string                `json:"status"`
-	Sentences  []TranslationSentence `json:"sentences"`
-	Error      string                `json:"error,omitempty"`
+	BlockID         string                `json:"blockId"`
+	SourceHash      string                `json:"sourceHash"`
+	Status          string                `json:"status"`
+	Sentences       []TranslationSentence `json:"sentences"`
+	FormulaMarkdown string                `json:"formulaMarkdown,omitempty"`
+	Error           string                `json:"error,omitempty"`
 }
 
 func translationSource(b PDFBlock) string {
@@ -29,7 +30,7 @@ func translationSource(b PDFBlock) string {
 	case "reference", "reference_content", "algorithm", "display_formula", "inline_formula", "formula_number", "header", "footer", "number":
 		return ""
 	}
-	if b.Image != "" && b.Label != "table" {
+	if isImageAsset(b) {
 		return strings.TrimSpace(b.Caption)
 	}
 	return strings.TrimSpace(b.Text)
@@ -38,8 +39,15 @@ func translationHash(source string) string {
 	sum := sha256.Sum256([]byte("zh-CN:v1:" + source))
 	return hex.EncodeToString(sum[:])
 }
+func needsTranslation(b PDFBlock) bool {
+	return translationSource(b) != "" || (isFormula(b) && b.Image != "")
+}
 func newTranslation(b PDFBlock) TranslationBlock {
-	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(translationSource(b)), Status: "pending", Sentences: []TranslationSentence{}}
+	source := translationSource(b)
+	if isFormula(b) {
+		source = "formula-image:v1:" + b.Image + ":" + b.Text
+	}
+	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
 func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
 	rows, err := s.Store.DB.Query("SELECT body FROM translations WHERE document_id=?", documentID)
@@ -67,7 +75,7 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 	}
 	result := []TranslationBlock{}
 	for _, b := range m.Blocks {
-		if translationSource(b) == "" {
+		if !needsTranslation(b) {
 			continue
 		}
 		t := newTranslation(b)
@@ -79,12 +87,12 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 	return result, nil
 }
 
-func (s *Server) retryFailedTranslations(documentID string, p *Processing) error {
+func (s *Server) retryFailedTranslations(documentID string) error {
 	m, err := s.readLayout(documentID)
 	if err != nil {
 		return nil
 	}
-	items, err := s.translations(documentID, processingLayout(m, p))
+	items, err := s.translations(documentID, m)
 	if err != nil {
 		return err
 	}
@@ -132,7 +140,7 @@ func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, items)
 }
 
-// Requests only enqueue work. The settling worker owns provider calls and persists
+// Requests only enqueue work. The translation lane owns provider calls and persists
 // completed responses independently, so closing a reader never loses progress.
 func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
@@ -155,18 +163,8 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	defer s.processingMu.Unlock()
 	p, err := s.Store.processing(d.ID)
 	if err != nil || !p.Enabled {
-		fail(w, 409, "请先开启辅助阅读")
+		fail(w, 409, "请先开始翻译")
 		return
-	}
-	if req.BlockID == "" {
-		fail(w, 400, "请在辅助阅读菜单中选择处理整本")
-		return
-	}
-	for _, b := range m.Blocks {
-		if b.ID == req.BlockID && (b.Page < p.PageStart || b.Page > p.PageEnd) {
-			fail(w, 409, "此段不在当前处理范围，请先阅读到该页")
-			return
-		}
 	}
 	items, err := s.translations(d.ID, m)
 	if err != nil {
@@ -193,12 +191,13 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "没有可翻译的段落")
 		return
 	}
-	if p.Status != "running" {
+	if p.Status != "running" || (p.Translating != nil && p.Translating.Status != "running") {
 		if p.Phase == "ready" {
 			p.Phase = "translating"
 		}
 		p.Status = "queued"
 		p.Detail = "等待继续处理"
+		p.queueTranslation = true
 		if err = s.Store.saveProcessing(p); err != nil {
 			fail(w, 500, "无法安排翻译任务")
 			return

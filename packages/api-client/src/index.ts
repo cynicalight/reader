@@ -119,14 +119,10 @@ export const api = {
     }),
   assistance: (id: string) =>
     request<Processing>(`/api/documents/${id}/assistance`),
-  setAssistance: (
-    id: string,
-    action: "reading" | "full" | "pause" | "follow" | "resume",
-    page: number,
-  ) =>
+  setAssistance: (id: string, action: "start" | "pause" | "resume") =>
     request<Processing>(`/api/documents/${id}/assistance`, {
       method: "POST",
-      body: JSON.stringify({ action, page }),
+      body: JSON.stringify({ action }),
     }),
   processing: () => request<Processing[]>("/api/processing"),
   process: (id: string) =>

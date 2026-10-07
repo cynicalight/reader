@@ -1,0 +1,183 @@
+package reader
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+// Keep at most one text chat connection. SQLite remains the authority for
+// committed history; failed, canceled or unsaved turns must never be reused.
+type codexChatCache struct {
+	mu     sync.Mutex
+	entry  *codexChatEntry
+	closed bool
+}
+type codexChatEntry struct {
+	session                      *codexSession
+	work, key, document, savedID string
+	seen                         map[string]bool
+	pending                      *chatInput
+	turns, sourceBytes           int
+	timer                        *time.Timer
+}
+
+func (c *codexChatCache) discardLocked() {
+	if e := c.entry; e != nil {
+		c.entry = nil
+		if e.timer != nil {
+			e.timer.Stop()
+		}
+		e.session.close()
+		_ = os.RemoveAll(e.work)
+	}
+}
+func (c *codexChatCache) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	c.discardLocked()
+}
+func (c *codexChatCache) acquire(root, model string, in AIInput) (*codexSession, AIInput, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return nil, in, generationError(ErrorCanceled, "服务已关闭")
+	}
+	chat := in.Chat
+	executable, _ := exec.LookPath("codex")
+	key := executable + "\x00" + model + "\x00" + in.Effort + "\x00" + chat.Title
+	e := c.entry
+	if e != nil && (e.key != key || e.document != chat.DocumentID || e.savedID != chat.PriorID || e.pending != nil || e.turns >= 64 || e.sourceBytes >= 256000) {
+		c.discardLocked()
+		e = nil
+	}
+	if e == nil {
+		work, err := os.MkdirTemp(filepath.Join(root, "ai-work"), "chat-")
+		if err != nil {
+			return nil, in, err
+		}
+		session, err := newCodexSession(work, model)
+		if err != nil {
+			_ = os.RemoveAll(work)
+			return nil, in, err
+		}
+		e = &codexChatEntry{session: session, work: work, key: key, document: chat.DocumentID, seen: map[string]bool{}}
+		c.entry = e
+	} else {
+		if e.timer != nil {
+			e.timer.Stop()
+		}
+		in.Prompt = chat.incremental(e.seen)
+	}
+	e.pending = chat
+	return e.session, in, nil
+}
+func (c *codexChatCache) finish(chat *chatInput, savedID string, successful bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e := c.entry
+	if chat == nil || e == nil || e.pending != chat {
+		return
+	}
+	if !successful || !e.session.usageComplete {
+		c.discardLocked()
+		return
+	}
+	e.savedID = savedID
+	e.pending = nil
+	e.turns++
+	for _, source := range chat.Sources {
+		if !e.seen[source.ID] {
+			e.sourceBytes += len(source.Text)
+			e.seen[source.ID] = true
+		}
+	}
+	committedTurns := e.turns
+	e.timer = time.AfterFunc(10*time.Minute, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.entry == e && e.pending == nil && e.turns == committedTurns {
+			c.discardLocked()
+		}
+	})
+}
+func (c *codexChatCache) reset() { c.mu.Lock(); defer c.mu.Unlock(); c.discardLocked() }
+
+func codexUsageDelta(total, prior *TokenCounts) *TokenCounts {
+	if total == nil {
+		return nil
+	}
+	if prior == nil {
+		return total
+	}
+	d := *total
+	d.InputTokens -= prior.InputTokens
+	d.OutputTokens -= prior.OutputTokens
+	d.TotalTokens -= prior.TotalTokens
+	sub := func(a, b *int64) *int64 {
+		if a == nil || b == nil {
+			return nil
+		}
+		return tokenCount(*a - *b)
+	}
+	d.CachedInputTokens = sub(total.CachedInputTokens, prior.CachedInputTokens)
+	d.CacheWriteInputTokens = sub(total.CacheWriteInputTokens, prior.CacheWriteInputTokens)
+	d.ReasoningOutputTokens = sub(total.ReasoningOutputTokens, prior.ReasoningOutputTokens)
+	if !validTokens(&d) {
+		return nil
+	}
+	return &d
+}
+
+type codexChatAdapter struct {
+	configuredCLIAdapter
+	cache *codexChatCache
+}
+
+func (a codexChatAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	if req.Input.Chat == nil || len(req.Input.images()) > 0 {
+		return a.configuredCLIAdapter.Stream(ctx, req, emit)
+	}
+	models, err := a.catalog(ctx, a.provider)
+	if err != nil {
+		return GenerateResult{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
+	}
+	req.Input.Effort = nativeEffort(a.provider, a.level, a.model, models)
+	session, in, err := a.cache.acquire(a.root, a.model, req.Input)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	child, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var emitErr error
+	send := func(e ProviderEvent) {
+		if emitErr == nil && emit != nil {
+			emitErr = emit(e)
+			if emitErr != nil {
+				cancel()
+			}
+		}
+	}
+	text, err := session.generate(child, in, func(part string) { send(ProviderEvent{Text: part}) }, func(metrics []ModelTokens) { send(ProviderEvent{Metrics: metrics}) })
+	if emitErr != nil {
+		err = emitErr
+	}
+	if err != nil {
+		a.cache.finish(in.Chat, "", false)
+		return GenerateResult{}, err
+	}
+	return GenerateResult{text, "stop"}, nil
+}
+func (s *Server) Close() { s.codexChat.close() }
+
+func (c *codexChatCache) deleteDocument(document string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entry != nil && c.entry.document == document {
+		c.discardLocked()
+	}
+}

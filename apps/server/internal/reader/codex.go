@@ -8,16 +8,28 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
 
-// App Server exposes agentMessage deltas; exec --json only exposes completed
-// assistant messages. Use one private stdio connection and ephemeral thread per
-// invocation, retaining the CLI's own login without reading its credentials.
-func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (string, error) {
-	child, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	defer cancel()
+type codexSession struct {
+	cmd                                *exec.Cmd
+	stdin                              io.WriteCloser
+	stdout                             io.ReadCloser
+	scan                               *bufio.Scanner
+	work, model, threadID, actualModel string
+	serial                             int
+	total                              *TokenCounts
+	usageComplete                      bool
+	completedTurns                     map[string]bool
+	closeOnce                          sync.Once
+}
+
+func (s *codexSession) close() {
+	s.closeOnce.Do(func() { _ = s.cmd.Process.Kill(); _ = s.stdin.Close(); _ = s.stdout.Close(); _ = s.cmd.Wait() })
+}
+func newCodexSession(work, model string) (*codexSession, error) {
 	args := []string{"app-server", "--listen", "stdio://"}
 	for _, setting := range []string{
 		`approval_policy="never"`, `sandbox_mode="read-only"`,
@@ -29,29 +41,51 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	} {
 		args = append(args, "-c", setting)
 	}
-	cmd := exec.CommandContext(child, "codex", args...)
+	cmd := exec.Command("codex", args...)
 	cmd.Dir, cmd.Stderr, cmd.WaitDelay = work, io.Discard, 3*time.Second
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer stdin.Close()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", err
+		_ = stdin.Close()
+		return nil, err
 	}
-	defer stdout.Close()
 	if err = cmd.Start(); err != nil {
-		return "", generationError(ErrorConfiguration, "无法启动 Codex App Server，请检查 CLI 安装及版本")
+		_ = stdin.Close()
+		_ = stdout.Close()
+		return nil, generationError(ErrorConfiguration, "无法启动 Codex App Server，请检查 CLI 安装及版本")
 	}
-	lifecycle := newRPCLifecycle(ctx, cmd, stdin, stdout)
-	defer func() { lifecycle.close(); cancel(); _ = cmd.Wait() }()
 	scan := bufio.NewScanner(stdout)
 	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 
+	return &codexSession{cmd: cmd, stdin: stdin, stdout: stdout, scan: scan, work: work, model: model}, nil
+}
+
+func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (string, error) {
+	session, err := newCodexSession(work, model)
+	if err != nil {
+		return "", err
+	}
+	defer session.close()
+	return session.generate(ctx, in, delta, metrics...)
+}
+func (s *codexSession) generate(ctx context.Context, in AIInput, delta func(string), metrics ...func([]ModelTokens)) (answerText string, err error) {
+	lifecycle := newRPCLifecycle(ctx, s.cmd, s.stdin, s.stdout)
+	defer func() {
+		lifecycle.finish()
+		if err != nil || ctx.Err() != nil {
+			s.close()
+		}
+	}()
+	scan, work, model := s.scan, s.work, s.model
+	previousTotal := s.total
+	usageReceived := false
+
 	var answer strings.Builder
 	items := map[string]*strings.Builder{}
-	threadID, turnID := "", ""
+	threadID, turnID := s.threadID, ""
 	completed := false
 	providerError := errors.New("Codex 未完成回答，请检查登录、网络、模型或额度")
 	appendText := func(itemID, part string) error {
@@ -112,6 +146,9 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		if json.Unmarshal(msg.Params, &p) != nil || threadID == "" || p.ThreadID != threadID {
 			return nil
 		}
+		if p.TurnID != "" && (s.completedTurns[p.TurnID] || (turnID != "" && p.TurnID != turnID)) {
+			return nil
+		}
 		if msg.Method == "thread/tokenUsage/updated" {
 			var usage struct {
 				TokenUsage struct {
@@ -119,7 +156,12 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 				} `json:"tokenUsage"`
 			}
 			if json.Unmarshal(msg.Params, &usage) == nil {
-				emitMetrics(metrics, []ModelTokens{{Tokens: codexTokens(usage.TokenUsage.Total)}})
+				total := codexTokens(usage.TokenUsage.Total)
+				if counts := codexUsageDelta(total, previousTotal); counts != nil && codexUsageDelta(total, s.total) != nil {
+					usageReceived = true
+					s.total = total
+					emitMetrics(metrics, []ModelTokens{{Tokens: counts}})
+				}
 			}
 			return nil
 		}
@@ -127,7 +169,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		if strings.HasPrefix(msg.Method, "turn/") {
 			id = p.Turn.ID
 		}
-		if id == "" || (turnID != "" && id != turnID) {
+		if id == "" || s.completedTurns[id] || (turnID != "" && id != turnID) {
 			return nil
 		}
 		lifecycle.setCancel(map[string]any{"id": 99, "method": "turn/interrupt", "params": map[string]string{"threadId": threadID, "turnId": id}})
@@ -179,7 +221,9 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 		}
 		return msg, nil
 	}
-	call := func(id int, method string, params any) (json.RawMessage, error) {
+	call := func(method string, params any) (json.RawMessage, error) {
+		s.serial++
+		id := s.serial
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -203,32 +247,36 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 			}
 		}
 	}
-	if _, err = call(1, "initialize", map[string]any{"clientInfo": map[string]string{"name": "reader", "title": "Reader", "version": "0.1.0"}}); err != nil {
-		return "", err
+	var raw json.RawMessage
+	if threadID == "" {
+		if _, err = call("initialize", map[string]any{"clientInfo": map[string]string{"name": "reader", "title": "Reader", "version": "0.1.0"}}); err != nil {
+			return "", err
+		}
+		if err = lifecycle.send(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+			return "", err
+		}
+		params := map[string]any{"cwd": work, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never",
+			"baseInstructions": readerSystemPrompt}
+		if model != "" {
+			params["model"] = model
+		}
+		raw, err = call("thread/start", params)
+		if err != nil {
+			return "", err
+		}
+		var thread struct {
+			Model  string `json:"model"`
+			Thread struct {
+				ID string `json:"id"`
+			} `json:"thread"`
+		}
+		if json.Unmarshal(raw, &thread) != nil || thread.Thread.ID == "" {
+			return "", generationError(ErrorProtocol, "Codex 会话无效")
+		}
+		threadID = thread.Thread.ID
+		s.threadID, s.actualModel = threadID, thread.Model
 	}
-	if err = lifecycle.send(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
-		return "", err
-	}
-	params := map[string]any{"cwd": work, "ephemeral": true, "sandbox": "read-only", "approvalPolicy": "never",
-		"baseInstructions": readerSystemPrompt}
-	if model != "" {
-		params["model"] = model
-	}
-	raw, err := call(2, "thread/start", params)
-	if err != nil {
-		return "", err
-	}
-	var thread struct {
-		Model  string `json:"model"`
-		Thread struct {
-			ID string `json:"id"`
-		} `json:"thread"`
-	}
-	if json.Unmarshal(raw, &thread) != nil || thread.Thread.ID == "" {
-		return "", generationError(ErrorProtocol, "Codex 会话无效")
-	}
-	threadID = thread.Thread.ID
-	emitMetrics(metrics, []ModelTokens{{Model: thread.Model}})
+	emitMetrics(metrics, []ModelTokens{{Model: s.actualModel}})
 	input := []any{map[string]string{"type": "text", "text": in.Prompt}}
 	for _, image := range in.images() {
 		input = append(input, map[string]string{"type": "image", "url": imageData(image)})
@@ -237,7 +285,7 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	if in.Effort != "" {
 		turnParams["effort"] = in.Effort
 	}
-	raw, err = call(3, "turn/start", turnParams)
+	raw, err = call("turn/start", turnParams)
 	if err != nil {
 		return "", err
 	}
@@ -266,5 +314,10 @@ func invokeCodex(ctx context.Context, work, model string, in AIInput, delta func
 	if answer.Len() == 0 {
 		return "", providerError
 	}
+	if s.completedTurns == nil {
+		s.completedTurns = map[string]bool{}
+	}
+	s.completedTurns[turnID] = true
+	s.usageComplete = usageReceived
 	return answer.String(), nil
 }

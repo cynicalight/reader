@@ -40,6 +40,15 @@ func (s *chatStreamWriter) send(event string, value any) error {
 	return err
 }
 func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w http.ResponseWriter, documentID string, config AIConfig, in AIInput) {
+	if config.Primary != "codex" || len(in.images()) > 0 {
+		s.codexChat.reset()
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			s.codexChat.finish(in.Chat, "", false)
+		}
+	}()
 	// Bound a blocked network write by the request deadline and interrupt it on
 	// cancellation. Reset the deadline before this keep-alive connection is reused.
 	controller := http.NewResponseController(w)
@@ -116,4 +125,11 @@ func (s *Server) streamChat(ctx context.Context, cancel context.CancelFunc, w ht
 		return
 	}
 	finalErr = out.send("done", map[string]bool{"ok": true})
+	if finalErr == nil && result.Provider == "codex" {
+		savedID, saveErr := s.Store.lastChatMessageID(documentID)
+		if saveErr == nil {
+			s.codexChat.finish(in.Chat, savedID, true)
+			committed = true
+		}
+	}
 }

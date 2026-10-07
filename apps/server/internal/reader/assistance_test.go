@@ -13,10 +13,10 @@ import (
 	"time"
 )
 
-func assistanceRequest(t *testing.T, s *Server, action string, page int) Processing {
+func assistanceRequest(t *testing.T, s *Server, action string) Processing {
 	t.Helper()
 	s.Token = "test-secret"
-	body, _ := json.Marshal(map[string]any{"action": action, "page": page})
+	body, _ := json.Marshal(map[string]any{"action": action})
 	w := request(t, s, "POST", "/api/documents/doc/assistance", strings.NewReader(string(body)))
 	if w.Code != 200 {
 		t.Fatalf("%s: %d %s", action, w.Code, w.Body.String())
@@ -29,7 +29,6 @@ func assistanceRequest(t *testing.T, s *Server, action string, page int) Process
 }
 func TestAssistanceDefaultLegacyAndPauseSurviveRestart(t *testing.T) {
 	s, p := processingFixture(t)
-	p.Mode = ""
 	p.Enabled = false
 	p.Status = "running"
 	_ = s.Store.saveProcessing(p)
@@ -40,19 +39,15 @@ func TestAssistanceDefaultLegacyAndPauseSurviveRestart(t *testing.T) {
 	if got.Enabled || got.Status != "paused" {
 		t.Fatalf("legacy task resumed: %+v", got)
 	}
-	p = assistanceRequest(t, s, "reading", 2)
-	if !p.Enabled || p.Mode != "reading" || p.PageStart != 2 || p.PageEnd != 2 {
+	p = assistanceRequest(t, s, "start")
+	if !p.Enabled || p.Status != "queued" {
 		t.Fatalf("wrong scope: %+v", p)
 	}
-	p = assistanceRequest(t, s, "pause", 2)
+	p = assistanceRequest(t, s, "pause")
 	s.StartProcessing(ctx)()
 	got, _ = s.Store.processing("doc")
 	if got.Enabled || got.Status != "paused" {
 		t.Fatalf("pause lost on restart: %+v", got)
-	}
-	got = assistanceRequest(t, s, "follow", 1)
-	if got.Enabled || got.PageStart != p.PageStart {
-		t.Fatal("navigation enabled a paused task")
 	}
 	if r := request(t, s, "POST", "/api/documents/doc/processing", nil); r.Code != 409 {
 		t.Fatal("retry enabled a paused task")
@@ -61,9 +56,6 @@ func TestAssistanceDefaultLegacyAndPauseSurviveRestart(t *testing.T) {
 func TestAssistanceJoinsProcessingWithoutCancellingChat(t *testing.T) {
 	s, p := processingFixture(t)
 	s.Token = "test-secret"
-	p.Mode = "reading"
-	p.PageStart = 1
-	p.PageEnd = 2
 	_ = s.Store.saveProcessing(p)
 	ctx, cancel := context.WithCancel(context.Background())
 	task := &documentTask{cancel: cancel, done: make(chan struct{})}
@@ -80,7 +72,7 @@ func TestAssistanceJoinsProcessingWithoutCancellingChat(t *testing.T) {
 		_ = s.Store.saveProcessing(p)
 		s.finishProcessingTask("doc", task)
 	}()
-	got := assistanceRequest(t, s, "pause", 1)
+	got := assistanceRequest(t, s, "pause")
 	if got.Enabled || got.Status != "paused" {
 		t.Fatalf("stale worker overwrote pause: %+v", got)
 	}
@@ -88,7 +80,7 @@ func TestAssistanceJoinsProcessingWithoutCancellingChat(t *testing.T) {
 		t.Fatal("paused the independent chat")
 	}
 }
-func TestReadingScopeDoesNotTranslateCachedPagesOutsideWindow(t *testing.T) {
+func TestWholeDocumentTranslationReusesCachedResults(t *testing.T) {
 	s, _, m := translationFixture(t)
 	m.Pages = 20
 	outside := m.Blocks[0]
@@ -101,11 +93,6 @@ func TestReadingScopeDoesNotTranslateCachedPagesOutsideWindow(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		input := readTranslationInput(t, r)
-		for _, paragraph := range input.Batch.Paragraphs {
-			if paragraph.BlockID == outside.ID {
-				t.Error("translated an unread page")
-			}
-		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		for _, paragraph := range input.Batch.Paragraphs {
 			sendTranslationDelta(w, translationParagraphLine(paragraph))
@@ -114,39 +101,39 @@ func TestReadingScopeDoesNotTranslateCachedPagesOutsideWindow(t *testing.T) {
 	}))
 	defer provider.Close()
 	configureTranslationTest(t, s, provider.URL)
-	p := assistanceRequest(t, s, "reading", 1)
+	p := assistanceRequest(t, s, "start")
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.settlePDF(context.Background(), &p); e != nil {
+	if e := s.processPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	before := calls.Load()
 	if before != 1 {
 		t.Fatalf("calls=%d", before)
 	}
-	p = assistanceRequest(t, s, "reading", 1)
+	p = assistanceRequest(t, s, "start")
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.settlePDF(context.Background(), &p); e != nil {
+	if e := s.processPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if calls.Load() != before {
 		t.Fatal("revisited page generated again")
 	}
 	items, _ := s.translations("doc", m)
-	if items[len(items)-1].Status != "pending" {
-		t.Fatal("modified unread page")
+	if items[len(items)-1].Status != "complete" {
+		t.Fatal("whole document did not finish")
 	}
-	if w := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{"blockId":"p9-b1"}`)); w.Code != 409 {
-		t.Fatal("explicit paragraph request escaped scope")
+	if w := request(t, s, "POST", "/api/documents/doc/translations", strings.NewReader(`{"blockId":"p9-b1"}`)); w.Code != 202 {
+		t.Fatal("explicit cached paragraph request failed")
 	}
 }
 func TestPartialExtractionPassesOnlyMissingPagesAndPreservesCache(t *testing.T) {
 	s, p := processingFixture(t)
 	m, _ := s.readLayout("doc")
-	m.Pages = 20
+	m.Pages = 4
 	m.ProcessedPages = []int{1}
 	raw, _ := json.Marshal(m)
 	_ = os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), raw, 0600)
@@ -157,18 +144,15 @@ while [ "$#" -gt 0 ]; do
  case "$1" in --output) out="$2";; --pages) pages="$2";; esac
  shift 2
 done
-[ "$pages" = "4,5,6" ] || exit 42
+[ "$pages" = "2,3,4" ] || exit 42
 mkdir -p "$out/assets"
-printf '%s' '{"pages":20,"processedPages":[4,5,6],"blocks":[],"warnings":[]}' > "$out/manifest.json"
+printf '%s' '{"pages":4,"processedPages":[2,3,4],"blocks":[],"warnings":[]}' > "$out/manifest.json"
 `
 	if e := os.WriteFile(script, []byte(contents), 0700); e != nil {
 		t.Fatal(e)
 	}
 	t.Setenv("READER_NODE", "/bin/sh")
 	t.Setenv("READER_PROCESSOR", script)
-	p.Mode = "reading"
-	p.PageStart = 4
-	p.PageEnd = 6
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
@@ -179,43 +163,13 @@ printf '%s' '{"pages":20,"processedPages":[4,5,6],"blocks":[],"warnings":[]}' > 
 	if len(got.Blocks) != 1 || got.Blocks[0].ID != m.Blocks[0].ID || len(got.ProcessedPages) != 4 {
 		t.Fatalf("cache lost: %+v", got)
 	}
-	if p.PagesDone != 3 || p.PagesTotal != 3 || p.AssetsTotal != 0 {
+	if p.PagesDone != 4 || p.PagesTotal != 4 || p.AssetsTotal != 1 {
 		t.Fatalf("range progress counted whole document: %+v", p)
 	}
 	// Empty/scanned pages are cached too, and must not be re-extracted.
 	t.Setenv("READER_PROCESSOR", "/does/not/exist")
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatalf("reparsed cached empty pages: %v", e)
-	}
-}
-func TestFullProcessingAdvancesButReadingWindowDoesNot(t *testing.T) {
-	s, p := processingFixture(t)
-	m, _ := s.readLayout("doc")
-	m.Pages = 10
-	raw, _ := json.Marshal(m)
-	_ = os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), raw, 0600)
-	p.Mode = "reading"
-	p.PageStart = 1
-	p.PageEnd = 3
-	p.Status = "complete"
-	if e := s.advanceFullProcessing(&p); e != nil {
-		t.Fatal(e)
-	}
-	if p.PageStart != 1 || p.Status != "complete" {
-		t.Fatal("prefetch ran ahead")
-	}
-	p.Mode = "full"
-	if e := s.advanceFullProcessing(&p); e != nil {
-		t.Fatal(e)
-	}
-	if p.PageStart != 4 || p.PageEnd != 6 || p.Status != "queued" {
-		t.Fatalf("full batch: %+v", p)
-	}
-	_ = s.Store.saveProcessing(p)
-	assistanceRequest(t, s, "pause", 4)
-	got := assistanceRequest(t, s, "resume", 4)
-	if got.PageStart != 4 || got.Mode != "full" {
-		t.Fatalf("full resume revisited early pages: %+v", got)
 	}
 }
 func TestImportDoesNotStartBackgroundAI(t *testing.T) {
@@ -270,20 +224,74 @@ func TestFullProcessingRetainsEarlierOCRWarnings(t *testing.T) {
 	m.Warnings = []string{"第 1 页无可提取文字；尚未接入 OCR，正文不完整。"}
 	data, _ := json.Marshal(m)
 	_ = os.WriteFile(filepath.Join(s.analysisDir("doc"), "manifest.json"), data, 0600)
-	p.Mode = "full"
-	p.PageStart = 4
-	p.PageEnd = 6
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if !p.Incomplete {
 		t.Fatal("whole-book status forgot an earlier scanned page")
 	}
-	p.Mode = "reading"
-	if e := s.learnPDF(context.Background(), &p); e != nil {
-		t.Fatal(e)
+}
+
+func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
+	s := testServer(t)
+	s.Token = "test-secret"
+	first := organizationDoc(t, s)
+	for _, enabled := range []bool{true, false} {
+		body, _ := json.Marshal(map[string]any{"autoTranslatePDF": enabled, "appearance": "dark"})
+		w := request(t, s, "PUT", "/api/settings", strings.NewReader(string(body)))
+		if w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+		settings := request(t, s, "GET", "/api/settings", nil)
+		var saved map[string]any
+		if err := json.Unmarshal(settings.Body.Bytes(), &saved); err != nil || saved["autoTranslatePDF"] != enabled || saved["appearance"] != "dark" {
+			t.Fatalf("settings not persisted: %s", settings.Body.String())
+		}
+		content := append(sample(t, "reading-notes.pdf"), []byte("\n% preference "+string(body))...)
+		imported := upload(t, s, "preference.pdf", content)
+		if imported.Code != 201 {
+			t.Fatal(imported.Body.String())
+		}
+		var next Document
+		if err := json.Unmarshal(imported.Body.Bytes(), &next); err != nil {
+			t.Fatal(err)
+		}
+		p, err := s.Store.processing(next.ID)
+		if err != nil || p.Enabled != enabled || (enabled && p.Status != "queued") || (!enabled && p.Status != "paused") {
+			t.Fatalf("preference ignored: %+v %v", p, err)
+		}
+		original, _ := s.Store.processing(first.ID)
+		if original.Enabled || original.Status != "paused" {
+			t.Fatal("changing preference enabled an existing document")
+		}
+		if next.ClassificationStatus != "idle" {
+			t.Fatal("translation preference queued classification")
+		}
 	}
-	if p.Incomplete || p.Warning != "" {
-		t.Fatal("unrelated scanned page marked the reading window incomplete")
+	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":"true"}`)); w.Code != 400 {
+		t.Fatal("non-boolean preference accepted")
+	}
+}
+
+func TestPausedParallelProgressCannotReenableProcessing(t *testing.T) {
+	s, p := processingFixture(t)
+	p.Settling = &ProcessingStage{Status: "waiting"}
+	p.Translating = &ProcessingStage{Status: "running"}
+	p.Enabled, p.Status = false, "paused"
+	if err := s.Store.saveProcessing(p); err != nil {
+		t.Fatal(err)
+	}
+	stale := p
+	stale.Enabled, stale.lane, stale.Status = true, "translating", "queued"
+	if err := s.Store.saveProcessing(stale); err != nil {
+		t.Fatal(err)
+	}
+	s.wakeProcessing()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.StartProcessing(ctx)()
+	got, _ := s.Store.processing("doc")
+	if got.Enabled || got.Status != "paused" || got.Settling.Status != "waiting" {
+		t.Fatalf("parallel progress or recovery lost pause: %+v", got)
 	}
 }
