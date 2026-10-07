@@ -124,7 +124,7 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 		return ""
 	}
 }
-func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T) {
+func TestTranslationRunsSequentiallyAndSavesBeforeProviderCompletes(t *testing.T) {
 	s, p, m := translationFixture(t)
 	m.Blocks = append(m.Blocks, m.Blocks[1], m.Blocks[1])
 	m.Blocks[2].ID = "p1-b3"
@@ -162,9 +162,9 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.settleTranslations(ctx, &p, m) }()
-	first, second, third := waitTranslationSignal(t, started), waitTranslationSignal(t, started), waitTranslationSignal(t, started)
-	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
-		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
+	first := waitTranslationSignal(t, started)
+	if first != "p1-b1" {
+		t.Fatalf("bad batch scheduling: %s", first)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -172,7 +172,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		if items[0].Status == "complete" && items[1].Status == "complete" && items[2].Status == "complete" {
+		if items[0].Status == "complete" {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -182,7 +182,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	}
 	select {
 	case <-started:
-		t.Fatal("started a fourth concurrent batch")
+		t.Fatal("started another batch before provider completion")
 	default:
 	}
 	cancel()
@@ -192,11 +192,11 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 		t.Fatal("workers ignored cancellation")
 	}
 	items, _ := s.translations("doc", m)
-	if maxActive.Load() != 3 || items[0].Status != "complete" || items[1].Status != "complete" || items[2].Status != "complete" || items[3].Status != "pending" {
+	if maxActive.Load() != 1 || items[0].Status != "complete" || items[1].Status != "pending" || items[2].Status != "pending" || items[3].Status != "pending" {
 		t.Fatalf("lost partial results or exceeded concurrency: max=%d %+v", maxActive.Load(), items)
 	}
 	saved, err := s.Store.processing("doc")
-	if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 3 || saved.TranslationsTotal != 4 {
+	if err != nil || saved.Phase != "translating" || saved.TranslationsDone != 1 || saved.TranslationsTotal != 4 {
 		t.Fatalf("streamed progress was not persisted: %+v, %v", saved, err)
 	}
 }
