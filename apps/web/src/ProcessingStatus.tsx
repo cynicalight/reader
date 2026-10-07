@@ -99,7 +99,26 @@ export function processingStages(job: Processing) {
     },
   ];
 }
-// Keep completion visible briefly, then lift it away before revealing the next stage.
+// Learning advances to one parallel-processing panel; hide it only after both
+// jobs finish, rather than treating a change of active lane as completion.
+function coverPhase(job: Processing) {
+  return job.phase === "learning"
+    ? "learning"
+    : job.phase === "ready"
+      ? "ready"
+      : "processing";
+}
+function stageLabel(label: string, status: Processing["status"]) {
+  const name = label.startsWith("沉淀")
+    ? "沉淀"
+    : label.startsWith("翻译")
+      ? "翻译"
+      : "学习";
+  if (status === "queued") return `等待${name}`;
+  if (status === "waiting") return `${name}待配置`;
+  if (status === "failed") return `${name}失败`;
+  return label;
+}
 export function CoverProcessing({
   job,
   onSettings,
@@ -109,22 +128,48 @@ export function CoverProcessing({
   onSettings: () => void;
   unavailable?: boolean;
 }) {
-  const [phase, setPhase] = useState(job.phase);
+  const nextPhase = coverPhase(job);
+  const [phase, setPhase] = useState(nextPhase);
   const [retrying, setRetrying] = useState(false);
-  const leaving = phase !== job.phase;
+  const leaving = phase !== nextPhase;
   useEffect(() => {
     if (!leaving) return;
-    const timer = setTimeout(() => setPhase(job.phase), 750);
+    const timer = setTimeout(() => setPhase(nextPhase), 750);
     return () => clearTimeout(timer);
-  }, [leaving, job.phase]);
+  }, [leaving, nextPhase]);
   if (phase === "ready")
     return job.incomplete ? (
       <span className="cover-incomplete" title={job.warning || job.detail}>
         正文不完整
       </span>
     ) : null;
-  const stage = processingStages(job).find((stage) => stage.key === phase)!;
-  const label = stage.label;
+  const stages = processingStages(job).filter((stage) => {
+    if (phase === "learning") return stage.key === "learning";
+    if (stage.key === "learning") return false;
+    if (
+      stage.done &&
+      (stage.key === "settling" ? job.assetsTotal : job.translationsTotal) === 0
+    )
+      return false;
+    return true;
+  });
+  if (phase !== "learning") stages.reverse();
+  const status = (key: string, done: boolean): Processing["status"] => {
+    if (done) return "complete";
+    if (key === "settling" && job.settling) return job.settling.status;
+    if (key === "translating" && job.translating) return job.translating.status;
+    return key === job.phase ? job.status : "queued";
+  };
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      await api.process(job.documentId);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRetrying(false);
+    }
+  };
   return (
     <div
       className="cover-processing"
@@ -136,6 +181,8 @@ export function CoverProcessing({
           : [
               job.detail,
               job.warning,
+              job.settling?.detail,
+              job.translating?.detail,
               job.settling?.warning,
               job.translating?.warning,
             ]
@@ -143,64 +190,74 @@ export function CoverProcessing({
               .join("\n")
       }
     >
-      <div
-        className="processing-step"
-        data-active={!unavailable && !leaving && stage.active}
-      >
-        <div className="processing-step-heading" role="status">
-          {leaving && stage.done ? <Check className="size-3" /> : null}
-          <span>{label}</span>
-          <span className="processing-count">
-            {leaving && stage.done
-              ? "100%"
-              : unavailable
-                ? "离线"
-                : stage.value === null
-                  ? ""
-                  : `${Math.floor(stage.value)}%`}
-          </span>
-        </div>
-        <Progress
-          aria-label={label}
-          value={
-            leaving && stage.done
-              ? 100
-              : (stage.value ?? (stage.active && !unavailable ? null : 0))
-          }
-          className="processing-progress"
-        />
-      </div>
-      {!leaving && job.status === "waiting" && (
-        <Button
-          size="xs"
-          variant="ghost"
-          className="cover-processing-action"
-          onClick={onSettings}
-        >
-          等待 AI 配置
-        </Button>
-      )}
-      {!leaving && job.status === "failed" && (
-        <Button
-          size="xs"
-          variant="ghost"
-          className="cover-processing-action"
-          disabled={retrying || unavailable}
-          onClick={async () => {
-            setRetrying(true);
-            try {
-              await api.process(job.documentId);
-            } catch (e) {
-              toast.error((e as Error).message);
-            } finally {
-              setRetrying(false);
+      {stages.map((stage) => {
+        const state = status(stage.key, stage.done);
+        const label = stageLabel(stage.label, state);
+        const count =
+          stage.key === "learning"
+            ? stage.value === null
+              ? ""
+              : `${Math.floor(stage.value)}%`
+            : stage.key === "settling"
+              ? `${job.assetsDone}/${job.assetsTotal}`
+              : `${job.translationsDone}/${job.translationsTotal}`;
+        return (
+          <div
+            key={stage.key}
+            className="processing-step"
+            data-stage={stage.key}
+            data-active={!unavailable && !leaving && stage.active}
+            data-done={stage.done || undefined}
+            title={
+              stage.key === "settling"
+                ? job.settling?.detail
+                : stage.key === "translating"
+                  ? job.translating?.detail
+                  : job.detail
             }
-          }}
-        >
-          <RefreshCw className="size-3" />
-          重试
-        </Button>
-      )}
+          >
+            <div className="processing-step-heading" role="status">
+              {stage.done && <Check className="size-3" />}
+              <span>{label}</span>
+              <span className="processing-count">
+                {unavailable ? "离线" : count}
+              </span>
+            </div>
+            <Progress
+              aria-label={label}
+              value={stage.value ?? (stage.active && !unavailable ? null : 0)}
+              className="processing-progress"
+            />
+            {!leaving && state === "waiting" && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="cover-processing-action"
+                onClick={onSettings}
+              >
+                等待 AI 配置
+              </Button>
+            )}
+            {!leaving && state === "failed" && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="cover-processing-action"
+                disabled={retrying || unavailable}
+                onClick={retry}
+              >
+                <RefreshCw className="size-3" />
+                重试
+                {stage.key === "settling"
+                  ? "沉淀"
+                  : stage.key === "translating"
+                    ? "翻译"
+                    : "学习"}
+              </Button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
