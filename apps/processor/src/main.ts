@@ -4,13 +4,8 @@ import { readFile, writeFile, mkdir, rename, readdir } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { createRequire } from "node:module";
 import { parseArgs } from "node:util";
-import {
-  assignText,
-  decodeRegions,
-  readingRegions,
-  isAsset,
-  type Region,
-} from "./layout";
+import { detectRegions } from "./detect";
+import { assignText, readingRegions, isAsset, type Region } from "./layout";
 import { extractTextSpans } from "./text";
 import { digest, model, resolveModel } from "./model";
 
@@ -103,38 +98,7 @@ try {
       viewport,
       background: "white",
     }).promise;
-    const thumbnail = createCanvas(800, 800),
-      thumbContext = thumbnail.getContext("2d");
-    thumbContext.drawImage(canvas, 0, 0, 800, 800);
-    const rgba = thumbContext.getImageData(0, 0, 800, 800).data;
-    const rgb = new Float32Array(3 * 800 * 800);
-    for (let i = 0; i < 800 * 800; i++) {
-      rgb[i] = rgba[i * 4] / 255;
-      rgb[i + 800 * 800] = rgba[i * 4 + 1] / 255;
-      rgb[i + 2 * 800 * 800] = rgba[i * 4 + 2] / 255;
-    }
-    const result = await session.run(
-      {
-        image: new ort.Tensor("float32", rgb, [1, 3, 800, 800]),
-        im_shape: new ort.Tensor(
-          "float32",
-          new Float32Array([800, 800]),
-          [1, 2],
-        ),
-        scale_factor: new ort.Tensor(
-          "float32",
-          new Float32Array([800 / canvas.height, 800 / canvas.width]),
-          [1, 2],
-        ),
-      },
-      ["fetch_name_0"],
-    );
-    const regions = decodeRegions(
-      result.fetch_name_0.data as Float32Array,
-      canvas.width,
-      canvas.height,
-    );
-    for (const tensor of Object.values(result)) tensor.dispose();
+    const regions = await detectRegions(session, canvas);
     const spans = await extractTextSpans(page, scale);
     if (!spans.length) incompletePages.push(number);
     if (!spans.length)
@@ -174,7 +138,7 @@ try {
     for (const block of pageBlocks) {
       if (block.image)
         sections.push(
-          `<!-- block:${block.id} type:${block.label} -->\n[${block.label}: ${block.id}](${block.image})\n\n<!-- transcript:transcripts/${block.id}.md -->`,
+          `<!-- block:${block.id} type:${block.label} -->\n[${block.label}: ${block.id}](${block.image})`,
         );
       else if (block.text)
         sections.push(

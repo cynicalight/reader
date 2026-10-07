@@ -5,12 +5,10 @@ import { CoverProcessing } from "./ProcessingStatus";
 
 const base: Processing = {
   documentId: "preview",
-  phase: "settling",
+  phase: "translating",
   status: "running",
   pagesDone: 1,
   pagesTotal: 1,
-  assetsDone: 0,
-  assetsTotal: 4,
   translationsDone: 8,
   translationsTotal: 22,
   detail: "",
@@ -18,39 +16,26 @@ const base: Processing = {
 };
 const examples: { label: string; job: Processing }[] = [
   {
-    label: "同时运行",
+    label: "翻译中",
     job: {
       ...base,
-      settling: { status: "running", detail: "正在理解图表" },
       translating: { status: "running", detail: "正在翻译正文" },
     },
   },
   {
-    label: "翻译先完成",
+    label: "翻译等待配置",
     job: {
       ...base,
-      assetsDone: 2,
-      translationsDone: 22,
-      settling: { status: "running", detail: "正在理解图表" },
-      translating: { status: "complete", detail: "翻译完成" },
+      status: "waiting",
+      translating: { status: "waiting", detail: "等待文字能力验证" },
     },
   },
   {
-    label: "沉淀等待配置",
+    label: "翻译失败",
     job: {
       ...base,
-      phase: "translating",
-      settling: { status: "waiting", detail: "等待图片能力验证" },
-      translating: { status: "running", detail: "正在翻译正文" },
-    },
-  },
-  {
-    label: "沉淀失败，翻译继续",
-    job: {
-      ...base,
-      phase: "translating",
-      settling: { status: "failed", detail: "图片调用失败" },
-      translating: { status: "running", detail: "正在翻译正文" },
+      status: "failed",
+      translating: { status: "failed", detail: "文字调用失败" },
     },
   },
 ];
@@ -67,17 +52,12 @@ export default function CoverProcessingPreview() {
       ? null
       : {
           ...base,
-          phase: step >= 12 ? "ready" : "settling",
+          phase: step >= 12 ? "ready" : "translating",
           status: step >= 12 ? "complete" : "running",
           translationsDone: Math.min(22, step * 2),
-          assetsDone: Math.min(4, Math.floor(step / 3)),
           translating: {
             status: step >= 11 ? "complete" : "running",
             detail: "模拟翻译进度",
-          },
-          settling: {
-            status: step >= 12 ? "complete" : "running",
-            detail: "模拟沉淀进度",
           },
         };
   return (

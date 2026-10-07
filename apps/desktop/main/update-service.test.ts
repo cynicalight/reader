@@ -1,0 +1,113 @@
+import type { BrowserWindow } from "electron";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({
+  read: vi.fn(),
+  write: vi.fn(),
+  dialog: vi.fn(),
+  fetch: vi.fn(),
+  download: vi.fn(),
+  open: vi.fn(),
+  app: {
+    isPackaged: true,
+    getPath: () => "/test/user-data",
+    getVersion: () => "0.1.0",
+  },
+}));
+vi.mock("electron", () => ({
+  app: mocks.app,
+  dialog: { showMessageBox: mocks.dialog },
+  net: { fetch: mocks.fetch },
+  shell: { openPath: mocks.open },
+}));
+vi.mock("node:fs/promises", () => ({
+  readFile: mocks.read,
+  writeFile: mocks.write,
+  mkdir: vi.fn(),
+  rename: vi.fn(),
+}));
+vi.mock("./update-download", () => ({ downloadUpdate: mocks.download }));
+import { startUpdateService } from "./update-service";
+import { day } from "./updates";
+let stop: (() => void) | undefined;
+const window = {
+  isDestroyed: () => false,
+  setProgressBar: vi.fn(),
+} as unknown as BrowserWindow;
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(day * 10);
+  vi.clearAllMocks();
+  mocks.app.isPackaged = true;
+  mocks.read.mockRejectedValue(new Error("missing"));
+  mocks.dialog.mockResolvedValue({ response: 1 });
+  mocks.fetch.mockImplementation(async () =>
+    Response.json({
+      tag_name: "v0.2.0",
+      draft: false,
+      prerelease: false,
+      assets: ["Reader-0.2.0-mac-arm64.dmg", "SHA256SUMS.txt"].map((name) => ({
+        name,
+        state: "uploaded",
+        browser_download_url: `https://github.com/cynicalight/reader/releases/download/v0.2.0/${name}`,
+      })),
+    }),
+  );
+  vi.stubGlobal("process", { ...process, platform: "darwin", arch: "arm64" });
+});
+afterEach(() => {
+  stop?.();
+  stop = undefined;
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+it("checks on startup, coalesces manual checks, and does not prompt again within a day", async () => {
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(mocks.dialog).toHaveBeenCalledTimes(1);
+  expect(mocks.download).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(day - 60_000);
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  await Promise.all([service.check(), service.check()]);
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  expect(mocks.dialog).toHaveBeenCalledTimes(2);
+});
+it("respects persisted check times and stops scheduled work", async () => {
+  mocks.read.mockResolvedValue(JSON.stringify({ lastChecked: day * 10 }));
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  service.stop();
+  await vi.advanceTimersByTimeAsync(day * 2);
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
+it("opens only verified downloads and reports download failures even after a background prompt", async () => {
+  mocks.dialog.mockResolvedValue({ response: 0 });
+  mocks.download.mockRejectedValueOnce(new Error("安装包完整性校验失败"));
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.dialog).toHaveBeenLastCalledWith(
+    window,
+    expect.objectContaining({ type: "error", detail: "安装包完整性校验失败" }),
+  );
+  mocks.download.mockResolvedValue("/test/verified.dmg");
+  mocks.open.mockResolvedValue("");
+  await service.check();
+  expect(mocks.open).toHaveBeenCalledWith("/test/verified.dmg");
+  expect(window.setProgressBar).toHaveBeenLastCalledWith(-1);
+});
+it("does not contact GitHub in development mode", async () => {
+  mocks.app.isPackaged = false;
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await vi.advanceTimersByTimeAsync(15_000);
+  await service.check();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  expect(mocks.dialog).toHaveBeenCalledWith(
+    window,
+    expect.objectContaining({ message: "开发模式不检查更新" }),
+  );
+});

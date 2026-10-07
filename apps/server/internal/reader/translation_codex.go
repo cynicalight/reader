@@ -28,16 +28,10 @@ func (a *translationCodexAdapter) close() {
 }
 
 func (s *Server) translationService(config AIConfig) (*GenerationService, *translationCodexAdapter) {
-	// Keep the user's selected chat model untouched. Track failures against the
-	// translation model so they cannot invalidate another model's saved probe.
+	// Use task-specific settings for other providers. Codex keeps the fixed
+	// translation model without modifying saved chat or translation settings.
 	ready := capable(config, "codex", false)
-	models := make(map[string]string, len(config.Models)+1)
-	for provider, model := range config.Models {
-		models[provider] = model
-	}
-	models["codex"] = translationCodexModel
-	config.Models = models
-	service := s.generationService(config)
+	service := s.taskGenerationService(config, taskTranslation)
 	adapter := &translationCodexAdapter{root: s.Store.Root}
 	connection := service.connections["codex"]
 	connection.Adapter = adapter

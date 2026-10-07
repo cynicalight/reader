@@ -12,6 +12,25 @@ import (
 	"testing"
 )
 
+func TestTranslationServiceKeepsOtherProviderTaskSettings(t *testing.T) {
+	s, _, _ := translationFixture(t)
+	config := AIConfig{
+		Primary:            "claude",
+		Models:             map[string]string{"claude": "chat-model", "codex": "chat-codex"},
+		TranslationModels:  map[string]string{"claude": "translation-model", "codex": "selected-codex"},
+		TranslationEfforts: map[string]map[string]string{"claude": {"translation-model": "low"}},
+	}
+	service, adapter := s.translationService(config)
+	defer adapter.close()
+	claude, ok := service.connections["claude"].Adapter.(configuredCLIAdapter)
+	if !ok || service.primary != "claude" || claude.model != "translation-model" || claude.level != "low" || claude.task != taskTranslation {
+		t.Fatalf("translation task settings not preserved: %#v", service)
+	}
+	if service.connections["codex"].Adapter != adapter || config.Models["codex"] != "chat-codex" || config.TranslationModels["codex"] != "selected-codex" {
+		t.Fatal("Codex adapter or saved model settings changed")
+	}
+}
+
 func runTranslationSessionProcess() {
 	scan := bufio.NewScanner(os.Stdin)
 	scan.Buffer(make([]byte, 4096), maxProviderFrame)

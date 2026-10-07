@@ -21,6 +21,7 @@ type AgentModel struct {
 	Description      string   `json:"description"`
 	Default          bool     `json:"isDefault"`
 	Aliases          []string `json:"aliases,omitempty"`
+	RecommendedFor   []string `json:"recommendedFor,omitempty"`
 	SupportedEfforts []string `json:"-"`
 	DefaultEffort    string   `json:"-"`
 }
@@ -38,7 +39,7 @@ func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
 		fail(w, 502, "无法获取模型列表，请确认 Agent 已登录后重试")
 		return
 	}
-	respond(w, 200, models)
+	respond(w, 200, taskRecommendations(provider, models))
 }
 
 // Model discovery only initializes the installed CLI's protocol. It never sends

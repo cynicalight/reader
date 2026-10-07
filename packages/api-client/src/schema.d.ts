@@ -1529,17 +1529,14 @@ export interface components {
       warning?: string;
     };
     Processing: {
-      settling?: components["schemas"]["ProcessingStage"];
       translating?: components["schemas"]["ProcessingStage"];
       documentId: string;
       /** @enum {string} */
-      phase: "learning" | "settling" | "translating" | "ready";
+      phase: "learning" | "translating" | "ready";
       /** @enum {string} */
       status: "queued" | "running" | "waiting" | "failed" | "complete";
       pagesDone: number;
       pagesTotal: number;
-      assetsDone: number;
-      assetsTotal: number;
       translationsDone: number;
       translationsTotal: number;
       detail: string;
@@ -1586,6 +1583,8 @@ export interface components {
       description: string;
       isDefault: boolean;
       aliases?: string[];
+      /** @description Tasks that use this model when no model is chosen. */
+      recommendedFor?: ("chat" | "translation")[];
     };
     /** @enum {string} */
     ReasoningEffort: "low" | "medium" | "high" | "max";
@@ -1596,6 +1595,16 @@ export interface components {
       };
       /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
       efforts?: {
+        [key: string]: {
+          [key: string]: components["schemas"]["ReasoningEffort"];
+        };
+      };
+      /** @description Translation model by provider. Empty uses the provider's fast-tier recommendation. */
+      translationModels?: {
+        [key: string]: string;
+      };
+      /** @description Translation effort by provider and model ID. Defaults to medium. */
+      translationEfforts?: {
         [key: string]: {
           [key: string]: components["schemas"]["ReasoningEffort"];
         };

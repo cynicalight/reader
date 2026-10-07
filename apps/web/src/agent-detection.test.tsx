@@ -8,7 +8,12 @@ import { Settings } from "./Settings";
 import { useReaderStore } from "./store";
 
 vi.mock("@reader/api", () => ({
-  api: { providers: vi.fn(), aiConfig: vi.fn(), testAI: vi.fn() },
+  api: {
+    providers: vi.fn(),
+    aiConfig: vi.fn(),
+    testAI: vi.fn(),
+    agentModels: vi.fn(async () => []),
+  },
 }));
 vi.mock("@reader/ui/components/dialog", () => {
   const Content = ({ children }: { children: ReactNode }) => (

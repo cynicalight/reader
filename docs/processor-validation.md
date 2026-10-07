@@ -6,11 +6,15 @@ The processor is now connected to the desktop two-stage import UI, with separate
 
 The planned default installer includes PDF.js, the native Canvas runtime, ONNX Runtime and the processor code. The PP-DocLayoutV3 weights are downloaded automatically on first use and cached once per local library. Users do not install Python or PaddlePaddle. An installer containing the weights could support offline first use; that packaging variant is not implemented.
 
-The desktop import flow now starts the worker automatically for PDFs. The UI exposes model download status, per-page learning progress, per-asset consolidation progress, connection waits and retries. Desktop installer distribution is not implemented yet.
+The desktop import flow now starts the worker automatically for PDFs. The UI exposes model download status, per-page learning progress, translation progress, connection waits and retries. Per-asset image consolidation has since been removed; the consolidation results below are a historical record. Desktop installer distribution is not implemented yet.
 
-Weights: `PaddlePaddle/PP-DocLayoutV3_onnx`, revision `46bbdf188bb0a772c08aed74882ce7e51a8f1ea6`, 130,502,049 bytes (about 130 MB / 124.5 MiB). SHA256: `45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba`. Weights and generated user documents are not committed. The download is checked before inference; partial downloads never become the cached model.
+Weights: `bu44er/PP-DocLayoutV3-FP16-ONNX`, revision `58dfa00ba1135e027817cbd5802f1f0df62aa5c0`, file `PP-DocLayoutV3-fp16.onnx`, 67,372,587 bytes (about 67 MB / 64.3 MiB). SHA256: `8bb693ed3b5dcc1cf926b15d89dfe6abf62bc11cdd0afd33c8ffe039db6f8209`. It is a byte-identical mirror of [`stefanj0/PP-DocLayoutV3-FP16-ONNX`](https://huggingface.co/stefanj0/PP-DocLayoutV3-FP16-ONNX) at `ca5155572513b7832d297255a1f5cab0ff4b0202`, an FP16 export of [`PaddlePaddle/PP-DocLayoutV3_safetensors`](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors) without the mask head; box decoding and reading-order postprocessing stay in FP32. The mirror keeps the file available if the source repository disappears. Weights and generated user documents are not committed. The download is checked before inference; partial downloads never become the cached model. After the current model is verified, the superseded FP32 cache file is deleted.
 
-Sources: [official model card](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx), [pinned configuration](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx/blob/46bbdf188bb0a772c08aed74882ce7e51a8f1ea6/inference.yml), [PaddleX postprocessing](https://github.com/PaddlePaddle/PaddleX/blob/develop/paddlex/inference/models/object_detection/processors.py). Model license: Apache-2.0; retain the upstream license and notices when distributing weights.
+I/O differs from the official paddle2onnx export: the output is `det` (`[300,7]`), boxes are in the 800×800 input space, and `scale_factor` is passed as `[1,1]`. `detectRegions` owns this contract. Set `READER_TEST_LAYOUT_MODEL` to a downloaded copy to run the real-model coordinate test.
+
+The FP16 model replaced the official FP32 [`PaddlePaddle/PP-DocLayoutV3_onnx`](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx) (revision `46bbdf1`, 130,502,049 bytes) on 2026-10-08. On 72 pages from four English papers with ONNX Runtime CPU: 1434 regions from each model, 1431 matched at IoU ≥ 0.5 with mean IoU 0.991, no label changes, 99.7% pairwise reading-order agreement, unchanged per-page latency (about 1.1 s), and peak inference RSS of 0.77 GB instead of 1.24 GB. The remaining differences were regions at the 0.5 confidence threshold. On the Oze paper the full worker produced the same 17 image blocks on the same pages and the same block count as the FP32 run. Scanned, CJK and vertical-text documents were not compared.
+
+Sources: [mirror model card](https://huggingface.co/bu44er/PP-DocLayoutV3-FP16-ONNX), [official FP32 configuration](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx/blob/46bbdf188bb0a772c08aed74882ce7e51a8f1ea6/inference.yml), [PaddleX postprocessing](https://github.com/PaddlePaddle/PaddleX/blob/develop/paddlex/inference/models/object_detection/processors.py). Model license: Apache-2.0; the mirror carries the license text and upstream attribution.
 
 ## Reproduce
 
@@ -23,7 +27,7 @@ node apps/processor/dist/main.mjs \
   --debug
 ```
 
-Use a fresh output directory for each run. `--model FILE` accepts an already-downloaded copy, still checked against the pinned hash. Without `--debug`, full-page and diagnostic images are not saved. `manifest.json` is written last and records source hash, page count, normalized coordinates, model revision, timing and warnings. `paper.md` references crops in `assets/`; transcript references remain placeholders until a later analysis job creates them. The sample PDF is supplied locally by the user and is not distributed in this repository.
+Use a fresh output directory for each run. `--model FILE` accepts an already-downloaded copy, still checked against the pinned hash. Without `--debug`, full-page and diagnostic images are not saved. `manifest.json` is written last and records source hash, page count, normalized coordinates, model revision, timing and warnings. `paper.md` references crops in `assets/`. The sample PDF is supplied locally by the user and is not distributed in this repository.
 
 Opt-in real Codex test (uses the existing CLI login and subscription):
 

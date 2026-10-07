@@ -15,6 +15,8 @@ import { homedir } from "node:os";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 import { writeClipboardText } from "./clipboard";
 import { childProxyEnvironment } from "./proxy";
+import { startUpdateService } from "./update-service";
+let updateService: Awaited<ReturnType<typeof startUpdateService>> | undefined;
 let child: ChildProcess | undefined;
 let serverURL = "";
 let serverToken = "";
@@ -275,6 +277,15 @@ app
     });
     await window.loadURL(`${url}/#token=${serverToken}`);
     if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
+    updateService = await startUpdateService(window);
+    ipcMain.handle("reader:check-updates", (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      return updateService?.check();
+    });
   })
   .catch((error) => {
     dialog.showErrorBox("无法打开 Reader", String(error));
@@ -287,6 +298,7 @@ app.on("before-quit", (event) => {
     return;
   }
   quitting = true;
+  updateService?.stop();
   child?.kill();
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const)
