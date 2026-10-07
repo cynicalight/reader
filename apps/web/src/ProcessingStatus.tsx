@@ -174,6 +174,7 @@ export function CoverProcessing({
     <div
       className="cover-processing"
       key={phase}
+      data-compact={phase !== "learning"}
       data-leaving={leaving}
       title={
         unavailable
@@ -217,18 +218,54 @@ export function CoverProcessing({
             }
           >
             <div className="processing-step-heading" role="status">
-              {stage.done && <Check className="size-3" />}
-              <span>{label}</span>
+              {stage.done && (
+                <Check className="size-3 processing-complete-icon" />
+              )}
+              {phase !== "learning" && stage.active && !stage.done && (
+                <span
+                  className="processing-activity-dot"
+                  data-active={!unavailable && !leaving}
+                  aria-hidden="true"
+                />
+              )}
+              {phase !== "learning" &&
+              !leaving &&
+              (state === "waiting" || state === "failed") ? (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="cover-processing-action"
+                  aria-label={
+                    state === "waiting"
+                      ? "等待 AI 配置"
+                      : `重试${stage.key === "settling" ? "沉淀" : "翻译"}`
+                  }
+                  disabled={state === "failed" && (retrying || unavailable)}
+                  onClick={state === "waiting" ? onSettings : retry}
+                >
+                  {state === "failed" && <RefreshCw className="size-3" />}
+                  <span className="processing-label">{label}</span>
+                </Button>
+              ) : (
+                <span className="processing-label">{label}</span>
+              )}
               <span className="processing-count">
-                {unavailable ? "离线" : count}
+                <span
+                  className="processing-count-value"
+                  key={`${unavailable}:${count}`}
+                >
+                  {unavailable ? "离线" : count}
+                </span>
               </span>
             </div>
-            <Progress
-              aria-label={label}
-              value={stage.value ?? (stage.active && !unavailable ? null : 0)}
-              className="processing-progress"
-            />
-            {!leaving && state === "waiting" && (
+            {phase === "learning" && (
+              <Progress
+                aria-label={label}
+                value={stage.value ?? (stage.active && !unavailable ? null : 0)}
+                className="processing-progress"
+              />
+            )}
+            {phase === "learning" && !leaving && state === "waiting" && (
               <Button
                 size="xs"
                 variant="ghost"
@@ -238,7 +275,7 @@ export function CoverProcessing({
                 等待 AI 配置
               </Button>
             )}
-            {!leaving && state === "failed" && (
+            {phase === "learning" && !leaving && state === "failed" && (
               <Button
                 size="xs"
                 variant="ghost"

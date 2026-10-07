@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Processing } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { CoverProcessing } from "./ProcessingStatus";
@@ -56,6 +56,30 @@ const examples: { label: string; job: Processing }[] = [
 ];
 export default function CoverProcessingPreview() {
   const [dark, setDark] = useState(true);
+  const [step, setStep] = useState<number | null>(null);
+  useEffect(() => {
+    if (step === null || step >= 14) return;
+    const timer = setTimeout(() => setStep(step + 1), 1200);
+    return () => clearTimeout(timer);
+  }, [step]);
+  const demo: Processing | null =
+    step === null
+      ? null
+      : {
+          ...base,
+          phase: step >= 12 ? "ready" : "settling",
+          status: step >= 12 ? "complete" : "running",
+          translationsDone: Math.min(22, step * 2),
+          assetsDone: Math.min(4, Math.floor(step / 3)),
+          translating: {
+            status: step >= 11 ? "complete" : "running",
+            detail: "模拟翻译进度",
+          },
+          settling: {
+            status: step >= 12 ? "complete" : "running",
+            detail: "模拟沉淀进度",
+          },
+        };
   return (
     <main
       className={dark ? "dark" : ""}
@@ -69,6 +93,9 @@ export default function CoverProcessingPreview() {
       <Button variant="outline" size="sm" onClick={() => setDark(!dark)}>
         {dark ? "浅色" : "深色"}
       </Button>
+      <Button variant="ghost" size="sm" onClick={() => setStep(0)}>
+        播放模拟进度
+      </Button>
       <div
         style={{
           display: "grid",
@@ -77,7 +104,7 @@ export default function CoverProcessingPreview() {
           marginTop: 24,
         }}
       >
-        {examples.map(({ label, job }) => (
+        {examples.map(({ label, job }, index) => (
           <section key={label}>
             <p style={{ fontSize: 13, marginBottom: 12 }}>{label}</p>
             <div className="book-cover-frame">
@@ -90,7 +117,10 @@ export default function CoverProcessingPreview() {
                 </div>
                 <div className="cover-decoration" />
               </div>
-              <CoverProcessing job={job} onSettings={() => {}} />
+              <CoverProcessing
+                job={index === 0 && demo ? demo : job}
+                onSettings={() => {}}
+              />
             </div>
           </section>
         ))}

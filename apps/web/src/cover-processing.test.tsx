@@ -49,7 +49,10 @@ it("shows learning first, then both parallel jobs, and hides the panel after com
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toContain("沉淀中1/4");
   expect(host.textContent).toContain("翻译中3/10");
-  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(2);
+  expect(
+    host.querySelectorAll('.processing-activity-dot[data-active="true"]'),
+  ).toHaveLength(2);
+  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
   render({
     ...job,
     phase: "translating",
@@ -73,6 +76,8 @@ it("shows learning first, then both parallel jobs, and hides the panel after com
     translating: { status: "complete", detail: "" },
   });
   expect(host.textContent).toContain("翻译完成10/10");
+  expect(host.querySelector(".processing-activity-dot")).toBeNull();
+  expect(host.querySelectorAll(".processing-complete-icon")).toHaveLength(2);
   act(() => vi.advanceTimersByTime(750));
   expect(host.textContent).toBe("");
 });
@@ -101,18 +106,25 @@ it("shows persisted translation progress and detail when a parsing warning exist
 });
 it("keeps a configuration action without active glow while waiting", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const onSettings = vi.fn();
   const host = document.createElement("div");
   root = createRoot(host);
   act(() =>
     root!.render(
       <CoverProcessing
         job={{ ...job, phase: "settling", status: "waiting" }}
-        onSettings={() => {}}
+        onSettings={onSettings}
       />,
     ),
   );
-  expect(host.textContent).toContain("等待 AI 配置");
+  expect(host.querySelector('[aria-label="等待 AI 配置"]')).not.toBeNull();
   expect(host.querySelector('[data-active="true"]')).toBeNull();
+  act(() =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="等待 AI 配置"]')!
+      .click(),
+  );
+  expect(onSettings).toHaveBeenCalledOnce();
 });
 
 it("uses independent states when translation is active while consolidation waits", async () => {
@@ -163,7 +175,7 @@ it("exposes a failed lane while the other keeps running", () => {
   );
   expect(host.textContent).toContain("沉淀失败0/4");
   expect(host.textContent).toContain("翻译中4/10");
-  expect(host.textContent).toContain("重试沉淀");
+  expect(host.querySelector('[aria-label="重试沉淀"]')).not.toBeNull();
   expect(
     host.querySelector('[data-stage="translating"][data-active="true"]'),
   ).not.toBeNull();
@@ -210,6 +222,6 @@ it("omits a completed lane that has no work", () => {
       />,
     ),
   );
-  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+  expect(host.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
   expect(host.textContent).not.toContain("0/0");
 });
