@@ -232,12 +232,8 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 		if err != nil {
 			return err
 		}
-		p.TranslationsTotal = len(items)
-		p.TranslationsDone = 0
-		for _, t := range items {
-			if t.Status == "complete" {
-				p.TranslationsDone++
-			}
+		if err = s.refreshTranslationCounts(p, m); err != nil {
+			return err
 		}
 		if len(items) > 0 {
 			p.Phase = "translating"
@@ -278,7 +274,10 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 		progress := func() {
 			progressMu.Lock()
 			defer progressMu.Unlock()
-			p.TranslationsDone++
+			if err := s.refreshTranslationCounts(p, m); err != nil {
+				log.Printf("cannot read translation progress: %v", err)
+				return
+			}
 			p.Detail = fmt.Sprintf("正在翻译正文 · %d / %d 段", p.TranslationsDone, p.TranslationsTotal)
 			if err := s.Store.saveProcessing(*p); err != nil {
 				log.Printf("cannot save translation progress: %v", err)
@@ -352,4 +351,19 @@ func (s *Server) textTranslations(documentID string, m layoutManifest) ([]Transl
 		}
 	}
 	return out, err
+}
+
+func (s *Server) refreshTranslationCounts(p *Processing, m layoutManifest) error {
+	items, err := s.translations(p.DocumentID, m)
+	if err != nil {
+		return err
+	}
+	p.TranslationsTotal = len(items)
+	p.TranslationsDone = 0
+	for _, item := range items {
+		if item.Status == "complete" {
+			p.TranslationsDone++
+		}
+	}
+	return nil
 }

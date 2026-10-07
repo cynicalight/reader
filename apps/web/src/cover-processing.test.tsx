@@ -94,3 +94,31 @@ it("keeps a configuration action without active glow while waiting", () => {
   expect(host.textContent).toContain("等待 AI 配置");
   expect(host.querySelector('[data-active="true"]')).toBeNull();
 });
+
+it("uses independent states when translation is active while consolidation waits", async () => {
+  const { processingStages } = await import("./ProcessingStatus");
+  const stages = processingStages({
+    ...job,
+    phase: "translating",
+    settling: { status: "waiting", detail: "等待图片能力" },
+    translating: { status: "running", detail: "正在翻译" },
+    translationsDone: 4,
+  });
+  expect(stages[1].done).toBe(false);
+  expect(stages[1].active).toBe(false);
+  expect(stages[2].active).toBe(true);
+  expect(stages[2].count).toBe("4 / 10 段");
+});
+it("keeps the cover on unfinished consolidation when translation has completed", async () => {
+  const { processingStages } = await import("./ProcessingStatus");
+  const stages = processingStages({
+    ...job,
+    phase: "settling",
+    settling: { status: "running", detail: "正在沉淀" },
+    translating: { status: "complete", detail: "翻译完成" },
+    translationsDone: 10,
+  });
+  expect(stages[1].active).toBe(true);
+  expect(stages[1].done).toBe(false);
+  expect(stages[2].done).toBe(true);
+});

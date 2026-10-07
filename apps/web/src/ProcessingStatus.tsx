@@ -35,7 +35,12 @@ export function useProcessing() {
 }
 export function processingStages(job: Processing) {
   const learned = job.phase !== "learning";
-  const settled = job.phase === "translating" || job.phase === "ready";
+  const settled = job.settling
+    ? job.settling.status === "complete"
+    : job.phase === "translating" || job.phase === "ready";
+  const translated = job.translating
+    ? job.translating.status === "complete"
+    : job.phase === "ready";
   return [
     {
       key: "learning",
@@ -61,7 +66,9 @@ export function processingStages(job: Processing) {
       label: settled ? "沉淀完成" : "沉淀中",
       icon: Sparkles,
       done: settled,
-      active: job.phase === "settling" && job.status === "running",
+      active: job.settling
+        ? job.settling.status === "running"
+        : job.phase === "settling" && job.status === "running",
       value: settled
         ? 100
         : job.assetsTotal
@@ -75,20 +82,18 @@ export function processingStages(job: Processing) {
     },
     {
       key: "translating",
-      label: job.phase === "ready" ? "翻译完成" : "翻译中",
+      label: translated ? "翻译完成" : "翻译中",
       icon: Languages,
-      done: job.phase === "ready",
-      active: job.phase === "translating" && job.status === "running",
-      value:
-        job.phase === "ready"
-          ? 100
-          : job.translationsTotal
-            ? Math.min(
-                100,
-                (job.translationsDone / job.translationsTotal) * 100,
-              )
-            : 0,
-      count: settled
+      done: translated,
+      active: job.translating
+        ? job.translating.status === "running"
+        : job.phase === "translating" && job.status === "running",
+      value: translated
+        ? 100
+        : job.translationsTotal
+          ? Math.min(100, (job.translationsDone / job.translationsTotal) * 100)
+          : 0,
+      count: learned
         ? `${job.translationsDone} / ${job.translationsTotal} 段`
         : "等待解析完成",
     },
@@ -128,7 +133,14 @@ export function CoverProcessing({
       title={
         unavailable
           ? "暂时无法同步进度"
-          : [job.detail, job.warning].filter(Boolean).join("\n")
+          : [
+              job.detail,
+              job.warning,
+              job.settling?.warning,
+              job.translating?.warning,
+            ]
+              .filter(Boolean)
+              .join("\n")
       }
     >
       <div
@@ -136,10 +148,10 @@ export function CoverProcessing({
         data-active={!unavailable && !leaving && stage.active}
       >
         <div className="processing-step-heading" role="status">
-          {leaving ? <Check className="size-3" /> : null}
+          {leaving && stage.done ? <Check className="size-3" /> : null}
           <span>{label}</span>
           <span className="processing-count">
-            {leaving
+            {leaving && stage.done
               ? "100%"
               : unavailable
                 ? "离线"
@@ -151,7 +163,7 @@ export function CoverProcessing({
         <Progress
           aria-label={label}
           value={
-            leaving
+            leaving && stage.done
               ? 100
               : (stage.value ?? (stage.active && !unavailable ? null : 0))
           }

@@ -135,6 +135,7 @@ func (s *Server) queueUntranslatedPDFs() {
 				p.Phase = "translating"
 				p.Status = "queued"
 				p.Detail = "等待翻译正文"
+				p.queueTranslation = true
 				_ = s.Store.saveProcessing(p)
 				break
 			}
@@ -173,7 +174,7 @@ func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, items)
 }
 
-// Requests only enqueue work. The settling worker owns provider calls and persists
+// Requests only enqueue work. The translation lane owns provider calls and persists
 // completed responses independently, so closing a reader never loses progress.
 func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
@@ -224,12 +225,13 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法读取处理状态")
 		return
 	}
-	if p.Status != "running" {
+	if p.Status != "running" || (p.Translating != nil && p.Translating.Status != "running") {
 		if p.Phase == "ready" {
 			p.Phase = "translating"
 		}
 		p.Status = "queued"
 		p.Detail = "等待继续处理"
+		p.queueTranslation = true
 		if err = s.Store.saveProcessing(p); err != nil {
 			fail(w, 500, "无法安排翻译任务")
 			return

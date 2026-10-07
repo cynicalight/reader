@@ -202,7 +202,14 @@ export interface Message {
   createdAt: string;
 }
 
+export interface ProcessingStage {
+  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  detail: string;
+  warning?: string;
+}
 export interface Processing {
+  settling?: ProcessingStage;
+  translating?: ProcessingStage;
   usageTracked?: boolean;
   startedAt?: string;
   completedAt?: string;

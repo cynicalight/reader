@@ -1522,7 +1522,15 @@ export interface components {
     Error: {
       error: string;
     };
+    ProcessingStage: {
+      /** @enum {unknown} */
+      status: "queued" | "running" | "waiting" | "failed" | "complete";
+      detail: string;
+      warning?: string;
+    };
     Processing: {
+      settling?: components["schemas"]["ProcessingStage"];
+      translating?: components["schemas"]["ProcessingStage"];
       documentId: string;
       /** @enum {string} */
       phase: "learning" | "settling" | "translating" | "ready";

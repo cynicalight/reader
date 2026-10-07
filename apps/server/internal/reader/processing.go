@@ -18,7 +18,19 @@ import (
 	"time"
 )
 
+type ProcessingStage struct {
+	Status  string `json:"status"`
+	Detail  string `json:"detail"`
+	Warning string `json:"warning,omitempty"`
+}
 type Processing struct {
+	Settling          *ProcessingStage `json:"settling,omitempty"`
+	Translating       *ProcessingStage `json:"translating,omitempty"`
+	lane              string
+	resetStages       bool
+	wakeStages        bool
+	recoverStages     bool
+	queueTranslation  bool
 	UsageTracked      bool   `json:"usageTracked,omitempty"`
 	StartedAt         string `json:"startedAt,omitempty"`
 	CompletedAt       string `json:"completedAt,omitempty"`
@@ -69,6 +81,15 @@ func (s *Store) processing(id string) (Processing, error) {
 	return p, e
 }
 func (s *Store) saveProcessing(p Processing) error {
+	s.processingWriteMu.Lock()
+	defer s.processingWriteMu.Unlock()
+	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation {
+		current, err := s.processing(p.DocumentID)
+		if err != nil {
+			return err
+		}
+		p = mergeProcessing(current, p)
+	}
 	p.UpdatedAt = now()
 	b, e := json.Marshal(p)
 	if e != nil {
@@ -129,12 +150,13 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法创建解析任务")
 		return
 	}
-	if p.Status == "running" || p.Status == "complete" {
+	if p.Status == "complete" || (p.Status == "running" && !hasFailedStage(p)) {
 		respond(w, 200, p)
 		return
 	}
 	p.Status = "queued"
 	p.Detail = "等待继续处理"
+	p.resetStages = true
 	if e = s.retryFailedTranslations(d.ID); e != nil {
 		fail(w, 500, "无法恢复翻译任务")
 		return
@@ -143,7 +165,12 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法继续处理")
 		return
 	}
-	respond(w, 200, p)
+	latest, err := s.Store.processing(d.ID)
+	if err != nil {
+		fail(w, 500, "无法读取处理状态")
+		return
+	}
+	respond(w, 200, latest)
 }
 func (s *Server) documentBlocks(w http.ResponseWriter, r *http.Request) {
 	d, e := s.Store.Document(r.PathValue("id"))
@@ -189,7 +216,8 @@ func (s *Server) readLayout(id string) (layoutManifest, error) {
 	return m, nil
 }
 
-// Two serial queues keep new imports responsive while image interpretation runs.
+// A layout queue keeps imports responsive; the post-layout queue starts both
+// durable consolidation and translation lanes together.
 // Stop waits for children before the library database is closed.
 func (s *Server) StartProcessing(parent context.Context) func() {
 	ctx, cancel := context.WithCancel(parent)
@@ -198,7 +226,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	}
 	s.queueUntranslatedPDFs()
 	var workers sync.WaitGroup
-	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running'")
+	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running' OR json_extract(body,'$.settling.status')='running' OR json_extract(body,'$.translating.status')='running'")
 	if e == nil {
 		var pending []Processing
 		for rows.Next() {
@@ -212,6 +240,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 		for _, p := range pending {
 			p.Status = "queued"
 			p.Detail = "继续上次的处理"
+			p.recoverStages = true
 			_ = s.Store.saveProcessing(p)
 		}
 	}
@@ -261,9 +290,9 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 						}
 					}
 				} else {
-					e = s.settlePDF(work, &p)
+					e = s.processPDF(work, &p)
 				}
-				if e != nil {
+				if e != nil && phase == "learning" {
 					if ctx.Err() != nil {
 						p.Status = "queued"
 						p.Detail = "已暂停，将在下次启动时继续"
@@ -285,7 +314,7 @@ func (s *Server) wakeProcessing() {
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
 	// Reset only jobs blocked on a missing connection, never interrupted/failed jobs.
-	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='waiting'")
+	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='waiting' OR json_extract(body,'$.settling.status')='waiting' OR json_extract(body,'$.translating.status')='waiting'")
 	if e != nil {
 		return
 	}
@@ -301,6 +330,7 @@ func (s *Server) wakeProcessing() {
 	for _, p := range pending {
 		p.Status = "queued"
 		p.Detail = "等待继续处理"
+		p.wakeStages = true
 		_ = s.Store.saveProcessing(p)
 	}
 }
@@ -424,9 +454,20 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			p.Detail = "部分就绪：有页面缺少可提取文字，尚未接入 OCR"
 		}
 	}
+	p.Settling = &ProcessingStage{Status: "queued", Detail: "等待解析图表"}
+	p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文与公式"}
+	if p.AssetsTotal == 0 {
+		p.Settling.Status = "complete"
+	}
+	if p.TranslationsTotal == 0 {
+		p.Translating.Status = "complete"
+	}
+	if p.Status != "complete" {
+		aggregateProcessing(p)
+	}
 	return s.Store.saveProcessing(*p)
 }
-func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
+func (s *Server) settleAssets(ctx context.Context, p *Processing) error {
 	m, e := s.readLayout(p.DocumentID)
 	if e != nil {
 		return e
@@ -501,17 +542,8 @@ func (s *Server) settlePDF(ctx context.Context, p *Processing) error {
 	if e = finishStage(); e != nil {
 		return e
 	}
-	// Formula conversion runs alongside body translation, after non-formula consolidation.
-	if e = s.translatePDFContent(ctx, p, m); e != nil || p.Status == "waiting" {
-		return e
-	}
-	p.Phase = "ready"
 	p.Status = "complete"
-	p.CompletedAt = now()
-	p.Detail = "正文与图片解析已就绪"
-	if p.Incomplete {
-		p.Detail = "图片解析已完成；正文部分就绪，有页面需要 OCR"
-	}
+	p.Detail = "图表沉淀已完成"
 	return s.Store.saveProcessing(*p)
 }
 
