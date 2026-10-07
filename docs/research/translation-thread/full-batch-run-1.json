@@ -1,0 +1,146 @@
+[
+  {
+    "mode": "independent-parallel",
+    "batch": 1,
+    "processMs": 3,
+    "initializeMs": 51,
+    "threadMs": 130,
+    "firstDeltaMs": 10752,
+    "firstParagraphMs": 18623,
+    "totalMs": 102974,
+    "characters": 10296,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 15560,
+          "outputTokens": 5158,
+          "totalTokens": 20718,
+          "cachedInputTokens": 0,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 34
+        }
+      }
+    ]
+  },
+  {
+    "mode": "independent-parallel",
+    "batch": 2,
+    "processMs": 2,
+    "initializeMs": 87,
+    "threadMs": 127,
+    "firstDeltaMs": 9682,
+    "firstParagraphMs": 15873,
+    "totalMs": 105166,
+    "characters": 10641,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 15549,
+          "outputTokens": 5342,
+          "totalTokens": 20891,
+          "cachedInputTokens": 0,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 34
+        }
+      }
+    ]
+  },
+  {
+    "mode": "independent-parallel",
+    "batch": 3,
+    "processMs": 2,
+    "initializeMs": 51,
+    "threadMs": 110,
+    "firstDeltaMs": 9682,
+    "firstParagraphMs": 16140,
+    "totalMs": 108395,
+    "characters": 10836,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 15610,
+          "outputTokens": 5516,
+          "totalTokens": 21126,
+          "cachedInputTokens": 0,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 27
+        }
+      }
+    ]
+  },
+  {
+    "mode": "shared-sequential",
+    "batch": 1,
+    "processMs": 4,
+    "initializeMs": 75,
+    "threadMs": 101,
+    "firstDeltaMs": 8627,
+    "firstParagraphMs": 10038,
+    "totalMs": 27309,
+    "characters": 10296,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 15558,
+          "outputTokens": 5105,
+          "totalTokens": 20663,
+          "cachedInputTokens": 0,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 26
+        }
+      }
+    ]
+  },
+  {
+    "mode": "shared-sequential",
+    "batch": 2,
+    "processMs": 0,
+    "initializeMs": 0,
+    "threadMs": 0,
+    "firstDeltaMs": 1468,
+    "firstParagraphMs": 2992,
+    "totalMs": 21067,
+    "characters": 10641,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 25192,
+          "outputTokens": 5347,
+          "totalTokens": 30539,
+          "cachedInputTokens": 15104,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 39
+        }
+      }
+    ]
+  },
+  {
+    "mode": "shared-sequential",
+    "batch": 3,
+    "processMs": 0,
+    "initializeMs": 0,
+    "threadMs": 0,
+    "firstDeltaMs": 1245,
+    "firstParagraphMs": 2777,
+    "totalMs": 21333,
+    "characters": 10836,
+    "models": [
+      {
+        "model": "gpt-5.6-luna",
+        "tokens": {
+          "inputTokens": 35129,
+          "outputTokens": 5490,
+          "totalTokens": 40619,
+          "cachedInputTokens": 24320,
+          "cacheWriteInputTokens": 0,
+          "reasoningOutputTokens": 16
+        }
+      }
+    ]
+  }
+]

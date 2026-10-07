@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -35,11 +36,19 @@ func TestLiveTranslationThreadSpeed(t *testing.T) {
 		"The translation system divides a document into batches while keeping each paragraph intact. Every batch contains the paragraphs to translate and a small amount of surrounding context. Titles, author information, and neighboring paragraphs help the model interpret terminology, but they should not produce extra translation records. The output contains the original sentences and their corresponding Chinese translations. The application checks paragraph identifiers, source versions, and sentence coverage before accepting a record. Numbers, mathematical expressions, and technical terms should retain their meaning. A retry should request only the paragraphs that still need a valid translation.",
 		"A persistent conversation can accept several translation requests in sequence. The first request initializes a connection and starts a conversation, while later requests add new turns to the same conversation. Each new turn still requires the model to process new input and generate the requested output. Earlier context may help maintain consistent terminology, but the conversation becomes longer as more batches are translated. Concurrent requests can improve document throughput when the service has sufficient capacity. Sequential requests may simplify scheduling and reduce repeated setup work. Actual performance must be measured with the same model, reasoning settings, source text, and output format.",
 	}
+	paragraphCount := 2
+	if value := os.Getenv("READER_TRANSLATION_SPEED_PARAGRAPHS"); value != "" {
+		var err error
+		paragraphCount, err = strconv.Atoi(value)
+		if err != nil || paragraphCount < 1 || paragraphCount > 30 {
+			t.Fatal("READER_TRANSLATION_SPEED_PARAGRAPHS must be between 1 and 30")
+		}
+	}
 	batches := make([]translationBatch, len(paragraphs))
 	m := layoutManifest{}
 	for i, text := range paragraphs {
-		// Two distinct paragraphs per batch exercise incremental JSONL delivery.
-		for j := 0; j < 2; j++ {
+		// Numbered paragraphs exercise incremental JSONL delivery and full-batch sizes.
+		for j := 0; j < paragraphCount; j++ {
 			source := fmt.Sprintf("Section %d.%d. %s", i+1, j+1, text)
 			b := PDFBlock{ID: fmt.Sprintf("p%d-b%d", i+1, j+1), Page: i + 1, Label: "text", Text: source}
 			m.Blocks = append(m.Blocks, b)
@@ -50,7 +59,7 @@ func TestLiveTranslationThreadSpeed(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "ai-work"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
 	defer cancel()
 	var all []timing
 	modes := []string{"independent-parallel", "shared-sequential"}
@@ -116,6 +125,8 @@ func TestLiveTranslationThreadSpeed(t *testing.T) {
 				row.Error = err.Error()
 			}
 			results[i] = row
+			raw, _ := json.Marshal(row)
+			t.Log("BATCH_RESULT " + string(raw))
 		}
 		if mode == "shared-sequential" {
 			a, d, err := makeAdapter()

@@ -2,6 +2,8 @@
 
 日期：2026-10-08（Asia/Shanghai）。Codex CLI 0.160.1，Go 1.25.4，macOS arm64。
 
+后续接近默认 10,000 字符批次的两轮复测见 [大批次报告](./full-batch.md)。本文保留最初的小批次测量，不将其当作大批次性能结论。
+
 ## 方法与边界
 
 使用 `TestLiveTranslationThreadSpeed` 的原创英文资料，三个批次，每批两段，分别为 1,372、1,418、1,444 个 Unicode 字符。两组都使用 `gpt-5.6-luna`、`low`、Reader 当前系统提示词和翻译 JSONL 提示词，以及相同的段落 ID、原文哈希、句子覆盖校验器。
