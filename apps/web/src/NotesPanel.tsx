@@ -4,6 +4,7 @@ import {
   ChevronDown,
   CircleHelp,
   Download,
+  Link,
   Loader2,
   Pencil,
   Sparkles,
@@ -11,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  readerLink,
   locationLabel,
   type Annotation,
   type Document,
@@ -32,6 +34,7 @@ import {
 } from "@reader/ui/components/toggle-group";
 import { toast } from "sonner";
 import { annotationLabels } from "./AnnotationToolbar";
+import { copyText } from "./chat/clipboard";
 import { documentOrder } from "./annotations";
 
 export { documentOrder };
@@ -194,6 +197,20 @@ function NoteCard({
               <Pencil />
             </Button>
           )}
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="复制链接"
+            title="复制链接，可在笔记软件中点开回到这里"
+            onClick={() =>
+              void copyText(
+                readerLink({ id: a.documentId, annotation: a.id }),
+                "已复制链接",
+              )
+            }
+          >
+            <Link />
+          </Button>
           <Button
             size="icon-xs"
             variant="ghost"

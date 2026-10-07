@@ -6,6 +6,7 @@ import {
   type AIConfig,
   type LibraryMode,
   type LibraryPreferences,
+  type ReaderLinkTarget,
 } from "@reader/core";
 import { api } from "@reader/api";
 export const useReaderStore = create<{
@@ -17,6 +18,9 @@ export const useReaderStore = create<{
   libraryPreferences: LibraryPreferences;
   trash: Document[];
   setTrash: (trash: Document[]) => void;
+  /** A reader:// target waiting for its document to open. */
+  linkTarget: ReaderLinkTarget | null;
+  setLinkTarget: (target: ReaderLinkTarget | null) => void;
   setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: AIConfig) => void;
   setAIModelSaving: (saving: boolean) => void;
@@ -31,6 +35,8 @@ export const useReaderStore = create<{
   libraryPreferences: {},
   trash: [],
   setTrash: (trash) => set({ trash }),
+  linkTarget: null,
+  setLinkTarget: (linkTarget) => set({ linkTarget }),
   setLibraryPreferences: (libraryPreferences) => set({ libraryPreferences }),
   setAIConfig: (aiConfig) => set({ aiConfig }),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),
@@ -85,4 +91,19 @@ export async function refreshTrash() {
   const state = useReaderStore.getState();
   const trash = await api.trash(libraryMode(state.libraryPreferences));
   if (revision === trashRevision) useReaderStore.getState().setTrash(trash);
+}
+/** Open the document a reader:// link points to, in its own library. */
+export async function openLinkTarget(target: ReaderLinkTarget) {
+  let doc = useReaderStore.getState().documents.find((d) => d.id === target.id);
+  if (!doc) {
+    await refreshLibrary();
+    doc = useReaderStore.getState().documents.find((d) => d.id === target.id);
+  }
+  if (!doc) return false;
+  const state = useReaderStore.getState();
+  if (libraryMode(state.libraryPreferences) !== doc.library)
+    void updateLibraryPreferences({ mode: doc.library }).catch(() => {});
+  state.setLinkTarget(target);
+  if (state.active?.id !== doc.id) state.open(doc);
+  return true;
 }

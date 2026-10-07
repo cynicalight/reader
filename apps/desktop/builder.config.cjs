@@ -7,6 +7,7 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   publish: null,
+  protocols: [{ name: "Reader", schemes: ["reader"] }],
   mac: {
     target: ["dmg"],
     category: "public.app-category.books",

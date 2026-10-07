@@ -39,6 +39,7 @@ import {
   loadLibraryPreferences,
   updateLibraryPreferences,
   refreshTrash,
+  openLinkTarget,
 } from "./store";
 import { TrashView } from "./TrashView";
 import { PaperLibrary } from "./papers/PaperLibrary";
@@ -164,6 +165,16 @@ export function App() {
         .finally(() => setBusy(false));
     } else fileRef.current?.click();
   };
+  useEffect(() => {
+    if (loading) return;
+    return window.readerDesktop?.onOpenLink?.((target) => {
+      void openLinkTarget(target)
+        .then((found) => {
+          if (!found) toast.error("找不到这份文档，它可能已被删除或在回收站中");
+        })
+        .catch((e) => toast.error((e as Error).message));
+    });
+  }, [loading]);
   useEffect(
     () =>
       window.readerDesktop?.onLibraryChanged(() => {

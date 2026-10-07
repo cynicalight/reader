@@ -1,4 +1,10 @@
 export { zoomCommand } from "./zoom-shortcut";
+export {
+  READER_SCHEME,
+  readerLink,
+  parseReaderLink,
+  type ReaderLinkTarget,
+} from "./reader-link";
 
 export type PDFLocation = {
   type: "pdf";

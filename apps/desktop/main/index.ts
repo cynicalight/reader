@@ -14,6 +14,11 @@ import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
+import {
+  READER_SCHEME,
+  parseReaderLink,
+  type ReaderLinkTarget,
+} from "../../../packages/reader-core/src/reader-link";
 import { writeClipboardText } from "./clipboard";
 import { childProxyEnvironment } from "./proxy";
 import { startUpdateService } from "./update-service";
@@ -140,6 +145,39 @@ async function importPaths(
   }
   window?.webContents.send("reader:library-changed");
 }
+// reader:// links reach one window. The renderer claims queued links once its
+// listener exists; later links are sent directly.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+const pendingLinks: ReaderLinkTarget[] = [];
+let linksClaimed = false;
+function openLink(link: string) {
+  const target = parseReaderLink(link);
+  if (!target) return;
+  if (linksClaimed && window && !window.isDestroyed()) {
+    window.webContents.send("reader:open-link", target);
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  } else pendingLinks.push(target);
+}
+const linkArgument = (argv: string[]) =>
+  argv.find((arg) => arg.toLowerCase().startsWith(`${READER_SCHEME}://`));
+app.on("open-url", (event, link) => {
+  event.preventDefault();
+  openLink(link);
+});
+app.on("second-instance", (_event, argv) => {
+  const link = linkArgument(argv);
+  if (link) openLink(link);
+  else if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  }
+});
+{
+  const link = linkArgument(process.argv);
+  if (link) openLink(link);
+}
 const pendingFiles: string[] = [];
 app.on("open-file", (event, path) => {
   event.preventDefault();
@@ -152,6 +190,13 @@ app.on("open-file", (event, path) => {
 app
   .whenReady()
   .then(async () => {
+    if (!primary) return;
+    // Development runs need the entry script registered beside Electron.
+    if (process.defaultApp && process.argv.length >= 2)
+      app.setAsDefaultProtocolClient(READER_SCHEME, process.execPath, [
+        resolve(process.argv[1]),
+      ]);
+    else app.setAsDefaultProtocolClient(READER_SCHEME);
     const url = await startServer();
     session.defaultSession.setPermissionRequestHandler(
       (_contents, _permission, callback) => callback(false),
@@ -298,6 +343,15 @@ app
         }
       },
     );
+    ipcMain.handle("reader:take-links", (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      linksClaimed = true;
+      return pendingLinks.splice(0);
+    });
     ipcMain.handle("reader:open-external", async (event, url: unknown) => {
       if (
         event.sender !== window?.webContents ||

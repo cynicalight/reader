@@ -4,11 +4,13 @@ import {
   ExternalLink,
   FolderOpen,
   FolderPlus,
+  Link2,
   Pin,
   Star,
   Trash2,
 } from "lucide-react";
-import type { Document, ReadingStatus } from "@reader/core";
+import { readerLink, type Document, type ReadingStatus } from "@reader/core";
+import { copyText } from "../chat/clipboard";
 import {
   ContextMenuCheckboxItem,
   ContextMenuItem,
@@ -172,6 +174,14 @@ export function PaperMenuItems({
       {one && (
         <>
           <K.Separator />
+          <K.Item
+            onClick={() =>
+              void copyText(readerLink({ id: one.id }), "已复制阅读链接")
+            }
+          >
+            <Link2 />
+            复制阅读链接
+          </K.Item>
           {link && (
             <K.Item onClick={() => openLink(link)}>
               <ExternalLink />

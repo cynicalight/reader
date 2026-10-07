@@ -54,6 +54,7 @@ import {
   type PDFBlockAction,
   type ImageAttachment,
   type LinkPreview,
+  readerLink,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Badge } from "@reader/ui/components/badge";
@@ -208,6 +209,8 @@ export function Workspace({
   onSettings: () => void;
 }) {
   const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
+  const linkTarget = useReaderStore((s) => s.linkTarget);
+  const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
   const [pdfToolbar, setPDFToolbar] = useState<HTMLDivElement | null>(null);
@@ -353,6 +356,7 @@ export function Workspace({
       .then((a) => {
         if (alive) {
           setAnnotations(a);
+          setAnnotationsLoaded(true);
         }
       })
       .catch((e) => toast.error(e.message));
@@ -380,6 +384,22 @@ export function Workspace({
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
+  useEffect(() => {
+    // Follow a reader:// link once the reader and annotations are ready.
+    if (linkTarget?.id !== doc.id || !adapter || !annotationsLoaded) return;
+    useReaderStore.getState().setLinkTarget(null);
+    if (linkTarget.annotation) {
+      const target = annotations.find((a) => a.id === linkTarget.annotation);
+      if (target) {
+        void adapter.goTo(target.location).catch((e) => toast.error(e.message));
+        setRight(true);
+        setRightTab("notes");
+      } else toast.info("这条批注已不存在，已打开文档");
+    } else if (linkTarget.page && doc.type === "pdf")
+      void adapter
+        .goTo({ type: "pdf", page: linkTarget.page })
+        .catch((e) => toast.error(e.message));
+  }, [linkTarget, adapter, annotationsLoaded, annotations, doc.id, doc.type]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
     setLocation(next);
     if (navigationRef.current?.settle()) setReturnLocation(undefined);
@@ -1502,6 +1522,7 @@ export function Workspace({
           document={doc}
           annotations={annotations}
           messages={chat.messages}
+          link={(a) => readerLink({ id: doc.id, annotation: a.id })}
           onClose={() => setExportingNotes(false)}
         />
       )}
