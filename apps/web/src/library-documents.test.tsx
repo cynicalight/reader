@@ -24,6 +24,7 @@ const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
   categorySource: "manual",
   classificationStatus: "done",
   classificationError: "",
+  library: "books",
   tags: [],
   size: 100,
   createdAt: "",

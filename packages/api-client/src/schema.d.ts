@@ -53,10 +53,24 @@ export interface paths {
           "multipart/form-data": {
             /** Format: binary */
             file: string;
+            /**
+             * @description Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.
+             * @enum {unknown}
+             */
+            library?: "books" | "papers";
           };
         };
       };
       responses: {
+        /** @description The identical file already exists, in either library */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
         /** @description Success */
         201: {
           headers: {
@@ -145,6 +159,8 @@ export interface paths {
             percentage?: number;
             title?: string;
             author?: string;
+            /** @enum {unknown} */
+            library?: "books" | "papers";
           };
         };
       };
@@ -1366,6 +1382,92 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/preferences/{key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: "library";
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Saved preferences, or an empty object */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: "library";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1428,6 +1530,8 @@ export interface components {
       favorite: boolean;
       percentage: number;
       progress?: components["schemas"]["DocumentLocation"];
+      /** @enum {unknown} */
+      library: "books" | "papers";
     };
     Annotation: {
       id: string;

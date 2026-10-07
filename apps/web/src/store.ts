@@ -4,6 +4,8 @@ import {
   type Document,
   type ReaderTheme,
   type AIConfig,
+  type LibraryMode,
+  type LibraryPreferences,
 } from "@reader/core";
 import { api } from "@reader/api";
 export const useReaderStore = create<{
@@ -12,6 +14,8 @@ export const useReaderStore = create<{
   theme: ReaderTheme;
   aiConfig?: AIConfig;
   aiModelSaving: boolean;
+  libraryPreferences: LibraryPreferences;
+  setLibraryPreferences: (preferences: LibraryPreferences) => void;
   setAIConfig: (config: AIConfig) => void;
   setAIModelSaving: (saving: boolean) => void;
   setDocuments: (documents: Document[]) => void;
@@ -22,6 +26,8 @@ export const useReaderStore = create<{
   active: null,
   theme: defaultTheme,
   aiModelSaving: false,
+  libraryPreferences: {},
+  setLibraryPreferences: (libraryPreferences) => set({ libraryPreferences }),
   setAIConfig: (aiConfig) => set({ aiConfig }),
   setAIModelSaving: (aiModelSaving) => set({ aiModelSaving }),
   setDocuments: (documents) => set({ documents }),
@@ -48,4 +54,23 @@ export async function refreshAIConfig() {
   // A concurrent settings save owns its newer snapshot.
   if (useReaderStore.getState().aiConfig === before)
     useReaderStore.getState().setAIConfig(config);
+}
+export const libraryMode = (preferences: LibraryPreferences): LibraryMode =>
+  preferences.mode === "papers" ? "papers" : "books";
+export async function loadLibraryPreferences() {
+  useReaderStore
+    .getState()
+    .setLibraryPreferences(await api.libraryPreferences());
+}
+let preferenceWrite = Promise.resolve();
+/** Apply locally at once; writes are serialized so the last change wins. */
+export function updateLibraryPreferences(patch: Partial<LibraryPreferences>) {
+  const state = useReaderStore.getState();
+  const next = { ...state.libraryPreferences, ...patch };
+  state.setLibraryPreferences(next);
+  preferenceWrite = preferenceWrite
+    .catch(() => {})
+    .then(() => api.saveLibraryPreferences(next))
+    .then(() => {});
+  return preferenceWrite;
 }

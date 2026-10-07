@@ -133,6 +133,21 @@ kbd {
   opacity: 0;
   pointer-events: none;
 }
+.library-mode-trigger {
+  align-self: flex-start;
+  height: 36px;
+  margin: -6px 0 -10px -4px;
+  padding-inline: 8px;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.library-mode-item {
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+}
 .nav-item {
   width: 100%;
   justify-content: flex-start;

@@ -44,6 +44,7 @@ func (s *Store) migrateOrganization() error {
 		{"classification_status", "TEXT NOT NULL DEFAULT 'pending'"},
 		{"classification_error", "TEXT NOT NULL DEFAULT ''"},
 		{"tags", "TEXT NOT NULL DEFAULT '[]'"},
+		{"library", "TEXT NOT NULL DEFAULT 'books' CHECK(library IN ('books','papers'))"},
 	} {
 		if !columns[column.name] {
 			if _, err = tx.Exec("ALTER TABLE documents ADD COLUMN " + column.name + " " + column.definition); err != nil {
@@ -53,6 +54,12 @@ func (s *Store) migrateOrganization() error {
 	}
 	if !columns["category"] {
 		if _, err = tx.Exec("UPDATE documents SET category='book' WHERE type='epub'"); err != nil {
+			return err
+		}
+	}
+	// Existing papers open in the paper library; everything else stays with books.
+	if !columns["library"] {
+		if _, err = tx.Exec("UPDATE documents SET library='papers' WHERE type='pdf' AND category='paper' AND size<=?", maxPaperBytes); err != nil {
 			return err
 		}
 	}

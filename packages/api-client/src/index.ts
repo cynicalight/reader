@@ -22,6 +22,8 @@ import type {
   AIConfig,
   AICapability,
   AgentModel,
+  LibraryMode,
+  LibraryPreferences,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -142,8 +144,9 @@ export const api = {
     if (error) throw new Error(error.error);
     return data;
   },
-  import: (file: File) => {
+  import: (file: File, library: LibraryMode = "books") => {
     const form = new FormData();
+    form.append("library", library);
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
@@ -165,6 +168,7 @@ export const api = {
       favorite?: boolean;
       progress?: DocumentLocation;
       percentage?: number;
+      library?: LibraryMode;
     },
   ) =>
     request<Document>(`/api/documents/${id}`, {
@@ -204,6 +208,13 @@ export const api = {
     request<Message[]>(`/api/documents/${id}/messages`, { signal }),
   providers: (checkAuth = true) =>
     request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
+  libraryPreferences: () =>
+    request<LibraryPreferences>("/api/preferences/library"),
+  saveLibraryPreferences: (preferences: LibraryPreferences) =>
+    request<LibraryPreferences>("/api/preferences/library", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    }),
   settings: () => request<Partial<ReaderTheme>>("/api/settings"),
   saveSettings: (theme: ReaderTheme) =>
     request<ReaderTheme>("/api/settings", {

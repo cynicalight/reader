@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
 import { api } from "@reader/api";
-import type { Document } from "@reader/core";
+import type { Document, LibraryMode } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import { TooltipProvider } from "@reader/ui/components/tooltip";
@@ -31,7 +31,14 @@ import {
   DialogDescription,
 } from "@reader/ui/components/dialog";
 import { Toaster, toast } from "sonner";
-import { useReaderStore, refreshLibrary } from "./store";
+import {
+  useReaderStore,
+  refreshLibrary,
+  libraryMode,
+  loadLibraryPreferences,
+  updateLibraryPreferences,
+} from "./store";
+import { LibraryModeSwitcher, libraryModes } from "./LibraryModeSwitcher";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
 import { useProcessing } from "./ProcessingStatus";
@@ -41,8 +48,20 @@ import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
+const currentMode = () =>
+  libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
-  const { documents, active, theme, setTheme, open } = useReaderStore();
+  const {
+    documents: allDocuments,
+    active,
+    theme,
+    setTheme,
+    open,
+    libraryPreferences,
+  } = useReaderStore();
+  const mode = libraryMode(libraryPreferences);
+  const papers = mode === "papers";
+  const documents = allDocuments.filter((d) => d.library === mode);
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
@@ -65,6 +84,7 @@ export function App() {
   useEffect(() => {
     Promise.all([
       refreshLibrary(),
+      loadLibraryPreferences(),
       api.settings().then((value) => setTheme(value)),
     ])
       .catch((e) => setError(e.message))
@@ -122,7 +142,7 @@ export function App() {
     if (window.readerDesktop) {
       setBusy(true);
       void window.readerDesktop
-        .importFiles()
+        .importFiles(currentMode())
         .catch((e) => toast.error(e.message))
         .finally(() => setBusy(false));
     } else fileRef.current?.click();
@@ -135,12 +155,33 @@ export function App() {
     [],
   );
   const importFiles = async (files: File[]) => {
-    if (!files.length) return;
+    const target = currentMode();
+    const accepted = files.filter((file) =>
+      target === "papers"
+        ? /\.pdf$/i.test(file.name)
+        : /\.(epub|pdf)$/i.test(file.name),
+    );
+    if (accepted.length < files.length)
+      toast.info(
+        target === "papers"
+          ? "文献库只支持 PDF，已跳过其他文件"
+          : "仅支持 EPUB 和 PDF，已跳过其他文件",
+      );
+    if (!accepted.length) return;
     setBusy(true);
     try {
-      for (const file of files) await api.import(file);
+      const elsewhere: Document[] = [];
+      for (const file of accepted) {
+        const document = await api.import(file, target);
+        if (document.library !== target) elsewhere.push(document);
+      }
       await refreshLibrary();
-      toast.success(`已导入 ${files.length} 个文件`);
+      if (elsewhere.length)
+        toast.info(
+          `${elsewhere.length} 个文件已在${libraryModes[elsewhere[0].library].label}中，可在那里移动`,
+        );
+      if (accepted.length > elsewhere.length)
+        toast.success(`已导入 ${accepted.length - elsewhere.length} 个文件`);
       setError("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -162,6 +203,25 @@ export function App() {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const switchMode = (next: LibraryMode) => {
+    if (next === mode) return;
+    setFilter("all");
+    setFilters(initialFilters);
+    setQuery("");
+    setEditingLibrary(false);
+    void updateLibraryPreferences({ mode: next }).catch((e) =>
+      toast.error(e.message),
+    );
+  };
+  const moveDocument = async (doc: Document, library: LibraryMode) => {
+    try {
+      await api.update(doc.id, { library });
+      await refreshLibrary();
+      toast.success(`已移到${libraryModes[library].label}`);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
   const openDocument = (doc: Document) => {
@@ -231,7 +291,7 @@ export function App() {
           ref={fileRef}
           hidden
           multiple
-          accept=".pdf,.epub"
+          accept={papers ? ".pdf" : ".pdf,.epub"}
           onChange={(e) => {
             void importFiles(Array.from(e.target.files || []));
             e.target.value = "";
@@ -256,6 +316,7 @@ export function App() {
               inert={!nav}
             >
               <div className="window-drag-handle" aria-hidden="true" />
+              <LibraryModeSwitcher mode={mode} onChange={switchMode} />
               <Button
                 className="w-full justify-between"
                 variant="outline"
@@ -271,7 +332,7 @@ export function App() {
                 {[
                   {
                     id: "all",
-                    label: "全部文档",
+                    label: papers ? "全部论文" : "全部文档",
                     icon: Library,
                     count: documents.length,
                   },
@@ -315,7 +376,9 @@ export function App() {
                   ) : (
                     <CirclePlus className="size-4" />
                   )}
-                  <span>{busy ? "导入中…" : "导入文档"}</span>
+                  <span>
+                    {busy ? "导入中…" : papers ? "导入论文" : "导入文档"}
+                  </span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -357,7 +420,9 @@ export function App() {
                       ? "标签看板"
                       : filter === "favorites"
                         ? "收藏"
-                        : "全部文档"}
+                        : papers
+                          ? "全部论文"
+                          : "全部文档"}
                   </h1>
                 </div>
                 {filter === "tags" ? (
@@ -447,6 +512,7 @@ export function App() {
                     openDocument={openDocument}
                     favorite={favorite}
                     onEdit={setEditingId}
+                    onMove={moveDocument}
                     onSettings={() => setSettings(true)}
                   />
                 ) : (
@@ -464,7 +530,9 @@ export function App() {
                         ? "没有符合筛选条件的文档"
                         : filter === "favorites"
                           ? "暂无收藏"
-                          : "暂无文档"}
+                          : papers
+                            ? "暂无论文"
+                            : "暂无文档"}
                     </h2>
                     {!!documents.length && (
                       <Button
@@ -478,7 +546,7 @@ export function App() {
                         显示全部文档
                       </Button>
                     )}
-                    {!documents.length && (
+                    {!documents.length && !papers && (
                       <Button
                         variant="link"
                         onClick={() => void sample()}

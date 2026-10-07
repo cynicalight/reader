@@ -32,6 +32,11 @@ export type EPUBLocation = {
 };
 export type DocumentLocation = PDFLocation | EPUBLocation;
 export type DocumentCategory = "book" | "article" | "paper";
+/** Books and papers are separate libraries; papers are PDFs up to 150 pages and 50 MB. */
+export type LibraryMode = "books" | "papers";
+export interface LibraryPreferences {
+  mode?: LibraryMode;
+}
 export interface TagBoard {
   id: string;
   name: string;
@@ -44,6 +49,7 @@ export interface Document {
   classificationStatus: "pending" | "running" | "failed" | "done";
   classificationError: string;
   tags: string[];
+  library: LibraryMode;
   id: string;
   type: "epub" | "pdf";
   title: string;

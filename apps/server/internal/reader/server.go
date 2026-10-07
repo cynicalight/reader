@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -101,6 +102,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/models", s.agentModels)
 	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
 	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
+	mux.HandleFunc("GET /api/preferences/{key}", s.preferences)
+	mux.HandleFunc("PUT /api/preferences/{key}", s.savePreferences)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {
 		var value string
 		err := s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
@@ -157,14 +160,20 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
-	s.importMu.Lock()
-	defer s.importMu.Unlock()
 	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		fail(w, 400, "文件超过 100 MB 或上传无效")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
+	library := r.FormValue("library")
+	if library == "" {
+		library = "books"
+	}
+	if !validLibrary(library) {
+		fail(w, 400, "未知书库")
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		fail(w, 400, "请选择 EPUB 或 PDF")
@@ -183,9 +192,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(temp.Name())
 	defer temp.Close()
-	hash := sha256.New()
-	size, err := io.Copy(io.MultiWriter(temp, hash), file)
-	if err != nil {
+	if _, err = io.Copy(temp, file); err != nil {
 		fail(w, 400, "上传未完成")
 		return
 	}
@@ -193,19 +200,72 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "保存失败")
 		return
 	}
+	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library)
+	if err != nil {
+		fail(w, status, err.Error())
+		return
+	}
+	respond(w, status, d)
+}
+
+type importError struct {
+	status  int
+	message string
+}
+
+func (e importError) Error() string { return e.message }
+
+// importFile moves a completed temporary file into the library. An identical
+// file returns the existing document, whichever library holds it.
+func (s *Server) importFile(ctx context.Context, temp, filename, library string) (Document, int, error) {
+	s.importMu.Lock()
+	defer s.importMu.Unlock()
+	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	failure := func(status int, message string) (Document, int, error) {
+		return Document{}, status, importError{status, message}
+	}
+	f, err := os.Open(temp)
+	if err != nil {
+		return failure(500, "无法验证文件")
+	}
+	hash := sha256.New()
+	size, err := io.Copy(hash, f)
+	f.Close()
+	if err != nil {
+		return failure(500, "无法验证文件")
+	}
 	docID := hex.EncodeToString(hash.Sum(nil))[:32]
 	if d, e := s.Store.Document(docID); e == nil {
 		if err = s.Store.enqueuePDF(d); err != nil {
-			fail(w, 500, "无法创建解析任务")
-			return
+			return failure(500, "无法创建解析任务")
 		}
-		respond(w, 200, d)
-		return
+		return d, 200, nil
 	}
-	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename)), Size: size, CreatedAt: now(), LastOpenedAt: now()}
+	if kind == "pdf" {
+		f, e := os.Open(temp)
+		if e != nil {
+			return failure(500, "无法验证文件")
+		}
+		head := make([]byte, 5)
+		_, e = io.ReadFull(f, head)
+		f.Close()
+		if e != nil || string(head) != "%PDF-" {
+			return failure(400, "文件不是有效的 PDF")
+		}
+	}
+	if library == "papers" {
+		if reason := paperLimit(kind, size, temp); reason != "" {
+			return failure(400, reason)
+		}
+	}
+	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}
 	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "pending", []string{}
 	if kind == "epub" {
 		d.Category = "book"
+	}
+	if library == "papers" {
+		// The library choice is the user's classification; no AI guess is needed.
+		d.Category, d.CategorySource, d.ClassificationStatus = "paper", "manual", "done"
 	}
 	var texts map[string]string
 	cache := filepath.Join(s.Store.Root, "cache", docID)
@@ -215,25 +275,10 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 			_ = os.RemoveAll(cache)
 		}
 	}()
-	if kind == "pdf" {
-		f, e := os.Open(temp.Name())
-		if e != nil {
-			fail(w, 500, "无法验证文件")
-			return
-		}
-		head := make([]byte, 5)
-		_, e = io.ReadFull(f, head)
-		f.Close()
-		if e != nil || string(head) != "%PDF-" {
-			fail(w, 400, "文件不是有效的 PDF")
-			return
-		}
-	}
 	if kind == "epub" {
-		m, t, e := prepareEPUB(r.Context(), temp.Name(), cache)
+		m, t, e := prepareEPUB(ctx, temp, cache)
 		if e != nil {
-			fail(w, 400, "EPUB 无法导入："+e.Error())
-			return
+			return failure(400, "EPUB 无法导入："+e.Error())
 		}
 		texts = t
 		if metadata, ok := m["metadata"].(map[string]any); ok {
@@ -254,18 +299,16 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	dest := s.Store.File(d)
-	if err = os.Rename(temp.Name(), dest); err != nil {
-		fail(w, 500, "无法保存原文件")
-		return
+	if err = os.Rename(temp, dest); err != nil {
+		return failure(500, "无法保存原文件")
 	}
 	tx, err := s.Store.DB.Begin()
 	if err != nil {
 		_ = os.Remove(dest)
-		fail(w, 500, "无法写入书库")
-		return
+		return failure(500, "无法写入书库")
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category) VALUES(?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category)
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,category_source,classification_status,library) VALUES(?,?,?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.CategorySource, d.ClassificationStatus, d.Library)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)
@@ -284,11 +327,10 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		_ = os.Remove(dest)
-		fail(w, 500, "书库保存失败")
-		return
+		return failure(500, "书库保存失败")
 	}
 	success = true
-	respond(w, 201, d)
+	return d, 201, nil
 }
 func validLocation(data json.RawMessage, kind string) bool {
 	var l struct {
@@ -320,11 +362,12 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		Favorite   *bool           `json:"favorite"`
 		Progress   json.RawMessage `json:"progress"`
 		Percentage *float64        `json:"percentage"`
+		Library    *string         `json:"library"`
 	}
 	if !decode(w, r, &v) {
 		return
 	}
-	var title, author, category, tags any
+	var title, author, category, tags, library any
 	if v.Title != nil {
 		title, err = metadataText(v.Title, 300, false)
 		if err != nil {
@@ -356,6 +399,23 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		b, _ := json.Marshal(normalized)
 		tags = string(b)
 	}
+	if v.Library != nil {
+		if !validLibrary(*v.Library) {
+			fail(w, 400, "未知书库")
+			return
+		}
+		if *v.Library == "papers" && d.Library != "papers" {
+			if reason := paperLimit(d.Type, d.Size, s.Store.File(d)); reason != "" {
+				fail(w, 400, reason)
+				return
+			}
+			// Moving into the paper library is an explicit classification.
+			if category == nil {
+				category = "paper"
+			}
+		}
+		library = *v.Library
+	}
 	if v.Progress != nil {
 		if !validLocation(v.Progress, d.Type) {
 			fail(w, 400, "无效阅读位置")
@@ -375,14 +435,14 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var openedAt any
 	// Organization and favorites must not move a document into recent reading.
-	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil) {
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil && v.Library == nil) {
 		openedAt = now()
 	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, category, category, category, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),library=COALESCE(?,library),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, library, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return

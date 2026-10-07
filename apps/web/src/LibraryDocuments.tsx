@@ -8,8 +8,9 @@ import {
   Trash2,
   Check,
   ChartColumn,
+  ArrowRightLeft,
 } from "lucide-react";
-import type { Document, Processing } from "@reader/core";
+import type { Document, LibraryMode, Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { toast } from "sonner";
 import { Button } from "@reader/ui/components/button";
@@ -44,6 +45,7 @@ export function LibraryDocuments({
   openDocument,
   favorite,
   onEdit,
+  onMove,
   onSettings,
   editing,
   onEditingChange,
@@ -55,6 +57,7 @@ export function LibraryDocuments({
   openDocument: (doc: Document) => void;
   favorite: (doc: Document) => void;
   onEdit: (id: string) => void;
+  onMove?: (doc: Document, library: LibraryMode) => void;
   onSettings: () => void;
   editing?: boolean;
   onEditingChange?: (editing: boolean) => void;
@@ -349,6 +352,16 @@ export function LibraryDocuments({
                 <Pencil />
                 编辑文档信息
               </ContextMenuItem>
+              {onMove && (doc.type === "pdf" || doc.library === "papers") && (
+                <ContextMenuItem
+                  onClick={() =>
+                    onMove(doc, doc.library === "papers" ? "books" : "papers")
+                  }
+                >
+                  <ArrowRightLeft />
+                  {doc.library === "papers" ? "移到图书库" : "移到文献库"}
+                </ContextMenuItem>
+              )}
               <ContextMenuSeparator />
               <ContextMenuItem
                 variant="destructive"

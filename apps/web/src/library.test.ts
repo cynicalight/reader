@@ -20,6 +20,7 @@ const makeDoc = (patch: Partial<Document>): Document => ({
   categorySource: "ai",
   classificationStatus: "done",
   classificationError: "",
+  library: "books",
   tags: [],
   ...patch,
 });

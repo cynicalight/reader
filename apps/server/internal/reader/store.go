@@ -16,6 +16,7 @@ type Document struct {
 	ClassificationStatus string          `json:"classificationStatus"`
 	ClassificationError  string          `json:"classificationError"`
 	Tags                 []string        `json:"tags"`
+	Library              string          `json:"library"`
 	ID                   string          `json:"id"`
 	Type                 string          `json:"type"`
 	Title                string          `json:"title"`
@@ -93,25 +94,32 @@ func OpenStore(root string) (*Store, error) {
 	return store, nil
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
+
+const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library`
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanDocument(row rowScanner) (Document, error) {
+	var d Document
+	var progress, tags string
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library)
+	if err == nil {
+		err = json.Unmarshal([]byte(tags), &d.Tags)
+	}
+	if progress != "" {
+		d.Progress = json.RawMessage(progress)
+	}
+	return d, err
+}
 func (s *Store) Documents() ([]Document, error) {
-	rows, err := s.DB.Query(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
+	rows, err := s.DB.Query(`SELECT ` + documentColumns + ` FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	docs := []Document{}
 	for rows.Next() {
-		var d Document
-		var progress, tags string
-		if err = rows.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags); err != nil {
-			return nil, err
-		}
-		if err == nil {
-			err = json.Unmarshal([]byte(tags), &d.Tags)
-		}
-		if progress != "" {
-			d.Progress = json.RawMessage(progress)
-		}
+		d, err := scanDocument(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -120,16 +128,7 @@ func (s *Store) Documents() ([]Document, error) {
 	return docs, rows.Err()
 }
 func (s *Store) Document(id string) (Document, error) {
-	var d Document
-	var progress, tags string
-	err := s.DB.QueryRow(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents WHERE id=?`, id).Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags)
-	if err == nil {
-		err = json.Unmarshal([]byte(tags), &d.Tags)
-	}
-	if progress != "" {
-		d.Progress = json.RawMessage(progress)
-	}
-	return d, err
+	return scanDocument(s.DB.QueryRow(`SELECT `+documentColumns+` FROM documents WHERE id=?`, id))
 }
 func (s *Store) File(d Document) string {
 	dir := "books"

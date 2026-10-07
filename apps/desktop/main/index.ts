@@ -119,11 +119,16 @@ async function startServer() {
     });
   });
 }
-async function importPaths(paths: string[]) {
+async function importPaths(
+  paths: string[],
+  library: "books" | "papers" = "books",
+) {
+  const accepted = library === "papers" ? /\.pdf$/i : /\.(epub|pdf)$/i;
   for (const path of paths) {
-    if (!/\.(epub|pdf)$/i.test(path)) continue;
+    if (!accepted.test(path)) continue;
     const data = await readFile(path);
     const form = new FormData();
+    form.append("library", library);
     form.append("file", new Blob([data]), path.split(/[\\/]/).pop()!);
     const response = await fetch(`${serverURL}/api/documents`, {
       method: "POST",
@@ -263,17 +268,22 @@ app
         nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
       );
     });
-    ipcMain.handle("reader:import", async (event) => {
+    ipcMain.handle("reader:import", async (event, library: unknown) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
       )
         throw new Error("Invalid sender");
+      if (library !== "books" && library !== "papers")
+        throw new Error("Invalid library");
       const selected = await dialog.showOpenDialog(window, {
         properties: ["openFile", "multiSelections"],
-        filters: [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
+        filters:
+          library === "papers"
+            ? [{ name: "PDF", extensions: ["pdf"] }]
+            : [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
       });
-      if (!selected.canceled) await importPaths(selected.filePaths);
+      if (!selected.canceled) await importPaths(selected.filePaths, library);
     });
     await window.loadURL(`${url}/#token=${serverToken}`);
     if (pendingFiles.length) await importPaths(pendingFiles.splice(0));

@@ -44,6 +44,18 @@
             {
               "responses":
                 {
+                  "200":
+                    {
+                      "description": "The identical file already exists, in either library",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
                   "201":
                     {
                       "description": "Success",
@@ -83,6 +95,11 @@
                                 {
                                   "file":
                                     { "type": "string", "format": "binary" },
+                                  "library":
+                                    {
+                                      "enum": ["books", "papers"],
+                                      "description": "Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.",
+                                    },
                                 },
                               "required": ["file"],
                             },
@@ -170,6 +187,7 @@
                                     },
                                   "author":
                                     { "type": "string", "maxLength": 200 },
+                                  "library": { "enum": ["books", "papers"] },
                                 },
                               "required": [],
                             },
@@ -1485,6 +1503,105 @@
                 },
             },
         },
+      "/api/preferences/{key}":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "key",
+                    "required": true,
+                    "schema": { "enum": ["library"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved preferences, or an empty object",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "additionalProperties": true,
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "key",
+                    "required": true,
+                    "schema": { "enum": ["library"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "type": "object", "additionalProperties": true },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "additionalProperties": true,
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1632,6 +1749,7 @@
                   "percentage": { "type": "number" },
                   "progress":
                     { "$ref": "#/components/schemas/DocumentLocation" },
+                  "library": { "enum": ["books", "papers"] },
                 },
               "required":
                 [
@@ -1649,6 +1767,7 @@
                   "lastOpenedAt",
                   "favorite",
                   "percentage",
+                  "library",
                 ],
             },
           "Annotation":

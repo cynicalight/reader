@@ -16,7 +16,8 @@ contextBridge.exposeInMainWorld("readerDesktop", {
   },
   setAppearance: (appearance: "light" | "dark" | "system") =>
     ipcRenderer.invoke("reader:appearance", appearance),
-  importFiles: () => ipcRenderer.invoke("reader:import"),
+  importFiles: (library: "books" | "papers") =>
+    ipcRenderer.invoke("reader:import", library),
   onLibraryChanged: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("reader:library-changed", listener);
