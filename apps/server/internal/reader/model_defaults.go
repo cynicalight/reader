@@ -19,8 +19,9 @@ const (
 // Matching uses whole tokens, so "mini" never matches "gemini".
 var taskFamilies = map[modelTask]map[string][]string{
 	taskChat: {
-		"codex":  {"astra", "sol", "terra"},
-		"claude": {"fable", "opus", "sonnet"},
+		"codex": {"astra", "sol", "terra"},
+		// Fable is usually unavailable, so it is never a default; users can still pick it.
+		"claude": {"opus", "sonnet"},
 	},
 	taskTranslation: {
 		"codex":  {"luna", "mini", "terra"},

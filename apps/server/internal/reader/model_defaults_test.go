@@ -31,7 +31,7 @@ func TestDefaultTaskModelPerAgent(t *testing.T) {
 	}{
 		{"codex chat takes the frontier tier", taskChat, "codex", codex, "gpt-6-astra"},
 		{"codex translation takes the newest luna", taskTranslation, "codex", codex, "gpt-6-luna"},
-		{"claude chat takes the newest fable", taskChat, "claude", claude, "claude-fable-5-1"},
+		{"claude chat takes the newest opus, never fable", taskChat, "claude", claude, "claude-opus-5-5"},
 		{"claude translation takes the newest sonnet", taskTranslation, "claude", claude, "claude-sonnet-5-5"},
 		{"claude translation falls back to haiku", taskTranslation, "claude", catalog("claude-opus-5-5", "claude-haiku-4-5-20251001", "claude-haiku-3-5"), "claude-haiku-4-5-20251001"},
 		{"kimi keeps its CLI default", taskChat, "kimi", kimi, ""},
@@ -55,7 +55,7 @@ func TestTaskRecommendationsMarkCatalog(t *testing.T) {
 	for _, m := range models {
 		got[m.ID] = strings.Join(m.RecommendedFor, ",")
 	}
-	if got["claude-fable-5-1"] != "chat" || got["claude-sonnet-5-5"] != "translation" || got["claude-opus-5-5"] != "" {
+	if got["claude-opus-5-5"] != "chat" || got["claude-sonnet-5-5"] != "translation" || got["claude-fable-5-1"] != "" {
 		t.Fatal(got)
 	}
 }
@@ -88,7 +88,7 @@ func TestUnsetModelsResolvePerTask(t *testing.T) {
 		task       modelTask
 		model, eff string
 	}{
-		{taskChat, "claude-fable-5-1", "medium"},
+		{taskChat, "claude-opus-5-5", "medium"},
 		{taskTranslation, "claude-sonnet-5-5", "medium"},
 	} {
 		t.Run(string(tt.task), func(t *testing.T) {
