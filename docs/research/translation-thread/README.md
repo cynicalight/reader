@@ -2,6 +2,8 @@
 
 日期：2026-10-08（Asia/Shanghai）。Codex CLI 0.160.1，Go 1.25.4，macOS arm64。
 
+以下为此前单 worker 方案的历史测量。当前实现已改为 3 个 worker 各自复用会话；这些结果不能作为当前实现的测速结论，`TestLiveTranslationThreadSpeed` 仍比较历史的独立并行与单会话串行两种方案。
+
 后续接近默认 10,000 字符批次的两轮复测见 [大批次报告](./full-batch.md)。本文保留最初的小批次测量，不将其当作大批次性能结论。
 
 ## 方法与边界

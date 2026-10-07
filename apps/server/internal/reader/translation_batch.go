@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
 
 const translationBatchCharacters = 10000
+const translationBatchConcurrency = 3
 const translationBatchTimeout = 20 * time.Minute
 
 type translationParagraph struct {
@@ -197,7 +199,16 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 			return err
 		}
 	}
-	return ctx.Err()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if callErr != nil {
+		return callErr
+	}
+	if len(decoder.completed) != len(batch.Paragraphs) {
+		return fmt.Errorf("此批次未收到全部有效译文，请重试失败部分")
+	}
+	return nil
 }
 func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layoutManifest) error {
 	doc, err := s.Store.Document(p.DocumentID)
@@ -305,12 +316,15 @@ func (s *Server) refreshTranslationCounts(p *Processing, m layoutManifest) error
 	return nil
 }
 
-// One translation run owns its Codex process and conversation. Each batch is a
-// subsequent turn; completed paragraphs remain the durable source of progress.
+// Each worker owns a process and conversation. Round-robin assignment preserves
+// batch order within each conversation; completed paragraphs remain durable.
 func (s *Server) translateBatches(ctx context.Context, doc Document, p *Processing, m layoutManifest, batches []translationBatch, config AIConfig) error {
-	service, codex := s.translationService(config)
-	defer codex.close()
+	work, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var progressMu sync.Mutex
 	progress := func() {
+		progressMu.Lock()
+		defer progressMu.Unlock()
 		if err := s.refreshTranslationCounts(p, m); err != nil {
 			log.Printf("cannot read translation progress: %v", err)
 			return
@@ -320,25 +334,49 @@ func (s *Server) translateBatches(ctx context.Context, doc Document, p *Processi
 			log.Printf("cannot save translation progress: %v", err)
 		}
 	}
-	for _, batch := range batches {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		s.processingMu.Lock()
-		var startErr error
-		for _, paragraph := range batch.Paragraphs {
-			startErr = s.saveTranslation(doc.ID, TranslationBlock{BlockID: paragraph.BlockID, SourceHash: paragraph.SourceHash, Status: "running", Sentences: []TranslationSentence{}})
-			if startErr != nil {
-				break
-			}
-		}
-		s.processingMu.Unlock()
-		if startErr != nil {
-			return startErr
-		}
-		if err := s.translateBatch(ctx, doc, m, batch, service, progress); err != nil {
-			return err
-		}
+	var workers sync.WaitGroup
+	var failed sync.Once
+	var failure error
+	fail := func(err error) {
+		failed.Do(func() {
+			failure = err
+			cancel()
+		})
 	}
-	return nil
+	count := min(translationBatchConcurrency, len(batches))
+	for worker := 0; worker < count; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			service, codex := s.translationService(config)
+			defer codex.close()
+			for index := worker; index < len(batches); index += count {
+				if work.Err() != nil {
+					return
+				}
+				batch := batches[index]
+				s.processingMu.Lock()
+				var startErr error
+				for _, paragraph := range batch.Paragraphs {
+					startErr = s.saveTranslation(doc.ID, TranslationBlock{BlockID: paragraph.BlockID, SourceHash: paragraph.SourceHash, Status: "running", Sentences: []TranslationSentence{}})
+					if startErr != nil {
+						break
+					}
+				}
+				s.processingMu.Unlock()
+				if startErr == nil {
+					startErr = s.translateBatch(work, doc, m, batch, service, progress)
+				}
+				if startErr != nil {
+					fail(startErr)
+					return
+				}
+			}
+		}()
+	}
+	workers.Wait()
+	if failure != nil {
+		return failure
+	}
+	return ctx.Err()
 }

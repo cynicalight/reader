@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTranslationServiceKeepsOtherProviderTaskSettings(t *testing.T) {
@@ -127,6 +128,12 @@ func translationSessionFixture(t *testing.T) (*Server, Processing, layoutManifes
 }
 func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 	s, p, m, capture := translationSessionFixture(t)
+	for i := 2; i < 6; i++ {
+		b := m.Blocks[0]
+		b.ID = fmt.Sprintf("p1-b%d", i+1)
+		b.Text = strings.Repeat(fmt.Sprintf("Paragraph %d. ", i), 1000)
+		m.Blocks = append(m.Blocks, b)
+	}
 	if err := s.settleTranslations(t.Context(), &p, m); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +141,8 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var pid, starts, initializes, turns int
+	type counts struct{ starts, initializes, turns int }
+	processes := map[int]*counts{}
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		var r struct {
 			PID    int    `json:"pid"`
@@ -148,27 +156,32 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &r); err != nil {
 			t.Fatal(err)
 		}
-		if pid != 0 && pid != r.PID {
-			t.Fatal("started another process")
+		if processes[r.PID] == nil {
+			processes[r.PID] = &counts{}
 		}
-		pid = r.PID
+		count := processes[r.PID]
 		switch r.Method {
 		case "initialize":
-			initializes++
+			count.initializes++
 		case "thread/start":
-			starts++
+			count.starts++
 			if r.Params.Model != translationCodexModel {
 				t.Fatal("wrong model")
 			}
 		case "turn/start":
-			turns++
+			count.turns++
 			if r.Params.Effort != "low" || r.Params.ThreadID != "thread" {
 				t.Fatal("wrong effort or thread")
 			}
 		}
 	}
-	if initializes != 1 || starts != 1 || turns != 2 {
-		t.Fatalf("initialize=%d threads=%d turns=%d", initializes, starts, turns)
+	if len(processes) != 3 {
+		t.Fatalf("expected three worker processes: %+v", processes)
+	}
+	for pid, count := range processes {
+		if count.initializes != 1 || count.starts != 1 || count.turns != 2 {
+			t.Fatalf("pid=%d counts=%+v", pid, count)
+		}
 	}
 	items, err := s.translations("doc", m)
 	if err != nil {
@@ -183,7 +196,7 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Calls) != 2 {
+	if len(report.Calls) != 6 {
 		t.Fatalf("calls=%+v", report.Calls)
 	}
 	for _, call := range report.Calls {
@@ -218,12 +231,73 @@ func TestTranslationCodexCancellationClosesSession(t *testing.T) {
 	}
 }
 
+func TestTranslationCodexCancellationClosesAllWorkers(t *testing.T) {
+	s, p, m, capture := translationSessionFixture(t)
+	b := m.Blocks[0]
+	b.ID = "p1-b3"
+	m.Blocks = append(m.Blocks, b)
+	t.Setenv("READER_TRANSLATION_CANCEL", "1")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.settleTranslations(ctx, &p, m) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		items, err := s.translations("doc", m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		complete := 0
+		for _, item := range items {
+			if item.Status == "complete" {
+				complete++
+			}
+		}
+		if complete == 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("three workers did not stream paragraphs")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation reported %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("workers did not stop")
+	}
+	data, err := os.ReadFile(capture)
+	if err != nil || strings.Count(string(data), `"method":"thread/start"`) != 3 {
+		t.Fatalf("did not create three threads: %s %v", data, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(s.Store.Root, "ai-work"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("worker directories leaked: %v %v", entries, err)
+	}
+}
+
 func TestTranslationCodexFailureRetryPreservesCompletedParagraphs(t *testing.T) {
 	s, p, m, capture := translationSessionFixture(t)
 	t.Setenv("READER_TRANSLATION_FAIL_SECOND", "1")
-	if err := s.settleTranslations(t.Context(), &p, m); err == nil {
+	// Exercise a failed subsequent turn on one worker's reused conversation.
+	service, adapter := s.translationService(s.aiConfig())
+	defer adapter.close()
+	initial, err := s.textTranslations("doc", m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batches := translationBatches(m, initial, translationBatchCharacters)
+	if err := s.translateBatch(t.Context(), Document{ID: "doc"}, m, batches[0], service, func() {}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.translateBatch(t.Context(), Document{ID: "doc"}, m, batches[1], service, func() {}); err == nil {
 		t.Fatal("failed turn reported success")
 	}
+	adapter.close()
 	items, err := s.translations("doc", m)
 	if err != nil {
 		t.Fatal(err)

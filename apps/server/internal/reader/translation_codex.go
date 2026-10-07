@@ -9,7 +9,7 @@ import (
 const translationCodexModel = "gpt-5.6-luna"
 const translationCodexEffort = "low"
 
-// Owned by a single sequential translation run, independently of chat sessions.
+// Owned by a single sequential worker, independently of other workers and chat.
 // Failed turns discard the connection; a later batch can start a fresh thread.
 type translationCodexAdapter struct {
 	root, work string
