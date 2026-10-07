@@ -16,7 +16,9 @@ export function AssistanceControls({
   const [busy, setBusy] = useState(false);
   const serial = useRef(0);
   const job =
-    saved && (!processing || saved.updatedAt >= processing.updatedAt)
+    saved &&
+    (!processing ||
+      Date.parse(saved.updatedAt) > Date.parse(processing.updatedAt))
       ? saved
       : processing;
   useEffect(() => {
@@ -34,7 +36,7 @@ export function AssistanceControls({
       serial.current++;
     };
   }, [documentId]);
-  const complete = job?.status === "complete";
+  const complete = job?.enabled && job.status === "complete";
   const action = job?.enabled ? "pause" : job?.startedAt ? "resume" : "start";
   return (
     <div className="assistance-controls">

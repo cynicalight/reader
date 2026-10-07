@@ -80,3 +80,37 @@ it("a paused whole-book job resumes instead of restarting its scope", async () =
   );
   expect(api.setAssistance).toHaveBeenCalledWith("book", "resume");
 });
+
+it("uses chronological status ordering for variable timestamp precision", async () => {
+  const saved: Processing = {
+    ...paused,
+    enabled: true,
+    status: "queued",
+    updatedAt: "2026-10-08T00:00:00.12Z",
+  };
+  vi.mocked(api.assistance).mockResolvedValue(saved);
+  await render(1, saved);
+  await render(1, {
+    ...saved,
+    status: "complete",
+    updatedAt: "2026-10-08T00:00:00.123Z",
+  });
+  expect(host.textContent).toContain("翻译完成");
+  expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
+});
+it("allows unconsented legacy completed jobs to start missing translations", async () => {
+  const legacy: Processing = { ...paused, status: "complete", phase: "ready" };
+  vi.mocked(api.assistance).mockResolvedValue(legacy);
+  vi.mocked(api.setAssistance).mockResolvedValue({
+    ...legacy,
+    enabled: true,
+    status: "queued",
+  });
+  await render(1, legacy);
+  expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(false);
+  expect(host.textContent).toContain("开始翻译");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(api.setAssistance).toHaveBeenCalledWith("book", "start");
+});
