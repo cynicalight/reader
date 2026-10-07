@@ -15,6 +15,8 @@ import (
 func TestMain(m *testing.M) {
 	if os.Getenv("READER_AGENT_HELPER") != "" {
 		switch os.Getenv("READER_AGENT_MODE") {
+		case "chat-session":
+			runChatSessionProcess()
 		case "models":
 			runModelProcess()
 		case "models-wait":

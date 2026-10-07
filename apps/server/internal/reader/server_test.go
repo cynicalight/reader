@@ -23,7 +23,9 @@ func testServer(t *testing.T) *Server {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { store.DB.Close() })
-	return NewServer(store, "test-secret", "")
+	server := NewServer(store, "test-secret", "")
+	t.Cleanup(server.Close)
+	return server
 }
 func request(t *testing.T, s *Server, method, path string, body io.Reader) *httptest.ResponseRecorder {
 	t.Helper()
@@ -281,7 +283,7 @@ func TestChatWithFakeCLI(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	prompt, e := os.ReadFile(capture)
-	if e != nil || !strings.Contains(string(prompt), "Source excerpts: Some text") {
+	if e != nil || strings.Count(string(prompt), "Some text") != 1 || !strings.Contains(string(prompt), "Explain") || !strings.Contains(string(prompt), "A new page") {
 		t.Fatal("prior context missing from follow-up", e)
 	}
 

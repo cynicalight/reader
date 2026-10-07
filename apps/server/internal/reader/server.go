@@ -18,6 +18,7 @@ import (
 )
 
 type Server struct {
+	codexChat              codexChatCache
 	Store                  *Store
 	Token                  string
 	Web                    string

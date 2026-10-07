@@ -104,6 +104,7 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.codexChat.deleteDocument(id)
 	tx, err := s.Store.DB.Begin()
 	if err != nil {
 		fail(w, 500, "无法删除文档")

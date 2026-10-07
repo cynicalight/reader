@@ -149,6 +149,7 @@ func runAgentProcess() {
 		}
 	}
 	decoder := json.NewDecoder(os.Stdin)
+	turnNumber := 0
 	for {
 		var req struct {
 			ID     json.RawMessage `json:"id"`
@@ -184,23 +185,25 @@ func runAgentProcess() {
 				}
 				respond(map[string]any{"thread": map[string]string{"id": "thread"}, "model": "actual-codex"})
 			case "turn/start":
+				turnNumber++
+				currentTurn := fmt.Sprintf("turn-%d", turnNumber)
 				if path := os.Getenv("READER_AGENT_CAPTURE"); path != "" {
 					_ = os.WriteFile(path, req.Params, 0600)
 				}
 				if mode != "interleaved" {
-					respond(map[string]any{"turn": map[string]string{"id": "turn", "status": "inProgress"}})
+					respond(map[string]any{"turn": map[string]string{"id": currentTurn, "status": "inProgress"}})
 				}
 				notify := func(method string, params map[string]any) {
 					params["threadId"] = "thread"
-					params["turnId"] = "turn"
+					params["turnId"] = currentTurn
 					emit(map[string]any{"method": method, "params": params})
 				}
 				if mode == "fail-before" {
-					notify("turn/completed", map[string]any{"turn": map[string]string{"id": "turn", "status": "failed"}})
+					notify("turn/completed", map[string]any{"turn": map[string]string{"id": currentTurn, "status": "failed"}})
 					continue
 				}
 				if mode == "protocol" {
-					emit(map[string]any{"id": "approval", "method": "item/commandExecution/requestApproval", "params": map[string]string{"threadId": "thread", "turnId": "turn"}})
+					emit(map[string]any{"id": "approval", "method": "item/commandExecution/requestApproval", "params": map[string]string{"threadId": "thread", "turnId": currentTurn}})
 					var denied struct {
 						ID    string          `json:"id"`
 						Error json.RawMessage `json:"error"`
@@ -208,7 +211,7 @@ func runAgentProcess() {
 					if decoder.Decode(&denied) != nil || denied.ID != "approval" || len(denied.Error) == 0 {
 						os.Exit(14)
 					}
-					emit(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "other", "turnId": "turn", "itemId": "other", "delta": "private"}})
+					emit(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "other", "turnId": currentTurn, "itemId": "other", "delta": "private"}})
 					emit(map[string]any{"method": "item/agentMessage/delta", "params": map[string]string{"threadId": "thread", "turnId": "other", "itemId": "other", "delta": "private"}})
 				}
 				if mode == "usage" {
@@ -221,7 +224,7 @@ func runAgentProcess() {
 				notify("item/commandExecution/outputDelta", map[string]any{"delta": "tool output"})
 				notify("item/agentMessage/delta", map[string]any{"itemId": "answer", "delta": "你好"})
 				if mode == "interleaved" {
-					respond(map[string]any{"turn": map[string]string{"id": "turn", "status": "inProgress"}})
+					respond(map[string]any{"turn": map[string]string{"id": currentTurn, "status": "inProgress"}})
 				}
 				if mode == "protocol-cancel" || mode == "ignore-cancel" {
 					var interrupt struct {
@@ -238,7 +241,7 @@ func runAgentProcess() {
 					}
 					notify("item/agentMessage/delta", map[string]any{"itemId": "answer", "delta": "late"})
 					emit(map[string]any{"id": interrupt.ID, "result": map[string]any{}})
-					notify("turn/completed", map[string]any{"turn": map[string]string{"id": "turn", "status": "interrupted"}})
+					notify("turn/completed", map[string]any{"turn": map[string]string{"id": currentTurn, "status": "interrupted"}})
 					continue
 				}
 				gate()
@@ -246,7 +249,7 @@ func runAgentProcess() {
 					return
 				}
 				if mode == "fail-after" {
-					notify("turn/completed", map[string]any{"turn": map[string]string{"id": "turn", "status": "failed"}})
+					notify("turn/completed", map[string]any{"turn": map[string]string{"id": currentTurn, "status": "failed"}})
 					continue
 				}
 				if mode != "suffix" {
@@ -257,7 +260,7 @@ func runAgentProcess() {
 					final = "different answer"
 				}
 				notify("item/completed", map[string]any{"item": map[string]string{"id": "answer", "type": "agentMessage", "text": final}})
-				notify("turn/completed", map[string]any{"turn": map[string]string{"id": "turn", "status": "completed"}})
+				notify("turn/completed", map[string]any{"turn": map[string]string{"id": currentTurn, "status": "completed"}})
 			}
 		} else {
 			switch req.Method {
