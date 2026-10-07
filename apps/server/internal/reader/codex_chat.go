@@ -142,34 +142,32 @@ func (a codexChatAdapter) Stream(ctx context.Context, req GenerateRequest, emit 
 	if req.Input.Chat == nil || len(req.Input.images()) > 0 {
 		return a.configuredCLIAdapter.Stream(ctx, req, emit)
 	}
-	cli, err := a.resolve(ctx, &req.Input)
-	if err != nil {
-		return GenerateResult{}, err
-	}
-	session, in, err := a.cache.acquire(cli.root, cli.model, req.Input)
-	if err != nil {
-		return GenerateResult{}, err
-	}
-	child, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var emitErr error
-	send := func(e ProviderEvent) {
-		if emitErr == nil && emit != nil {
-			emitErr = emit(e)
-			if emitErr != nil {
-				cancel()
+	return a.streamWith(ctx, req, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		session, in, err := a.cache.acquire(cli.root, cli.model, req.Input)
+		if err != nil {
+			return GenerateResult{}, err
+		}
+		child, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var emitErr error
+		send := func(e ProviderEvent) {
+			if emitErr == nil && emit != nil {
+				emitErr = emit(e)
+				if emitErr != nil {
+					cancel()
+				}
 			}
 		}
-	}
-	text, err := session.generate(child, in, func(part string) { send(ProviderEvent{Text: part}) }, func(metrics []ModelTokens) { send(ProviderEvent{Metrics: metrics}) })
-	if emitErr != nil {
-		err = emitErr
-	}
-	if err != nil {
-		a.cache.finish(in.Chat, "", false)
-		return GenerateResult{}, err
-	}
-	return GenerateResult{text, "stop"}, nil
+		text, err := session.generate(child, in, func(part string) { send(ProviderEvent{Text: part}) }, func(metrics []ModelTokens) { send(ProviderEvent{Metrics: metrics}) })
+		if emitErr != nil {
+			err = emitErr
+		}
+		if err != nil {
+			a.cache.finish(in.Chat, "", false)
+			return GenerateResult{}, err
+		}
+		return GenerateResult{text, "stop"}, nil
+	})
 }
 func (s *Server) Close() { s.codexChat.close() }
 

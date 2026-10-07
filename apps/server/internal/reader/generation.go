@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -127,26 +128,49 @@ type configuredCLIAdapter struct {
 	catalog func(context.Context, string) ([]AgentModel, error)
 }
 
-// resolve fills an unset model with the task default and maps the effort.
-func (a configuredCLIAdapter) resolve(ctx context.Context, in *AIInput) (cliAdapter, error) {
+// streamWith fills an unset model with the task default and maps the effort.
+// If that automatic choice fails before any text, retry once with the CLI's
+// own default: the account may not offer the recommended model. A model the
+// user chose is never replaced.
+func (a configuredCLIAdapter) streamWith(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error, run func(cliAdapter, GenerateRequest, func(ProviderEvent) error) (GenerateResult, error)) (GenerateResult, error) {
 	models, err := a.catalog(ctx, a.provider)
 	if err != nil {
-		return cliAdapter{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
+		return GenerateResult{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
 	}
 	cli := a.cliAdapter
-	if cli.model == "" {
+	automatic := cli.model == ""
+	if automatic {
 		cli.model = defaultTaskModel(a.task, a.provider, models)
 	}
-	in.Effort = nativeEffort(a.provider, a.level, cli.model, models)
-	return cli, nil
+	first := req
+	first.Input.Effort = nativeEffort(a.provider, a.level, cli.model, models)
+	var visible, emitFailed atomic.Bool
+	result, err := run(cli, first, func(e ProviderEvent) error {
+		if e.Text != "" {
+			visible.Store(true)
+		}
+		if emit == nil {
+			return nil
+		}
+		if err := emit(e); err != nil {
+			emitFailed.Store(true)
+			return err
+		}
+		return nil
+	})
+	if err == nil || !automatic || cli.model == "" || visible.Load() || emitFailed.Load() || ctx.Err() != nil || errorKind(err) == ErrorCanceled {
+		return result, err
+	}
+	log.Printf("%s %s model %s failed before output, retrying with the CLI default: %v", a.provider, a.task, cli.model, err)
+	cli.model = ""
+	req.Input.Effort = nativeEffort(a.provider, a.level, "", models)
+	return run(cli, req, emit)
 }
 
 func (a configuredCLIAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
-	cli, err := a.resolve(ctx, &req.Input)
-	if err != nil {
-		return GenerateResult{}, err
-	}
-	return cli.Stream(ctx, req, emit)
+	return a.streamWith(ctx, req, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		return cli.Stream(ctx, req, emit)
+	})
 }
 
 func (a cliAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {

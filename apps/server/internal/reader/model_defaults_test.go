@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -151,5 +152,56 @@ func TestModelVersion(t *testing.T) {
 		if got := fmt.Sprint(modelVersion(id)); got != want {
 			t.Fatalf("%s: got %s want %s", id, got, want)
 		}
+	}
+}
+
+func TestAutomaticModelFallsBackToCLIDefault(t *testing.T) {
+	models := catalog("claude-opus-5-5", "claude-sonnet-5-5")
+	for i := range models {
+		models[i].SupportedEfforts = []string{"low", "medium", "high"}
+	}
+	adapter := func(model string) configuredCLIAdapter {
+		return configuredCLIAdapter{cliAdapter{"", "claude", model}, "medium", taskTranslation,
+			func(context.Context, string) ([]AgentModel, error) { return models, nil }}
+	}
+	for _, tt := range []struct {
+		name       string
+		configured string
+		partial    bool
+		emitErr    error
+		want       []string
+		ok         bool
+	}{
+		{"automatic choice retries with the CLI default", "", false, nil, []string{"claude-sonnet-5-5", ""}, true},
+		{"user choice is never replaced", "claude-sonnet-5-5", false, nil, []string{"claude-sonnet-5-5"}, false},
+		{"visible text is never followed by a retry", "", true, nil, []string{"claude-sonnet-5-5"}, false},
+		{"consumer failure is not retried", "", false, errors.New("save"), []string{"claude-sonnet-5-5"}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls, efforts []string
+			emit := func(ProviderEvent) error { return tt.emitErr }
+			_, err := adapter(tt.configured).streamWith(t.Context(), GenerateRequest{}, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+				calls = append(calls, cli.model)
+				efforts = append(efforts, req.Input.Effort)
+				if cli.model == "" {
+					return GenerateResult{"ok", "stop"}, nil
+				}
+				if tt.partial {
+					_ = emit(ProviderEvent{Text: "部分"})
+				}
+				if tt.emitErr != nil {
+					return GenerateResult{}, emit(ProviderEvent{Metrics: []ModelTokens{{Model: "m"}}})
+				}
+				return GenerateResult{}, errors.New("model not available")
+			})
+			if fmt.Sprint(calls) != fmt.Sprint(tt.want) || (err == nil) != tt.ok {
+				t.Fatalf("calls %q err %v", calls, err)
+			}
+			for _, effort := range efforts {
+				if effort != "medium" {
+					t.Fatalf("effort %q", effort)
+				}
+			}
+		})
 	}
 }
