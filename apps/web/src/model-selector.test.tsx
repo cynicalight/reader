@@ -207,6 +207,14 @@ it("resolves aliases and preserves custom model IDs", () => {
   expect(selectedAgentModel(models, "fast")?.id).toBe("model-a");
   expect(selectedAgentModel(models, "custom-model")?.id).toBe("custom-model");
   expect(selectedAgentModel(models, "")?.id).toBe("model-a");
+  const recommended = [
+    models[0]!,
+    { ...models[1]!, recommendedFor: ["chat" as const] },
+  ];
+  expect(selectedAgentModel(recommended, "")?.id).toBe("model-b");
+  expect(selectedAgentModel(recommended, "", "translation")?.id).toBe(
+    "model-a",
+  );
 });
 
 async function openEffort() {
