@@ -1837,6 +1837,79 @@
                 },
             },
         },
+      "/api/libraries/{library}/tags":
+        {
+          "post":
+            {
+              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from": { "type": "string", "minLength": 1 },
+                                  "to":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 40,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Changed documents",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "changed": { "type": "number" } },
+                                  "required": ["changed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {

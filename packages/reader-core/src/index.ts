@@ -78,8 +78,19 @@ export type PaperMetadataField = Exclude<
   "sources" | "lookedUpAt"
 >;
 export type ReadingStatus = "unread" | "reading" | "done";
+export type PaperSort = "opened" | "added" | "year" | "title";
+export interface PaperLibraryPreferences {
+  /** Category (tag) order, including categories without papers. */
+  categories?: string[];
+  /** Pinned sidebar entries: "view:<id>", "tag:<name>" or "doc:<id>". */
+  pinned?: string[];
+  /** Hidden built-in views ("view:<id>") and categories ("tag:<name>"). */
+  hidden?: string[];
+  sort?: PaperSort;
+}
 export interface LibraryPreferences {
   mode?: LibraryMode;
+  papers?: PaperLibraryPreferences;
 }
 export interface TagBoard {
   id: string;

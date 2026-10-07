@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"rsc.io/pdf"
 )
@@ -103,4 +104,93 @@ func (s *Server) savePreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, 200, json.RawMessage(b))
+}
+
+// changeTag renames (to != "") or removes a tag on every document in a library,
+// including the trash, in one transaction.
+func (s *Store) changeTag(library, from, to string) (int, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query("SELECT id,tags FROM documents WHERE library=?", library)
+	if err != nil {
+		return 0, err
+	}
+	type change struct{ id, tags string }
+	changes := []change{}
+	for rows.Next() {
+		var id, raw string
+		var tags []string
+		if err = rows.Scan(&id, &raw); err != nil || json.Unmarshal([]byte(raw), &tags) != nil {
+			rows.Close()
+			return 0, errors.New("标签数据损坏")
+		}
+		next, hit := []string{}, false
+		for _, tag := range tags {
+			if strings.EqualFold(tag, from) {
+				hit = true
+				if to == "" {
+					continue
+				}
+				tag = to
+			}
+			next = append(next, tag)
+		}
+		if !hit {
+			continue
+		}
+		b, _ := json.Marshal(next)
+		normalized, e := normalizeTags(b)
+		if e != nil {
+			rows.Close()
+			return 0, e
+		}
+		b, _ = json.Marshal(normalized)
+		changes = append(changes, change{id, string(b)})
+	}
+	rows.Close()
+	for _, c := range changes {
+		if _, err = tx.Exec("UPDATE documents SET tags=? WHERE id=?", c.tags, c.id); err != nil {
+			return 0, err
+		}
+	}
+	return len(changes), tx.Commit()
+}
+
+func (s *Server) changeLibraryTag(w http.ResponseWriter, r *http.Request) {
+	library := r.PathValue("library")
+	if !validLibrary(library) {
+		fail(w, 404, "未知书库")
+		return
+	}
+	var v struct {
+		From string  `json:"from"`
+		To   *string `json:"to"`
+	}
+	if !decode(w, r, &v) {
+		return
+	}
+	from := strings.TrimSpace(v.From)
+	to := ""
+	if v.To != nil {
+		b, _ := json.Marshal([]string{*v.To})
+		names, err := normalizeTags(b)
+		if err != nil {
+			fail(w, 400, err.Error())
+			return
+		}
+		to = names[0]
+	}
+	if from == "" {
+		fail(w, 400, "请指定分类")
+		return
+	}
+	count, err := s.Store.changeTag(library, from, to)
+	if err != nil {
+		fail(w, 500, "分类保存失败")
+		return
+	}
+	respond(w, 200, map[string]int{"changed": count})
 }

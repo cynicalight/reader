@@ -227,6 +227,12 @@ export const api = {
     request<Message[]>(`/api/documents/${id}/messages`, { signal }),
   providers: (checkAuth = true) =>
     request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
+  /** Rename a category across a library, or remove it when `to` is omitted. */
+  changeLibraryTag: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/tags`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
   libraryPreferences: () =>
     request<LibraryPreferences>("/api/preferences/library"),
   saveLibraryPreferences: (preferences: LibraryPreferences) =>

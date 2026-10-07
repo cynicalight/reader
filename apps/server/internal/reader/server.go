@@ -106,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/models", s.agentModels)
 	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
 	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
+	mux.HandleFunc("POST /api/libraries/{library}/tags", s.changeLibraryTag)
 	mux.HandleFunc("GET /api/preferences/{key}", s.preferences)
 	mux.HandleFunc("PUT /api/preferences/{key}", s.savePreferences)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {

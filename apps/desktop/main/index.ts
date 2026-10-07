@@ -5,6 +5,7 @@ import {
   ipcMain,
   session,
   nativeTheme,
+  shell,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, resolve } from "node:path";
@@ -267,6 +268,45 @@ app
       window.setBackgroundColor(
         nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
       );
+    });
+    ipcMain.handle(
+      "reader:document-file",
+      async (event, id: unknown, type: unknown, action: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        // Only library-owned copies, addressed by content hash, can be reached.
+        if (
+          typeof id !== "string" ||
+          !/^[0-9a-f]{32}$/.test(id) ||
+          (type !== "pdf" && type !== "epub") ||
+          (action !== "show" && action !== "open")
+        )
+          throw new Error("Invalid document");
+        const file = join(
+          app.getPath("userData"),
+          "library",
+          type === "pdf" ? "papers" : "books",
+          `${id}.${type}`,
+        );
+        if (action === "show") shell.showItemInFolder(file);
+        else {
+          const error = await shell.openPath(file);
+          if (error) throw new Error(error);
+        }
+      },
+    );
+    ipcMain.handle("reader:open-external", async (event, url: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url))
+        throw new Error("Invalid link");
+      await shell.openExternal(new URL(url).toString());
     });
     ipcMain.handle("reader:import", async (event, library: unknown) => {
       if (

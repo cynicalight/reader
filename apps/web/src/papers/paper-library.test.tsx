@@ -1,0 +1,204 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { api } from "@reader/api";
+import type { Document } from "@reader/core";
+import { useReaderStore } from "../store";
+import { PaperLibrary } from "./PaperLibrary";
+import { PaperSidebar } from "./PaperSidebar";
+import { usePaperUI } from "./state";
+import { paper } from "./fixtures";
+vi.mock("@reader/api", () => ({
+  api: {
+    update: vi.fn(async () => ({})),
+    documents: vi.fn(async () => []),
+    trash: vi.fn(async () => []),
+    trashDocument: vi.fn(),
+    restoreDocument: vi.fn(),
+    saveLibraryPreferences: vi.fn(async (value) => value),
+    changeLibraryTag: vi.fn(async () => ({ changed: 1 })),
+  },
+}));
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+const docs: Document[] = [
+  paper({
+    id: "a",
+    title: "Attention Is All You Need",
+    tags: ["ML"],
+    metadata: {
+      creators: [{ given: "Ashish", family: "Vaswani" }],
+      date: "2017",
+      venue: "NeurIPS",
+      abstract: "The dominant sequence transduction models…",
+    },
+  }),
+  paper({ id: "b", title: "Graph Attention Networks", readingStatus: "done" }),
+];
+let root: Root, host: HTMLDivElement;
+const open = vi.fn();
+function Harness() {
+  const documents = useReaderStore((s) => s.documents);
+  return (
+    <>
+      <PaperSidebar
+        documents={documents}
+        jobs={new Map()}
+        trashCount={0}
+        openDocument={open}
+        onNewCategory={() => {}}
+      />
+      <PaperLibrary
+        documents={documents}
+        trash={[]}
+        jobs={new Map()}
+        loading={false}
+        openDocument={open}
+        moveToBooks={() => {}}
+        navOpen
+        onToggleNav={() => {}}
+      />
+    </>
+  );
+}
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.clearAllMocks();
+  vi.mocked(api.documents).mockImplementation(
+    async () => useReaderStore.getState().documents,
+  );
+  useReaderStore.setState({
+    documents: docs,
+    libraryPreferences: { mode: "papers", papers: { sort: "title" } },
+  });
+  usePaperUI.setState({
+    view: "all",
+    query: "",
+    selectedId: null,
+    picking: false,
+    picked: new Set(),
+    anchor: null,
+    naming: null,
+  });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => root.render(<Harness />));
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+});
+const row = (title: string) =>
+  host.querySelector<HTMLElement>(`[aria-label="${title}"][data-paper-id]`)!;
+const navButton = (label: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>(".paper-nav-item")].find((b) =>
+    b.textContent?.includes(label),
+  )!;
+
+it("lists papers with author, year and venue and opens on double click", async () => {
+  expect(row("Attention Is All You Need").textContent).toContain(
+    "Ashish Vaswani · 2017 · NeurIPS",
+  );
+  await act(async () =>
+    row("Graph Attention Networks").dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true }),
+    ),
+  );
+  expect(open).toHaveBeenCalledExactlyOnceWith(docs[1]);
+});
+
+it("shows details on click and saves an edited field as manual metadata", async () => {
+  await act(async () => row("Attention Is All You Need").click());
+  const detail = host.querySelector(".paper-detail")!;
+  expect(detail.textContent).toContain("摘要");
+  const venue = detail.querySelector<HTMLInputElement>('[aria-label="出处"]')!;
+  expect(venue.value).toBe("NeurIPS");
+  venue.value = "NIPS 2017";
+  await act(async () => {
+    venue.focus();
+    venue.blur();
+  });
+  expect(api.update).toHaveBeenCalledExactlyOnceWith("a", {
+    metadata: { venue: "NIPS 2017" },
+  });
+});
+
+it("filters by sidebar views and the search box", async () => {
+  await act(async () => navButton("已读").click());
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
+  expect(row("Graph Attention Networks")).toBeTruthy();
+  await act(async () => navButton("ML").click());
+  expect(host.querySelector(".library-title")?.textContent).toBe("ML");
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
+  await act(async () => navButton("全部论文").click());
+  const search = host.querySelector<HTMLInputElement>(
+    '[aria-label="搜索论文"]',
+  )!;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    setter.call(search, "vaswani 2017");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
+});
+
+it("selects all visible papers and changes their status together", async () => {
+  await act(async () =>
+    row("Attention Is All You Need").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", metaKey: true, bubbles: true }),
+    ),
+  );
+  expect(host.textContent).toContain("已选 2 篇");
+  await act(async () => row("Attention Is All You Need").click());
+  expect(host.textContent).toContain("已选 1 篇");
+  const star = [...host.querySelectorAll("button")].find(
+    (b) => b.textContent === "星标",
+  )!;
+  await act(async () => star.click());
+  expect(api.update).toHaveBeenCalledExactlyOnceWith("b", { favorite: true });
+});
+
+it("renames a category everywhere through the library endpoint", async () => {
+  await act(async () =>
+    navButton("ML").dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    ),
+  );
+  const rename = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent === "改名")!;
+  await act(async () => rename.click());
+  const input = host.querySelector<HTMLInputElement>('[aria-label="分类名"]')!;
+  input.value = "Machine learning";
+  await act(async () =>
+    input.form!.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(api.changeLibraryTag).toHaveBeenCalledExactlyOnceWith(
+    "papers",
+    "ML",
+    "Machine learning",
+  );
+});

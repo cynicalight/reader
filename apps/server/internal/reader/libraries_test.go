@@ -185,3 +185,40 @@ func TestLibraryPreferences(t *testing.T) {
 		t.Fatalf("non-object: %d", w.Code)
 	}
 }
+func TestRenameAndRemoveLibraryTag(t *testing.T) {
+	s := testServer(t)
+	ids := []string{}
+	for i, library := range []string{"papers", "papers", "books"} {
+		w := uploadTo(t, s, library, fmt.Sprintf("p%d.pdf", i), testPDF(i+1))
+		var d Document
+		_ = json.Unmarshal(w.Body.Bytes(), &d)
+		ids = append(ids, d.ID)
+	}
+	request(t, s, "PATCH", "/api/documents/"+ids[0], strings.NewReader(`{"tags":["ML","Vision"]}`))
+	request(t, s, "PATCH", "/api/documents/"+ids[1], strings.NewReader(`{"tags":["ml","NLP"]}`))
+	request(t, s, "PATCH", "/api/documents/"+ids[2], strings.NewReader(`{"tags":["ML"]}`))
+	request(t, s, "POST", "/api/documents/"+ids[1]+"/trash", nil)
+	w := request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"ML","to":"NLP"}`))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"changed":2`) {
+		t.Fatal(w.Body.String())
+	}
+	a, _ := s.Store.Document(ids[0])
+	b, _ := s.Store.Document(ids[1])
+	c, _ := s.Store.Document(ids[2])
+	if strings.Join(a.Tags, ",") != "NLP,Vision" || strings.Join(b.Tags, ",") != "NLP" || strings.Join(c.Tags, ",") != "ML" {
+		t.Fatalf("rename: %v %v %v", a.Tags, b.Tags, c.Tags)
+	}
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"NLP"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	a, _ = s.Store.Document(ids[0])
+	if strings.Join(a.Tags, ",") != "Vision" {
+		t.Fatalf("remove: %v", a.Tags)
+	}
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"Vision","to":" "}`)); w.Code != 400 {
+		t.Fatalf("blank rename: %d", w.Code)
+	}
+	if w = request(t, s, "POST", "/api/libraries/shelf/tags", strings.NewReader(`{"from":"x"}`)); w.Code != 404 {
+		t.Fatalf("unknown library: %d", w.Code)
+	}
+}

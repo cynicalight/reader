@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld("readerDesktop", {
     ipcRenderer.invoke("reader:appearance", appearance),
   importFiles: (library: "books" | "papers") =>
     ipcRenderer.invoke("reader:import", library),
+  showDocumentFile: (id: string, type: "pdf" | "epub") =>
+    ipcRenderer.invoke("reader:document-file", id, type, "show"),
+  openDocumentFile: (id: string, type: "pdf" | "epub") =>
+    ipcRenderer.invoke("reader:document-file", id, type, "open"),
+  openExternal: (url: string) =>
+    ipcRenderer.invoke("reader:open-external", url),
   onLibraryChanged: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("reader:library-changed", listener);
