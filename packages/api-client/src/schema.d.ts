@@ -1583,6 +1583,8 @@ export interface components {
       description: string;
       isDefault: boolean;
       aliases?: string[];
+      /** @description Tasks that use this model when no model is chosen. */
+      recommendedFor?: ("chat" | "translation")[];
     };
     /** @enum {string} */
     ReasoningEffort: "low" | "medium" | "high" | "max";
@@ -1593,6 +1595,16 @@ export interface components {
       };
       /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
       efforts?: {
+        [key: string]: {
+          [key: string]: components["schemas"]["ReasoningEffort"];
+        };
+      };
+      /** @description Translation model by provider. Empty uses the provider's fast-tier recommendation. */
+      translationModels?: {
+        [key: string]: string;
+      };
+      /** @description Translation effort by provider and model ID. Defaults to medium. */
+      translationEfforts?: {
         [key: string]: {
           [key: string]: components["schemas"]["ReasoningEffort"];
         };

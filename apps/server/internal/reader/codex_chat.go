@@ -142,12 +142,11 @@ func (a codexChatAdapter) Stream(ctx context.Context, req GenerateRequest, emit 
 	if req.Input.Chat == nil || len(req.Input.images()) > 0 {
 		return a.configuredCLIAdapter.Stream(ctx, req, emit)
 	}
-	models, err := a.catalog(ctx, a.provider)
+	cli, err := a.resolve(ctx, &req.Input)
 	if err != nil {
-		return GenerateResult{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
+		return GenerateResult{}, err
 	}
-	req.Input.Effort = nativeEffort(a.provider, a.level, a.model, models)
-	session, in, err := a.cache.acquire(a.root, a.model, req.Input)
+	session, in, err := a.cache.acquire(cli.root, cli.model, req.Input)
 	if err != nil {
 		return GenerateResult{}, err
 	}

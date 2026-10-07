@@ -1999,6 +1999,13 @@
                   "description": { "type": "string" },
                   "isDefault": { "type": "boolean" },
                   "aliases": { "type": "array", "items": { "type": "string" } },
+                  "recommendedFor":
+                    {
+                      "type": "array",
+                      "description": "Tasks that use this model when no model is chosen.",
+                      "items":
+                        { "type": "string", "enum": ["chat", "translation"] },
+                    },
                 },
             },
           "ReasoningEffort":
@@ -2018,6 +2025,23 @@
                     {
                       "type": "object",
                       "description": "Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation.",
+                      "additionalProperties":
+                        {
+                          "type": "object",
+                          "additionalProperties":
+                            { "$ref": "#/components/schemas/ReasoningEffort" },
+                        },
+                    },
+                  "translationModels":
+                    {
+                      "type": "object",
+                      "description": "Translation model by provider. Empty uses the provider's fast-tier recommendation.",
+                      "additionalProperties": { "type": "string" },
+                    },
+                  "translationEfforts":
+                    {
+                      "type": "object",
+                      "description": "Translation effort by provider and model ID. Defaults to medium.",
                       "additionalProperties":
                         {
                           "type": "object",
