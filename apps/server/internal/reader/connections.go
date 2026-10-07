@@ -36,12 +36,16 @@ type Capability struct {
 	Fingerprint   string `json:"-"`
 }
 type AIConfig struct {
-	Primary      string                       `json:"primary"`
-	Models       map[string]string            `json:"models"`
-	Efforts      map[string]map[string]string `json:"efforts,omitempty"`
-	TextAPI      APIConnection                `json:"textAPI"`
-	ImageAPI     APIConnection                `json:"imageAPI"`
-	Capabilities map[string]Capability        `json:"capabilities"`
+	Primary string                       `json:"primary"`
+	Models  map[string]string            `json:"models"`
+	Efforts map[string]map[string]string `json:"efforts,omitempty"`
+	// Translation choices are independent of chat. An empty model means
+	// Reader picks the fast tier from the live catalog.
+	TranslationModels  map[string]string            `json:"translationModels,omitempty"`
+	TranslationEfforts map[string]map[string]string `json:"translationEfforts,omitempty"`
+	TextAPI            APIConnection                `json:"textAPI"`
+	ImageAPI           APIConnection                `json:"imageAPI"`
+	Capabilities       map[string]Capability        `json:"capabilities"`
 }
 type savedConfig struct {
 	Config       AIConfig          `json:"config"`
@@ -209,11 +213,13 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请选择主 Agent")
 		return
 	}
-	for provider, models := range c.Efforts {
-		for _, effort := range models {
-			if !validEffort(provider, effort) {
-				fail(w, 400, "无效的 Effort 档位")
-				return
+	for _, efforts := range []map[string]map[string]string{c.Efforts, c.TranslationEfforts} {
+		for provider, models := range efforts {
+			for _, effort := range models {
+				if !validEffort(provider, effort) {
+					fail(w, 400, "无效的 Effort 档位")
+					return
+				}
 			}
 		}
 	}
@@ -222,6 +228,12 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 	old := s.readAIConfig()
 	if c.Efforts == nil {
 		c.Efforts = old.Efforts
+	}
+	if c.TranslationModels == nil {
+		c.TranslationModels = old.TranslationModels
+	}
+	if c.TranslationEfforts == nil {
+		c.TranslationEfforts = old.TranslationEfforts
 	}
 	// Omitted keys preserve secrets; hasKey=false plus empty key explicitly clears one.
 	if c.TextAPI.Key == "" && c.TextAPI.HasKey {
@@ -329,7 +341,14 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 func (s *Server) probeConnection(parent context.Context, c AIConfig, p string, in AIInput, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	var adapter Adapter = cliAdapter{s.Store.Root, p, c.Models[p]}
+	model := c.Models[p]
+	if model == "" && validAgent(p) {
+		// Test the model chat will actually use. Catalog failure keeps the CLI default.
+		if models, err := s.modelCatalog(ctx, p); err == nil {
+			model = defaultTaskModel(taskChat, p, models)
+		}
+	}
+	var adapter Adapter = cliAdapter{s.Store.Root, p, model}
 	if p == "text-api" {
 		adapter = apiAdapter{c.TextAPI}
 	}

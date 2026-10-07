@@ -46,6 +46,7 @@ export function App() {
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
   const [settings, setSettings] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
@@ -511,6 +512,21 @@ export function App() {
               <dt className="text-muted-foreground">版本</dt>
               <dd>{version}</dd>
             </dl>
+            {window.readerDesktop?.checkForUpdates && (
+              <Button
+                variant="outline"
+                disabled={checkingUpdates}
+                onClick={() => {
+                  setCheckingUpdates(true);
+                  void window
+                    .readerDesktop!.checkForUpdates()
+                    .catch((error) => toast.error(String(error)))
+                    .finally(() => setCheckingUpdates(false));
+                }}
+              >
+                {checkingUpdates ? "正在检查或下载…" : "检查更新"}
+              </Button>
+            )}
           </DialogContent>
         </Dialog>
         <Dialog open={command} onOpenChange={setCommand}>

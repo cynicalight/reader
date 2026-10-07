@@ -166,7 +166,7 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 		progress()
 		return nil
 	})
-	service := s.generationService(config)
+	service := s.taskGenerationService(config, taskTranslation)
 	service.timeout = translationBatchTimeout
 	service.usageSink = s.processingUsageSink(doc.ID, "translating", batch.Paragraphs[0].BlockID+"…"+batch.Paragraphs[len(batch.Paragraphs)-1].BlockID)
 	_, callErr := service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {

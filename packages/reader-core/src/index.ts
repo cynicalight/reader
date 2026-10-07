@@ -268,6 +268,8 @@ export interface AIConfig {
   primary: string;
   models: Record<string, string>;
   efforts?: Record<string, Record<string, ReasoningEffort>>;
+  translationModels?: Record<string, string>;
+  translationEfforts?: Record<string, Record<string, ReasoningEffort>>;
   textAPI: APIConnection;
   imageAPI: APIConnection;
   capabilities: Record<string, AICapability>;
@@ -278,7 +280,9 @@ export interface AgentModel {
   description: string;
   isDefault: boolean;
   aliases?: string[];
+  recommendedFor?: ModelTask[];
 }
+export type ModelTask = "chat" | "translation";
 
 export { isPDFPageDecoration } from "./pdf-content";
 

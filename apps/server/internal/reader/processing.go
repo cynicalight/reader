@@ -417,7 +417,7 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			}
 			switch event.Event {
 			case "model-download":
-				p.Detail = "首次准备版面模型（约 130 MB）"
+				p.Detail = "首次准备版面模型（约 67 MB）"
 			case "model-progress":
 				p.Detail = fmt.Sprintf("正在下载版面模型 %.0f / %.0f MB", float64(event.Downloaded)/1e6, float64(event.Bytes)/1e6)
 			case "page":

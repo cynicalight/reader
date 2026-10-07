@@ -8,6 +8,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { ProviderIdentity } from "./ProviderIdentity";
+import { TaskModels } from "./TaskModels";
 import { api } from "@reader/api";
 import type { Provider } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -258,9 +259,10 @@ export function Settings({
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <TaskModels disabled={saving || testing.size > 0} />
                 <p className="text-xs leading-5 text-muted-foreground">
-                  对话使用此 SDK，具体模型在对话框中选择。开始翻译后，PDF
-                  中的图片会发送给此 Agent 进行解析。
+                  问答与翻译分别使用上方模型；未指定时，问答使用主力模型，翻译使用快速模型。
+                  公式转换与主动图片提问会向此 Agent 发送图片。
                 </p>
               </div>
             )}

@@ -4,6 +4,7 @@ import { act } from "react";
 import { PDFBlockOverlay } from "./pdf-blocks";
 import type { Annotation, PDFBlock } from "@reader/core";
 import { PDFAnnotationLayer } from "./pdf-annotations";
+import { readFileSync } from "node:fs";
 
 let host: HTMLDivElement;
 let text: HTMLSpanElement;
@@ -88,6 +89,49 @@ it("opens all overlapping records at the clicked line and removes only deleted m
   // A PDF.js page rerender must not resurrect a deleted annotation.
   layer.paint();
   expect(host.querySelectorAll(".reader-highlight")).toHaveLength(2);
+});
+it("composites overlapping rectangles once per annotation, including on hover and repaint", () => {
+  // Use the production rules: per-rectangle opacity would darken this overlap.
+  const style = document.createElement("style");
+  style.textContent = readFileSync("apps/web/src/style.css", "utf8")
+    .match(/\.reader-(?:annotation|highlight)[^{]*\{[^}]*\}/g)!
+    .join("\n");
+  document.head.append(style);
+  const mark = annotation("overlap");
+  if (mark.location.type !== "pdf") throw new Error("Expected PDF location");
+  mark.location.rects = [
+    { x: 0.1, y: 0.1, width: 0.3, height: 0.05 },
+    { x: 0.2, y: 0.1, width: 0.3, height: 0.05 },
+    { x: 0.1, y: 0.1, width: 0.3, height: 0.05 },
+  ];
+  try {
+    layer.setAnnotations([mark]);
+    const assertSingleComposite = (opacity: string) => {
+      const rects = [
+        ...host.querySelectorAll<HTMLElement>(".reader-highlight"),
+      ];
+      expect(rects).toHaveLength(3);
+      const group = rects[0].parentElement!;
+      expect(group).not.toBe(host.firstElementChild);
+      expect(rects.every((rect) => rect.parentElement === group)).toBe(true);
+      expect(getComputedStyle(group).opacity).toBe(opacity);
+      expect(getComputedStyle(group).mixBlendMode).toBe("multiply");
+      for (const rect of rects) {
+        expect(["", "1"]).toContain(getComputedStyle(rect).opacity);
+        expect(["", "normal"]).toContain(getComputedStyle(rect).mixBlendMode);
+      }
+    };
+    assertSingleComposite("0.32");
+    pointer("pointermove");
+    assertSingleComposite("0.48");
+    layer.paint();
+    assertSingleComposite("0.32");
+    expect(host.querySelectorAll(".reader-annotation")).toHaveLength(1);
+    layer.setAnnotations([]);
+    expect(host.querySelector(".reader-annotation")).toBeNull();
+  } finally {
+    style.remove();
+  }
 });
 it("leaves dragging, text selection and native links untouched", () => {
   pointer("pointerdown");

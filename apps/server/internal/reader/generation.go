@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -75,19 +76,32 @@ type GenerationService struct {
 }
 
 func (s *Server) generationService(config AIConfig) *GenerationService {
+	return s.taskGenerationService(config, taskChat)
+}
+
+func (s *Server) taskGenerationService(config AIConfig, task modelTask) *GenerationService {
 	g := &GenerationService{primary: config.Primary, connections: map[string]generationConnection{}}
+	models, efforts := config.Models, config.Efforts
+	if task == taskTranslation {
+		models, efforts = config.TranslationModels, config.TranslationEfforts
+	}
 	g.attemptFailed = func(provider string, vision bool, err error) {
+		// Capability checks cover the chat model; a failing translation model
+		// must not mark the agent unusable for chat.
+		if task == taskTranslation && validAgent(provider) {
+			return
+		}
 		if saveErr := s.recordCapabilityFailure(config, provider, vision, err); saveErr != nil {
 			log.Printf("cannot persist %s capability failure: %v", provider, saveErr)
 		}
 	}
 	for _, p := range []string{"codex", "claude", "kimi", "text-api", "image-api"} {
-		model := config.Models[p]
-		level := config.Efforts[p][model]
+		model := models[p]
+		level := efforts[p][model]
 		if level == "" {
 			level = "medium"
 		}
-		cli := configuredCLIAdapter{cliAdapter{s.Store.Root, p, model}, level, s.modelCatalog}
+		cli := configuredCLIAdapter{cliAdapter{s.Store.Root, p, model}, level, task, s.modelCatalog}
 		var adapter Adapter = cli
 		if p == "codex" {
 			adapter = codexChatAdapter{cli, &s.codexChat}
@@ -110,16 +124,53 @@ type cliAdapter struct{ root, provider, model string }
 type configuredCLIAdapter struct {
 	cliAdapter
 	level   string
+	task    modelTask
 	catalog func(context.Context, string) ([]AgentModel, error)
 }
 
-func (a configuredCLIAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+// streamWith fills an unset model with the task default and maps the effort.
+// If that automatic choice fails before any text, retry once with the CLI's
+// own default: the account may not offer the recommended model. A model the
+// user chose is never replaced.
+func (a configuredCLIAdapter) streamWith(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error, run func(cliAdapter, GenerateRequest, func(ProviderEvent) error) (GenerateResult, error)) (GenerateResult, error) {
 	models, err := a.catalog(ctx, a.provider)
 	if err != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, "无法获取模型的 Effort 配置，请重试")
 	}
-	req.Input.Effort = nativeEffort(a.provider, a.level, a.model, models)
-	return a.cliAdapter.Stream(ctx, req, emit)
+	cli := a.cliAdapter
+	automatic := cli.model == ""
+	if automatic {
+		cli.model = defaultTaskModel(a.task, a.provider, models)
+	}
+	first := req
+	first.Input.Effort = nativeEffort(a.provider, a.level, cli.model, models)
+	var visible, emitFailed atomic.Bool
+	result, err := run(cli, first, func(e ProviderEvent) error {
+		if e.Text != "" {
+			visible.Store(true)
+		}
+		if emit == nil {
+			return nil
+		}
+		if err := emit(e); err != nil {
+			emitFailed.Store(true)
+			return err
+		}
+		return nil
+	})
+	if err == nil || !automatic || cli.model == "" || visible.Load() || emitFailed.Load() || ctx.Err() != nil || errorKind(err) == ErrorCanceled {
+		return result, err
+	}
+	log.Printf("%s %s model %s failed before output, retrying with the CLI default: %v", a.provider, a.task, cli.model, err)
+	cli.model = ""
+	req.Input.Effort = nativeEffort(a.provider, a.level, "", models)
+	return run(cli, req, emit)
+}
+
+func (a configuredCLIAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	return a.streamWith(ctx, req, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		return cli.Stream(ctx, req, emit)
+	})
 }
 
 func (a cliAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
