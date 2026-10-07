@@ -62,6 +62,7 @@ import {
   type PaperView,
 } from "./model";
 import { usePaperUI } from "./state";
+import { exportCitations } from "./CitationMenu";
 
 /** Drag payload for papers moved onto sidebar targets. */
 export const PAPER_DRAG_TYPE = "application/x-reader-papers";
@@ -310,6 +311,16 @@ export function PaperSidebar({
               }}
             >
               批量选择这个分类的论文
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() =>
+                exportCitations(
+                  documents.filter((d) => matchesView(d, key, jobs)),
+                  name,
+                )
+              }
+            >
+              导出这个分类的引用
             </ContextMenuItem>
             <ContextMenuItem
               variant="destructive"

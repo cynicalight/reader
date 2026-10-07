@@ -11,6 +11,7 @@ import {
   Star,
   StickyNote,
   Highlighter,
+  Quote,
   Trash2,
 } from "lucide-react";
 import type {
@@ -68,6 +69,8 @@ import { usePaperUI } from "./state";
 import { PaperDetail } from "./PaperDetail";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CategoryDialog } from "./CategoryDialog";
+import { CitationDialog } from "./CitationDialog";
+import { copyCitations, exportCitations } from "./CitationMenu";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
 
 export interface PaperLibraryProps {
@@ -79,10 +82,6 @@ export interface PaperLibraryProps {
   moveToBooks: (doc: Document) => void;
   navOpen: boolean;
   onToggleNav: () => void;
-  /** Extra detail-panel and batch tools, such as citation export. */
-  detailTools?: (doc: Document) => React.ReactNode;
-  batchTools?: (docs: Document[]) => React.ReactNode;
-  menuExtra?: (docs: Document[]) => React.ReactNode;
 }
 
 const busy = (job?: Processing) =>
@@ -97,14 +96,11 @@ export function PaperLibrary({
   moveToBooks,
   navOpen,
   onToggleNav,
-  detailTools,
-  batchTools,
-  menuExtra,
 }: PaperLibraryProps) {
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
   const sort: PaperSort = prefs.sort || "opened";
   const ui = usePaperUI();
-  const { view, query, selectedId, picking, picked, naming } = ui;
+  const { view, query, selectedId, picking, picked, naming, exporting } = ui;
   const listRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () =>
@@ -147,6 +143,32 @@ export function PaperLibrary({
     };
     window.addEventListener("paste", paste);
     return () => window.removeEventListener("paste", paste);
+  }, []);
+  useEffect(() => {
+    // ⌘⇧C copies the selected papers in the last used citation format.
+    const key = (e: KeyboardEvent) => {
+      if (
+        !(e.metaKey || e.ctrlKey) ||
+        !e.shiftKey ||
+        e.key.toLowerCase() !== "c" ||
+        (e.target as Element | null)?.closest?.("input, textarea")
+      )
+        return;
+      const state = usePaperUI.getState();
+      const all = useReaderStore.getState().documents;
+      const targets = state.picking
+        ? all.filter((d) => state.picked.has(d.id))
+        : all.filter((d) => d.id === state.selectedId);
+      if (!targets.length) return;
+      e.preventDefault();
+      void copyCitations(
+        targets,
+        useReaderStore.getState().libraryPreferences.papers?.citationStyle ||
+          "gb7714",
+      );
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
   }, []);
   useEffect(() => {
     // A paper that left the library (trash, move) cannot stay selected.
@@ -397,7 +419,17 @@ export function PaperLibrary({
                     <Star />
                     星标
                   </Button>
-                  {batchTools?.(pickedDocs)}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!pickedDocs.length}
+                    onClick={() =>
+                      exportCitations(pickedDocs, `${pickedDocs.length} 篇论文`)
+                    }
+                  >
+                    <Quote />
+                    导出引用
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -439,7 +471,6 @@ export function PaperLibrary({
                         kind="context"
                         docs={menuDocs(doc)}
                         actions={actions}
-                        extra={menuExtra?.(menuDocs(doc))}
                       />
                     }
                     moreMenu={
@@ -447,7 +478,6 @@ export function PaperLibrary({
                         kind="dropdown"
                         docs={menuDocs(doc)}
                         actions={actions}
-                        extra={menuExtra?.(menuDocs(doc))}
                       />
                     }
                   />
@@ -475,11 +505,24 @@ export function PaperLibrary({
               key={selected.id}
               doc={selected}
               actions={actions}
-              tools={detailTools?.(selected)}
               onClose={() => ui.select(null)}
             />
           )}
         </div>
+      )}
+      {exporting && (
+        <CitationDialog
+          docs={documents.filter((d) => exporting.ids.includes(d.id))}
+          title={exporting.title}
+          onClose={() => ui.setExporting(null)}
+          onEdit={(doc) => {
+            ui.setExporting(null);
+            ui.stopPicking();
+            ui.setView("all");
+            ui.setQuery("");
+            ui.select(doc.id);
+          }}
+        />
       )}
       {naming && (
         <CategoryDialog

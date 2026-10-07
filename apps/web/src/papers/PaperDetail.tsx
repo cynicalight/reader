@@ -5,6 +5,7 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
+  Quote,
   RefreshCw,
   Star,
   X,
@@ -52,6 +53,7 @@ import {
 } from "./format";
 import { paperCategories, statusLabels } from "./model";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
+import { CitationMenuItems } from "./CitationMenu";
 
 const fieldLabels: Partial<Record<PaperMetadataField, string>> = {
   date: "日期",
@@ -123,13 +125,10 @@ export function PaperDetail({
   doc,
   actions,
   onClose,
-  tools,
 }: {
   doc: Document;
   actions: PaperMenuActions;
   onClose: () => void;
-  /** Extra actions beside reading, such as citation export. */
-  tools?: React.ReactNode;
 }) {
   const all = useReaderStore((s) => s.documents);
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
@@ -162,7 +161,17 @@ export function PaperDetail({
             <BookOpen />
             {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
           </Button>
-          {tools}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button size="sm" variant="outline" />}
+            >
+              <Quote />
+              引用
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <CitationMenuItems kind="dropdown" docs={[doc]} />
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             size="icon-sm"
             variant="outline"

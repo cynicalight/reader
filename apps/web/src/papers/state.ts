@@ -12,6 +12,9 @@ export const usePaperUI = create<{
   /** Papers to place in a category being named, or null when closed. */
   naming: string[] | null;
   setNaming: (ids: string[] | null) => void;
+  /** Papers in the citation export dialog, or null when closed. */
+  exporting: { ids: string[]; title: string } | null;
+  setExporting: (exporting: { ids: string[]; title: string } | null) => void;
   setView: (view: PaperView) => void;
   setQuery: (query: string) => void;
   select: (id: string | null) => void;
@@ -29,6 +32,8 @@ export const usePaperUI = create<{
   anchor: null,
   naming: null,
   setNaming: (naming) => set({ naming }),
+  exporting: null,
+  setExporting: (exporting) => set({ exporting }),
   setView: (view) => set({ view }),
   setQuery: (query) => set({ query }),
   select: (selectedId) => set({ selectedId }),

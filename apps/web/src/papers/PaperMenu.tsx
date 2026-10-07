@@ -40,6 +40,7 @@ import {
   setStarred,
 } from "./actions";
 import { paperLink } from "./format";
+import { CitationMenuItems } from "./CitationMenu";
 import { paperCategories, statusLabels, togglePinned } from "./model";
 
 const kits = {
@@ -166,6 +167,7 @@ export function PaperMenuItems({
           </K.RadioGroup>
         </K.SubContent>
       </K.Sub>
+      <CitationMenuItems kind={kind} docs={docs} nested />
       {extra}
       {one && (
         <>

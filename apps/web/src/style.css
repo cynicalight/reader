@@ -2401,3 +2401,37 @@ textarea.paper-title-input {
   font-weight: 500;
   color: var(--muted-foreground);
 }
+.citation-items {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+}
+.citation-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: grab;
+}
+.citation-item:hover {
+  background: color-mix(in oklch, var(--foreground) 4%, transparent);
+}
+.citation-item[data-dragging] {
+  opacity: 0.5;
+}
+textarea.citation-preview {
+  height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  resize: vertical;
+  field-sizing: fixed;
+}

@@ -91,6 +91,8 @@ export interface PaperLibraryPreferences {
   sort?: PaperSort;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;
+  citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
+  citationOrder?: "author" | "year" | "custom";
 }
 export interface LibraryPreferences {
   mode?: LibraryMode;
