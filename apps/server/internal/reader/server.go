@@ -77,6 +77,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
 	mux.HandleFunc("POST /api/documents/resolve", s.resolveDocument)
+	mux.HandleFunc("GET /api/documents/{id}/note", s.documentNote)
+	mux.HandleFunc("PUT /api/documents/{id}/note", s.saveDocumentNote)
 	mux.HandleFunc("POST /api/documents/{id}/metadata/lookup", s.lookupMetadata)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
@@ -541,13 +543,14 @@ func (s *Server) saveAnnotation(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &a) {
 		return
 	}
-	if !validLocation(a.Location, d.Type) || (a.Kind != "highlight" && a.Kind != "underline" && a.Kind != "note" && a.Kind != "bookmark") {
+	if !validLocation(a.Location, d.Type) || (a.Kind != "highlight" && a.Kind != "underline" && a.Kind != "note" && a.Kind != "question" && a.Kind != "bookmark") {
 		fail(w, 400, "批注类型或位置无效")
 		return
 	}
 	a.ID = id()
 	a.DocumentID = d.ID
 	a.CreatedAt = now()
+	a.AnswerID, a.Resolved = "", false
 	result, err := s.Store.saveAnnotation(a)
 	if err != nil {
 		fail(w, 500, "批注保存失败")

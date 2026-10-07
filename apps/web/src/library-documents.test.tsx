@@ -35,6 +35,7 @@ const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
   readingStatus: "unread",
   noteCount: 0,
   highlightCount: 0,
+  openQuestionCount: 0,
   tags: [],
   size: 100,
   createdAt: "",

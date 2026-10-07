@@ -118,6 +118,8 @@ export interface Document {
   noteCount: number;
   /** Highlights and underlines. */
   highlightCount: number;
+  /** Questions without an answer that are not resolved. */
+  openQuestionCount: number;
   id: string;
   type: "epub" | "pdf";
   title: string;
@@ -138,12 +140,17 @@ export interface TOCItem {
 export interface Annotation {
   id: string;
   documentId: string;
-  kind: "highlight" | "underline" | "note" | "bookmark";
+  kind: "highlight" | "underline" | "note" | "question" | "bookmark";
   location: DocumentLocation;
   quote: string;
+  /** The note text, or the question for a question. */
   note: string;
   color: string;
   createdAt: string;
+  /** Chat message that answers a question. */
+  answerId?: string;
+  /** A question closed without an answer. */
+  resolved?: boolean;
 }
 export interface SearchResult {
   id: string;

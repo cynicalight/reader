@@ -371,11 +371,14 @@ export function PaperDetail({
               ` · 上次打开 ${relativeTime(doc.lastOpenedAt)}`}
           </dd>
         </dl>
-        {(doc.noteCount > 0 || doc.highlightCount > 0) && (
+        {(doc.noteCount > 0 ||
+          doc.highlightCount > 0 ||
+          doc.openQuestionCount > 0) && (
           <p className="paper-annotation-counts">
             {[
               doc.noteCount && `${doc.noteCount} 条笔记`,
               doc.highlightCount && `${doc.highlightCount} 处划线`,
+              doc.openQuestionCount && `${doc.openQuestionCount} 个问题待回答`,
             ]
               .filter(Boolean)
               .join(" · ")}

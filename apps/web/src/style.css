@@ -2435,3 +2435,57 @@ textarea.citation-preview {
   resize: vertical;
   field-sizing: fixed;
 }
+.paper-note {
+  margin-bottom: 12px;
+}
+.paper-note-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 6px;
+  padding-inline: 4px;
+  font-size: 12px;
+}
+.paper-note-toggle svg[data-open="false"] {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .paper-note-toggle svg {
+    transition: transform 150ms ease;
+  }
+}
+textarea.paper-note-input {
+  min-height: 84px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.notes-filter {
+  margin-bottom: 12px;
+}
+.note-question {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.note-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  height: auto;
+  padding: 6px 8px;
+  white-space: normal;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+}
+.note-answer svg {
+  margin-top: 4px;
+}
+.note-card[data-kind="question"] .note-quote {
+  border-left-color: color-mix(in oklch, var(--primary) 45%, transparent);
+}

@@ -13,6 +13,7 @@ export const annotationLabels = {
   highlight: "高亮",
   underline: "下划线",
   note: "笔记",
+  question: "问题",
   bookmark: "书签",
 };
 
@@ -24,6 +25,7 @@ export function AnnotationToolbar({
   onDelete,
   onNote,
   onAskAI,
+  onAnswer,
 }: {
   annotation: Annotation;
   anchor: SelectionAnchor;
@@ -32,15 +34,23 @@ export function AnnotationToolbar({
   onDelete: (id: string) => void;
   onNote: (annotation: Annotation) => void;
   onAskAI: (annotation: Annotation) => void;
+  onAnswer?: (annotation: Annotation) => void;
 }) {
   const hasNote = !!annotation.note.trim();
+  const question = annotation.kind === "question";
   const actions = [
     {
-      label: hasNote ? "编辑笔记" : "添加笔记",
+      label: question ? "编辑问题" : hasNote ? "编辑笔记" : "添加笔记",
       Icon: hasNote ? SquarePen : StickyNote,
       onClick: () => onNote(annotation),
     },
-    { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) },
+    question && onAnswer && !annotation.answerId
+      ? {
+          label: "让 AI 回答",
+          Icon: Sparkles,
+          onClick: () => onAnswer(annotation),
+        }
+      : { label: "问 AI", Icon: Sparkles, onClick: () => onAskAI(annotation) },
     {
       label: `删除${annotationLabels[annotation.kind]}`,
       Icon: Trash2,

@@ -226,6 +226,24 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ note }),
     }),
+  updateAnnotation: (
+    id: string,
+    annotation: string,
+    patch: { note?: string; answerId?: string; resolved?: boolean },
+  ) =>
+    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  documentNote: (id: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+    ),
+  saveDocumentNote: (id: string, body: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+      { method: "PUT", body: JSON.stringify({ body }) },
+    ),
   removeAnnotation: (id: string, annotation: string) =>
     request<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",

@@ -61,7 +61,9 @@ const button = (label: string) =>
     (b) => b.textContent?.trim() === label || b.ariaLabel === label,
   )!;
 it("orders by author, reorders by hand and copies the preview", async () => {
-  await vi.waitFor(() => expect(preview()).toContain("@article{adams2022apple"));
+  await vi.waitFor(() =>
+    expect(preview()).toContain("@article{adams2022apple"),
+  );
   expect(preview().indexOf("adams")).toBeLessThan(preview().indexOf("zhou"));
   expect(document.body.textContent).not.toContain("缺");
   await act(async () => button("下移 Apple paper").click());

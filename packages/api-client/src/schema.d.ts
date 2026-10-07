@@ -412,7 +412,10 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
-            note: string;
+            note?: string;
+            /** @description Message ID of this document; empty clears */
+            answerId?: string;
+            resolved?: boolean;
           };
         };
       };
@@ -1835,6 +1838,95 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/note": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The document's free-form paper note */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Note (empty when unset) */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              body: string;
+              updatedAt?: string;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            body: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              body: string;
+              updatedAt?: string;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1907,17 +1999,23 @@ export interface components {
       noteCount: number;
       /** @description Highlights and underlines */
       highlightCount: number;
+      /** @description Questions without an answer that are not resolved */
+      openQuestionCount: number;
     };
     Annotation: {
       id: string;
       documentId: string;
       /** @enum {unknown} */
-      kind: "highlight" | "underline" | "note" | "bookmark";
+      kind: "highlight" | "underline" | "note" | "question" | "bookmark";
       location: components["schemas"]["DocumentLocation"];
       quote: string;
       note: string;
       color: string;
       createdAt: string;
+      /** @description Chat message that answers a question */
+      answerId?: string;
+      /** @description A question closed without an answer */
+      resolved?: boolean;
     };
     SavedAnnotation: components["schemas"]["Annotation"] & {
       /** @description IDs removed when overlapping underlines were merged into the returned annotation. */

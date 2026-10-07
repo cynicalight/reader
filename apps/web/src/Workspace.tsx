@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ChartColumn,
   ArrowLeft,
@@ -29,6 +36,7 @@ import {
   Moon,
   AlignJustify,
   Check,
+  CircleHelp,
 } from "lucide-react";
 import { api, blockImageURL } from "@reader/api";
 import {
@@ -97,6 +105,7 @@ import { useAnnotationDeletion } from "./useAnnotationDeletion";
 import { activeAnnotation, applySavedAnnotation } from "./annotations";
 import { copyText } from "./chat/clipboard";
 import { ReaderView } from "./ReaderView";
+import { NotesPanel } from "./NotesPanel";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -293,6 +302,8 @@ export function Workspace({
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteKind, setNoteKind] = useState<"note" | "question">("note");
+  const [answering, setAnswering] = useState<Set<string>>(new Set());
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
     null,
   );
@@ -321,6 +332,7 @@ export function Workspace({
     };
   }, [setAIConfig]);
   const session = useMemo(() => new ChatSession(doc.id), [doc.id]);
+  const chat = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const sendSerial = useRef(0);
   const [sending, setSending] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -372,17 +384,18 @@ export function Workspace({
     );
   };
   const annotate = async (kind: Annotation["kind"], noteText = "") => {
-    const source = kind === "note" ? noteSelection : selection;
+    const written = kind === "note" || kind === "question";
+    const source = written ? noteSelection : selection;
     const target = kind === "bookmark" ? location : source?.location;
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
-    setNoteSaving(kind === "note");
+    setNoteSaving(written);
     // Start clipboard access inside the user's click, before network awaits.
     const copying =
       kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
       const a =
-        kind === "note" && editingAnnotation
+        written && editingAnnotation
           ? await api.updateAnnotationNote(
               doc.id,
               editingAnnotation.id,
@@ -410,6 +423,7 @@ export function Workspace({
       setNoteSelection(null);
       setEditingAnnotation(null);
       setNote("");
+      return a;
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -435,6 +449,7 @@ export function Workspace({
     lastCopiedSelection.current = key;
   };
   const editAnnotationNote = (annotation: Annotation) => {
+    setNoteKind(annotation.kind === "question" ? "question" : "note");
     setEditingAnnotation(annotation);
     setNoteSelection({ text: annotation.quote, location: annotation.location });
     setNote(annotation.note);
@@ -456,6 +471,64 @@ export function Workspace({
     setRightTab("ai");
     adapter?.clearSelection();
     requestAnimationFrame(() => composeInput.current?.focus());
+  };
+  const saveAnnotationText = async (annotation: Annotation, text: string) => {
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        note: text,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+      return true;
+    } catch (e) {
+      toast.error((e as Error).message);
+      return false;
+    }
+  };
+  const resolveQuestion = async (annotation: Annotation, resolved: boolean) => {
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        resolved,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  /** Ask the AI and keep its saved answer linked to the question. */
+  const answerQuestion = async (annotation: Annotation) => {
+    if (answering.has(annotation.id)) return;
+    setAnswering((ids) => new Set(ids).add(annotation.id));
+    try {
+      const answerId = await send(
+        `请回答我在阅读时提出的问题：${annotation.note}\n回答时区分原文依据与你的推断。`,
+        annotation.quote
+          ? [{ text: annotation.quote, location: annotation.location }]
+          : [],
+        !annotation.quote,
+      );
+      if (!answerId) return;
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        answerId,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAnswering((ids) => {
+        const next = new Set(ids);
+        next.delete(annotation.id);
+        return next;
+      });
+    }
+  };
+  const showAnswer = (messageId: string) => {
+    setRight(true);
+    setRightTab("ai");
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)
+        ?.scrollIntoView({ block: "start" }),
+    );
   };
   const search = async () => {
     if (!adapter) return;
@@ -535,6 +608,7 @@ export function Workspace({
         attachments,
       });
       if (serial !== sendSerial.current) return;
+      const answer = session.getSnapshot().pending;
       if (
         !directImage &&
         ["saved", "syncing"].includes(
@@ -548,6 +622,7 @@ export function Workspace({
           ),
         );
       }
+      return answer?.phase === "saved" ? answer.savedId : undefined;
     } catch (e) {
       if (serial === sendSerial.current && (e as Error).name !== "AbortError")
         toast.error((e as Error).message);
@@ -1030,6 +1105,7 @@ export function Workspace({
                 onDelete={(id) => void removeAnnotation(id)}
                 onNote={editAnnotationNote}
                 onAskAI={askAnnotationAI}
+                onAnswer={(annotation) => void answerQuestion(annotation)}
               />
             )}
 
@@ -1053,6 +1129,7 @@ export function Workspace({
                 <IconButton
                   label="记笔记"
                   onClick={() => {
+                    setNoteKind("note");
                     setEditingAnnotation(null);
                     setNoteSelection(selection);
                     setNote("");
@@ -1061,6 +1138,19 @@ export function Workspace({
                   }}
                 >
                   <StickyNote />
+                </IconButton>
+                <IconButton
+                  label="提问"
+                  onClick={() => {
+                    setNoteKind("question");
+                    setEditingAnnotation(null);
+                    setNoteSelection(selection);
+                    setNote("");
+                    setNoteOpen(true);
+                    adapter?.clearSelection();
+                  }}
+                >
+                  <CircleHelp />
                 </IconButton>
                 <IconButton
                   label="翻译选区"
@@ -1277,55 +1367,20 @@ export function Workspace({
                 </div>
               </TabsContent>
               <TabsContent value="notes" className="notes-panel">
-                <div className="notes-heading">
-                  <span>{annotations.length} 条记录</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!annotations.length}
-                    onClick={exportNotes}
-                  >
-                    <Download />
-                    导出
-                  </Button>
-                </div>
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="notes-list">
-                    {!annotations.length && (
-                      <div className="notes-empty">
-                        <StickyNote />
-                        <p>暂无笔记</p>
-                        <small>选中文字添加高亮、下划线或笔记。</small>
-                      </div>
-                    )}
-                    {annotations.map((a) => (
-                      <article className="note-card" key={a.id}>
-                        <div>
-                          <Badge variant="outline">
-                            {annotationLabels[a.kind]}
-                          </Badge>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label="删除记录"
-                            disabled={deleting.has(a.id)}
-                            onClick={() => void removeAnnotation(a.id)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          className="note-quote"
-                          onClick={() => move(a.location)}
-                        >
-                          {a.quote || locationLabel(a.location)}
-                        </Button>
-                        {a.note && <p>{a.note}</p>}
-                      </article>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <NotesPanel
+                  document={doc}
+                  annotations={annotations}
+                  messages={chat.messages}
+                  deleting={deleting}
+                  answering={answering}
+                  onGo={(a) => move(a.location)}
+                  onDelete={(id) => void removeAnnotation(id)}
+                  onSave={saveAnnotationText}
+                  onAnswer={(a) => void answerQuestion(a)}
+                  onResolve={(a, resolved) => void resolveQuestion(a, resolved)}
+                  onShowAnswer={showAnswer}
+                  onExport={exportNotes}
+                />
               </TabsContent>
             </Tabs>
           </aside>
@@ -1355,10 +1410,18 @@ export function Workspace({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingAnnotation?.note.trim() ? "编辑笔记" : "添加笔记"}
+              {noteKind === "question"
+                ? editingAnnotation
+                  ? "编辑问题"
+                  : "提问"
+                : editingAnnotation?.note.trim()
+                  ? "编辑笔记"
+                  : "添加笔记"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              为当前选区添加笔记
+              {noteKind === "question"
+                ? "就当前选区提问"
+                : "为当前选区添加笔记"}
             </DialogDescription>
           </DialogHeader>
           <blockquote className="note-preview">
@@ -1366,19 +1429,49 @@ export function Workspace({
           </blockquote>
           <Textarea
             autoFocus
-            placeholder="笔记内容…"
+            placeholder={
+              noteKind === "question" ? "想弄清楚什么？" : "笔记内容…"
+            }
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-          <Button
-            onClick={() => void annotate("note", note)}
-            disabled={
-              noteSaving || (!note.trim() && !editingAnnotation?.note.trim())
-            }
-          >
-            <Check />
-            保存笔记
-          </Button>
+          {noteKind === "question" ? (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => void annotate("question", note)}
+                disabled={noteSaving || !note.trim()}
+              >
+                <Check />
+                保存问题
+              </Button>
+              {!editingAnnotation && (
+                <Button
+                  className="flex-1"
+                  disabled={noteSaving || !note.trim() || !provider}
+                  onClick={() =>
+                    void annotate("question", note).then((saved) => {
+                      if (saved) void answerQuestion(saved);
+                    })
+                  }
+                >
+                  <Sparkles />
+                  保存并让 AI 回答
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Button
+              onClick={() => void annotate("note", note)}
+              disabled={
+                noteSaving || (!note.trim() && !editingAnnotation?.note.trim())
+              }
+            >
+              <Check />
+              保存笔记
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
       <ProcessingUsageDialog

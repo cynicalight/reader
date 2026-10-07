@@ -20,6 +20,7 @@ export const paper = (patch: Partial<Document> = {}): Document => ({
   readingStatus: "unread",
   noteCount: 0,
   highlightCount: 0,
+  openQuestionCount: 0,
   tags: [],
   ...patch,
 });

@@ -3,6 +3,7 @@ import {
   BookOpen,
   CheckCircle2,
   Circle,
+  CircleHelp,
   Eye,
   FileText,
   Folder,
@@ -74,6 +75,7 @@ const viewIcons: Record<BuiltinView, typeof Library> = {
   done: CheckCircle2,
   starred: Star,
   processing: Loader2,
+  questions: CircleHelp,
 };
 
 function droppedIds(e: React.DragEvent) {
@@ -403,6 +405,7 @@ export function PaperSidebar({
             )
             .map((v) => viewRow(v))}
           {count("processing") > 0 && viewRow("processing")}
+          {count("questions") > 0 && viewRow("questions")}
         </nav>
       </section>
       <section>

@@ -11,6 +11,7 @@ import {
   Star,
   StickyNote,
   Highlighter,
+  CircleHelp,
   Quote,
   Trash2,
 } from "lucide-react";
@@ -635,6 +636,12 @@ function PaperRow({
             <span title={`${doc.noteCount} 条笔记`}>
               <StickyNote className="size-3" />
               {doc.noteCount}
+            </span>
+          )}
+          {doc.openQuestionCount > 0 && (
+            <span title={`${doc.openQuestionCount} 个问题待回答`}>
+              <CircleHelp className="size-3" />
+              {doc.openQuestionCount}
             </span>
           )}
           {doc.highlightCount > 0 && (

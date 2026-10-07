@@ -8,7 +8,13 @@ import type {
 import { paperCreators, creatorName, paperYear } from "./format";
 
 export type BuiltinView =
-  "all" | "reading" | "unread" | "done" | "starred" | "processing";
+  | "all"
+  | "reading"
+  | "unread"
+  | "done"
+  | "starred"
+  | "processing"
+  | "questions";
 /** A built-in view, a category ("tag:<name>") or the trash. */
 export type PaperView = BuiltinView | `tag:${string}` | "trash";
 
@@ -19,6 +25,7 @@ export const viewLabels: Record<BuiltinView, string> = {
   done: "已读",
   starred: "星标",
   processing: "解析中",
+  questions: "待回答的问题",
 };
 /** Views the user can hide or pin; "all" is always shown. */
 export const managedViews: BuiltinView[] = [
@@ -60,6 +67,8 @@ export function matchesView(
       return doc.favorite;
     case "processing":
       return busy(jobs.get(doc.id));
+    case "questions":
+      return doc.openQuestionCount > 0;
     default:
       return true;
   }

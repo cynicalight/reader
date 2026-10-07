@@ -22,6 +22,7 @@ type Document struct {
 	ReadingStatus        string          `json:"readingStatus"`
 	NoteCount            int             `json:"noteCount"`
 	HighlightCount       int             `json:"highlightCount"`
+	OpenQuestionCount    int             `json:"openQuestionCount"`
 	ID                   string          `json:"id"`
 	Type                 string          `json:"type"`
 	Title                string          `json:"title"`
@@ -42,6 +43,9 @@ type Annotation struct {
 	Note       string          `json:"note"`
 	Color      string          `json:"color"`
 	CreatedAt  string          `json:"createdAt"`
+	// AnswerID links a question to the chat message that answers it.
+	AnswerID string `json:"answerId,omitempty"`
+	Resolved bool   `json:"resolved,omitempty"`
 }
 type Message struct {
 	Attachments []ImageAttachment `json:"attachments,omitempty"`
@@ -82,6 +86,7 @@ func OpenStore(root string) (*Store, error) {
  CREATE TABLE IF NOT EXISTS processing_intervals(id TEXT PRIMARY KEY,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,stage TEXT NOT NULL,started_at TEXT NOT NULL,finished_at TEXT);
  CREATE TABLE IF NOT EXISTS tag_boards(id TEXT PRIMARY KEY,name TEXT NOT NULL,tags TEXT NOT NULL,match TEXT NOT NULL CHECK(match IN ('all','any')));
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS document_notes(document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,body TEXT NOT NULL,updated_at TEXT NOT NULL);
  CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(document_id UNINDEXED,href UNINDEXED,content,tokenize='unicode61');`)
 	if err != nil {
 		db.Close()
@@ -102,14 +107,15 @@ func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
 const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library,deleted_at,metadata,reading_status,` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='note'),` +
-	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline'))`
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline')),` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='question' AND COALESCE(json_extract(a.body,'$.answerId'),'')='' AND NOT COALESCE(json_extract(a.body,'$.resolved'),0))`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanDocument(row rowScanner) (Document, error) {
 	var d Document
 	var progress, tags, metadata string
-	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount)
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount)
 	if err == nil {
 		err = json.Unmarshal([]byte(tags), &d.Tags)
 	}

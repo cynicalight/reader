@@ -483,8 +483,18 @@
                           "schema":
                             {
                               "type": "object",
-                              "required": ["note"],
-                              "properties": { "note": { "type": "string" } },
+                              "required": [],
+                              "properties":
+                                {
+                                  "note": { "type": "string" },
+                                  "answerId":
+                                    {
+                                      "type": "string",
+                                      "description": "Message ID of this document; empty clears",
+                                    },
+                                  "resolved": { "type": "boolean" },
+                                },
+                              "description": "At least one of note, answerId or resolved",
                             },
                         },
                     },
@@ -2015,6 +2025,132 @@
                 },
             },
         },
+      "/api/documents/{id}/note":
+        {
+          "get":
+            {
+              "summary": "The document's free-form paper note",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Note (empty when unset)",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "body":
+                                        {
+                                          "type": "string",
+                                          "maxLength": 100000,
+                                        },
+                                      "updatedAt": { "type": "string" },
+                                    },
+                                  "required": ["body"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "body":
+                                    { "type": "string", "maxLength": 100000 },
+                                },
+                              "required": ["body"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "body":
+                                        {
+                                          "type": "string",
+                                          "maxLength": 100000,
+                                        },
+                                      "updatedAt": { "type": "string" },
+                                    },
+                                  "required": ["body"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -2176,6 +2312,11 @@
                       "type": "number",
                       "description": "Highlights and underlines",
                     },
+                  "openQuestionCount":
+                    {
+                      "type": "number",
+                      "description": "Questions without an answer that are not resolved",
+                    },
                 },
               "required":
                 [
@@ -2198,6 +2339,7 @@
                   "readingStatus",
                   "noteCount",
                   "highlightCount",
+                  "openQuestionCount",
                 ],
             },
           "Annotation":
@@ -2208,13 +2350,32 @@
                   "id": { "type": "string" },
                   "documentId": { "type": "string" },
                   "kind":
-                    { "enum": ["highlight", "underline", "note", "bookmark"] },
+                    {
+                      "enum":
+                        [
+                          "highlight",
+                          "underline",
+                          "note",
+                          "question",
+                          "bookmark",
+                        ],
+                    },
                   "location":
                     { "$ref": "#/components/schemas/DocumentLocation" },
                   "quote": { "type": "string" },
                   "note": { "type": "string" },
                   "color": { "type": "string" },
                   "createdAt": { "type": "string" },
+                  "answerId":
+                    {
+                      "type": "string",
+                      "description": "Chat message that answers a question",
+                    },
+                  "resolved":
+                    {
+                      "type": "boolean",
+                      "description": "A question closed without an answer",
+                    },
                 },
               "required":
                 [
