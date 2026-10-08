@@ -152,8 +152,8 @@ it("answers, resolves and shows linked answers", async () => {
 });
 
 it("edits a note in place", async () => {
-  await act(async () => button("编辑笔记").click());
-  const field = host.querySelector<HTMLTextAreaElement>('[aria-label="笔记"]')!;
+  await act(async () => button("编辑批注").click());
+  const field = host.querySelector<HTMLTextAreaElement>('[aria-label="批注"]')!;
   await act(async () => type(field, "Checked twice"));
   const tags = host.querySelector<HTMLInputElement>('[aria-label="标签"]')!;
   Object.getOwnPropertyDescriptor(
@@ -168,7 +168,7 @@ it("edits a note in place", async () => {
     note: "Checked twice",
     tags: ["method", "proof"],
   });
-  expect(host.querySelector('[aria-label="笔记"]')).toBeNull();
+  expect(host.querySelector('[aria-label="批注"]')).toBeNull();
 });
 
 it("saves the paper note after typing stops", async () => {

@@ -47,7 +47,7 @@ it("groups the reader's marks by color in reading order", () => {
       "- 第 2 页：“F = ma”",
       "- 第 4 页：“E = mc^2”",
       "黄色（1 处）：",
-      "- 第 3 页：“claim” —— 笔记：check",
+      "- 第 3 页：“claim” —— 批注：check",
     ].join("\n"),
   );
   expect(colorLabel("#123456")).toBe("其他颜色");

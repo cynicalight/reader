@@ -345,7 +345,7 @@ export function PaperDetail({
           doc.openQuestionCount > 0) && (
           <p className="paper-annotation-counts">
             {[
-              doc.noteCount && `${doc.noteCount} 条笔记`,
+              doc.noteCount && `${doc.noteCount} 条批注`,
               doc.highlightCount && `${doc.highlightCount} 处划线`,
               doc.openQuestionCount && `${doc.openQuestionCount} 个问题待回答`,
             ]

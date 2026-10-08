@@ -78,7 +78,7 @@ export function ExportNotesDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>导出笔记</DialogTitle>
+          <DialogTitle>导出批注与笔记</DialogTitle>
           <DialogDescription>
             Markdown，可放进 Obsidian 或 Notion
           </DialogDescription>

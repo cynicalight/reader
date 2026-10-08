@@ -936,7 +936,7 @@ function PaperRow({
         </span>
       )}
       {doc.noteCount > 0 && (
-        <span title={`${doc.noteCount} 条笔记`}>
+        <span title={`${doc.noteCount} 条批注`}>
           <StickyNote className="size-3" />
           {doc.noteCount}
         </span>

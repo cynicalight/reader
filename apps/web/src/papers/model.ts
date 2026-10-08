@@ -61,7 +61,7 @@ export const sortLabels: Record<PaperSort, string> = {
   author: "作者",
   venue: "出处",
   status: "阅读状态",
-  notes: "笔记数",
+  notes: "批注数",
 };
 export const columnLabels: Record<PaperColumn, string> = {
   authors: "作者",
@@ -69,7 +69,7 @@ export const columnLabels: Record<PaperColumn, string> = {
   venue: "出处",
   added: "添加时间",
   opened: "上次打开",
-  notes: "笔记",
+  notes: "批注",
   status: "状态",
 };
 export const defaultColumns: PaperColumn[] = [

@@ -13,7 +13,7 @@ import { ColorSwatches } from "./ColorSwatches";
 export const annotationLabels = {
   highlight: "高亮",
   underline: "下划线",
-  note: "笔记",
+  note: "批注",
   question: "问题",
   bookmark: "书签",
 };
@@ -43,7 +43,7 @@ export function AnnotationToolbar({
   const question = annotation.kind === "question";
   const actions = [
     {
-      label: question ? "编辑问题" : hasNote ? "编辑笔记" : "添加笔记",
+      label: question ? "编辑问题" : hasNote ? "编辑批注" : "添加批注",
       Icon: hasNote ? SquarePen : StickyNote,
       onClick: () => onNote(annotation),
     },

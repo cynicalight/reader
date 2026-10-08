@@ -18,7 +18,7 @@ export type ExportPart =
 export const exportParts: Record<ExportPart, string> = {
   info: "文献信息",
   paperNote: "论文笔记",
-  notes: "笔记",
+  notes: "批注",
   highlights: "划线",
   questions: "问题与 AI 回答",
   bookmarks: "书签",
@@ -76,7 +76,7 @@ export function notesMarkdown(
       const label = {
         highlight: "划线",
         underline: "划线",
-        note: "笔记",
+        note: "批注",
         question: "问题",
         bookmark: "书签",
       }[a.kind];

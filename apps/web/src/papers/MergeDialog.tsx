@@ -93,7 +93,7 @@ export function MergeDialog({
                   {[
                     sizeLabel(doc.size),
                     `添加于 ${new Date(doc.createdAt).toLocaleDateString("zh-CN")}`,
-                    doc.noteCount && `${doc.noteCount} 条笔记`,
+                    doc.noteCount && `${doc.noteCount} 条批注`,
                     doc.highlightCount && `${doc.highlightCount} 处划线`,
                   ]
                     .filter(Boolean)

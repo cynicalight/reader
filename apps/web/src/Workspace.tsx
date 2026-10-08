@@ -1049,7 +1049,7 @@ export function Workspace({
             </PopoverContent>
           </Popover>
           <IconButton
-            label="AI 与笔记"
+            label="AI 与批注"
             active={right}
             expanded={right}
             onClick={() => setRight(!right)}
@@ -1224,7 +1224,7 @@ export function Workspace({
                   <Underline />
                 </IconButton>
                 <IconButton
-                  label="记笔记"
+                  label="添加批注"
                   onClick={() => {
                     setNoteKind("note");
                     setEditingAnnotation(null);
@@ -1311,7 +1311,7 @@ export function Workspace({
                 </TabsTrigger>
                 <TabsTrigger value="notes">
                   <StickyNote className="size-3.5" />
-                  笔记<small>{annotations.length || ""}</small>
+                  批注<small>{annotations.length || ""}</small>
                 </TabsTrigger>
                 <Button
                   variant="ghost"
@@ -1543,13 +1543,13 @@ export function Workspace({
                   ? "编辑问题"
                   : "提问"
                 : editingAnnotation?.note.trim()
-                  ? "编辑笔记"
-                  : "添加笔记"}
+                  ? "编辑批注"
+                  : "添加批注"}
             </DialogTitle>
             <DialogDescription className="sr-only">
               {noteKind === "question"
                 ? "就当前选区提问"
-                : "为当前选区添加笔记"}
+                : "为当前选区添加批注"}
             </DialogDescription>
           </DialogHeader>
           <blockquote className="note-preview">
@@ -1558,7 +1558,7 @@ export function Workspace({
           <Textarea
             autoFocus
             placeholder={
-              noteKind === "question" ? "想弄清楚什么？" : "笔记内容…"
+              noteKind === "question" ? "想弄清楚什么？" : "批注内容…"
             }
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -1597,7 +1597,7 @@ export function Workspace({
               }
             >
               <Check />
-              保存笔记
+              保存批注
             </Button>
           )}
         </DialogContent>

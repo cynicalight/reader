@@ -49,7 +49,7 @@ export type NotesFilter =
 const filterLabels: Record<NotesFilter, string> = {
   all: "全部",
   highlight: "划线",
-  note: "笔记",
+  note: "批注",
   question: "问题",
   bookmark: "书签",
 };
@@ -246,7 +246,7 @@ function NoteCard({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label={question ? "编辑问题" : "编辑笔记"}
+              aria-label={question ? "编辑问题" : "编辑批注"}
               onClick={() => {
                 setDraft(a.note);
                 setDraftTags((a.tags || []).join(" "));
@@ -288,7 +288,7 @@ function NoteCard({
         <div className="space-y-2">
           <Textarea
             autoFocus
-            aria-label={question ? "问题" : "笔记"}
+            aria-label={question ? "问题" : "批注"}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -542,9 +542,9 @@ export function NotesPanel({
           {!visible.length && (
             <div className="notes-empty">
               <StickyNote />
-              <p>{annotations.length ? "没有这类记录" : "暂无笔记"}</p>
+              <p>{annotations.length ? "没有这类记录" : "暂无批注"}</p>
               {!annotations.length && (
-                <small>选中文字添加高亮、笔记或问题。</small>
+                <small>选中文字添加高亮、批注或问题。</small>
               )}
             </div>
           )}

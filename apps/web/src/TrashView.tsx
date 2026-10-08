@@ -120,7 +120,7 @@ export function TrashView({ documents }: { documents: Document[] }) {
               彻底删除 {purging?.length ?? 0} 份？
             </AlertDialogTitle>
             <AlertDialogDescription>
-              将删除书库中的副本、笔记、对话和阅读记录，无法恢复。导入前的原始文件不受影响。
+              将删除书库中的副本、批注、笔记、对话和阅读记录，无法恢复。导入前的原始文件不受影响。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

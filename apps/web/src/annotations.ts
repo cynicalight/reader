@@ -89,7 +89,7 @@ export function annotationContext(
         a.location.type === "pdf" ? `第 ${a.location.page} 页` : "章节";
       const quote = a.quote.replace(/\s+/g, " ").slice(0, 300);
       const note = a.note.trim()
-        ? ` —— ${a.kind === "question" ? "问题" : "笔记"}：${a.note.replace(/\s+/g, " ").slice(0, 200)}`
+        ? ` —— ${a.kind === "question" ? "问题" : "批注"}：${a.note.replace(/\s+/g, " ").slice(0, 200)}`
         : "";
       lines.push(`- ${place}：${quote ? `“${quote}”` : ""}${note}`);
     }
