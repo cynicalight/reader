@@ -182,6 +182,7 @@ export function searchText(doc: Document) {
   return [
     doc.title,
     m.translatedTitle,
+    m.remark,
     m.shortTitle,
     paperCreators(doc).map(creatorName).join(" "),
     m.venue,

@@ -75,6 +75,8 @@ export interface PaperMetadata {
   url?: string;
   abstract?: string;
   language?: string;
+  /** The reader's own note on the item; never looked up. */
+  remark?: string;
   /** Where each field came from; lookups never replace manual values. */
   sources?: Partial<Record<string, MetadataSource>>;
   /** Automatic lookup state for papers imported from files. */

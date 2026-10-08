@@ -21,24 +21,26 @@ type Creator struct {
 // PaperMetadata is bibliographic data. Sources records where each field came
 // from ("file", "lookup" or "manual"); lookups never replace manual values.
 type PaperMetadata struct {
-	ItemType        string            `json:"itemType,omitempty"`
-	TranslatedTitle string            `json:"translatedTitle,omitempty"`
-	ShortTitle      string            `json:"shortTitle,omitempty"`
-	Creators        []Creator         `json:"creators,omitempty"`
-	Affiliation     string            `json:"affiliation,omitempty"`
-	Date            string            `json:"date,omitempty"`
-	Venue           string            `json:"venue,omitempty"`
-	Volume          string            `json:"volume,omitempty"`
-	Issue           string            `json:"issue,omitempty"`
-	Pages           string            `json:"pages,omitempty"`
-	Publisher       string            `json:"publisher,omitempty"`
-	DOI             string            `json:"doi,omitempty"`
-	ArXiv           string            `json:"arxiv,omitempty"`
-	ISBN            string            `json:"isbn,omitempty"`
-	URL             string            `json:"url,omitempty"`
-	Abstract        string            `json:"abstract,omitempty"`
-	Language        string            `json:"language,omitempty"`
-	Sources         map[string]string `json:"sources,omitempty"`
+	ItemType        string    `json:"itemType,omitempty"`
+	TranslatedTitle string    `json:"translatedTitle,omitempty"`
+	ShortTitle      string    `json:"shortTitle,omitempty"`
+	Creators        []Creator `json:"creators,omitempty"`
+	Affiliation     string    `json:"affiliation,omitempty"`
+	Date            string    `json:"date,omitempty"`
+	Venue           string    `json:"venue,omitempty"`
+	Volume          string    `json:"volume,omitempty"`
+	Issue           string    `json:"issue,omitempty"`
+	Pages           string    `json:"pages,omitempty"`
+	Publisher       string    `json:"publisher,omitempty"`
+	DOI             string    `json:"doi,omitempty"`
+	ArXiv           string    `json:"arxiv,omitempty"`
+	ISBN            string    `json:"isbn,omitempty"`
+	URL             string    `json:"url,omitempty"`
+	Abstract        string    `json:"abstract,omitempty"`
+	Language        string    `json:"language,omitempty"`
+	// Remark is the reader's own note on the item, never looked up.
+	Remark  string            `json:"remark,omitempty"`
+	Sources map[string]string `json:"sources,omitempty"`
 	// Lookup is "pending" until the automatic lookup ran, then "done",
 	// "notFound" or "failed".
 	Lookup     string `json:"lookup,omitempty"`
@@ -106,6 +108,7 @@ var metadataLabels = map[string]string{
 	"itemType": "文献类型", "translatedTitle": "译名", "shortTitle": "短标题", "creators": "作者", "affiliation": "单位",
 	"date": "日期", "venue": "出处", "volume": "卷", "issue": "期", "pages": "页码", "publisher": "出版者",
 	"doi": "DOI", "arxiv": "arXiv 编号", "isbn": "ISBN", "url": "链接", "abstract": "摘要", "language": "语言",
+	"remark": "备注",
 }
 
 // normalizeMetadataField validates one field and returns its canonical value.
@@ -141,10 +144,10 @@ func normalizeMetadataField(key string, raw json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("%s须为文本", label)
 	}
 	limit := 500
-	if key == "abstract" {
+	if key == "abstract" || key == "remark" {
 		limit = 20000
 	}
-	value, err := cleanText(value, limit, key == "abstract")
+	value, err := cleanText(value, limit, key == "abstract" || key == "remark")
 	if err != nil {
 		return nil, fmt.Errorf("%s%s", label, err.Error())
 	}
@@ -185,7 +188,7 @@ func (m *PaperMetadata) textField(key string) *string {
 	return map[string]*string{
 		"itemType": &m.ItemType, "translatedTitle": &m.TranslatedTitle, "shortTitle": &m.ShortTitle, "affiliation": &m.Affiliation,
 		"date": &m.Date, "venue": &m.Venue, "volume": &m.Volume, "issue": &m.Issue, "pages": &m.Pages, "publisher": &m.Publisher,
-		"doi": &m.DOI, "arxiv": &m.ArXiv, "isbn": &m.ISBN, "url": &m.URL, "abstract": &m.Abstract, "language": &m.Language,
+		"doi": &m.DOI, "arxiv": &m.ArXiv, "isbn": &m.ISBN, "url": &m.URL, "abstract": &m.Abstract, "language": &m.Language, "remark": &m.Remark,
 	}[key]
 }
 

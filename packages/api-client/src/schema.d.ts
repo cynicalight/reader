@@ -190,6 +190,7 @@ export interface paths {
               url?: string;
               abstract?: string;
               language?: string;
+              remark?: string;
             };
             /** @enum {unknown} */
             readingStatus?: "unread" | "reading" | "done";
@@ -2489,6 +2490,8 @@ export interface components {
       url?: string;
       abstract?: string;
       language?: string;
+      /** @description The reader's own note on the item; never looked up */
+      remark?: string;
       /** @description Origin per field; lookups never replace manual values */
       sources?: {
         [key: string]: "file" | "lookup" | "manual";

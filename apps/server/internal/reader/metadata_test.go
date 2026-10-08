@@ -49,11 +49,11 @@ func TestManualMetadataValidation(t *testing.T) {
 	if m.ApplyManual(raw) == nil || m.Venue != "" {
 		t.Fatalf("partial apply: %+v", m)
 	}
-	_ = json.Unmarshal([]byte(`{"doi":"https://doi.org/10.1000/X","abstract":"line one\nline two","creators":[{"given":"Ada","family":"Lovelace"},{"given":"张三"},{"family":""}]}`), &raw)
+	_ = json.Unmarshal([]byte(`{"doi":"https://doi.org/10.1000/X","abstract":"line one\nline two","remark":"组会讲\n第二部分","creators":[{"given":"Ada","family":"Lovelace"},{"given":"张三"},{"family":""}]}`), &raw)
 	if err := m.ApplyManual(raw); err != nil {
 		t.Fatal(err)
 	}
-	if m.DOI != "10.1000/X" || !strings.Contains(m.Abstract, "\n") || len(m.Creators) != 2 || m.Creators[1].Name != "张三" || m.Sources["doi"] != "manual" {
+	if m.DOI != "10.1000/X" || !strings.Contains(m.Abstract, "\n") || len(m.Creators) != 2 || m.Creators[1].Name != "张三" || m.Sources["doi"] != "manual" || m.Remark != "组会讲\n第二部分" {
 		t.Fatalf("manual: %+v", m)
 	}
 	if CreatorNames(m.Creators) != "Ada Lovelace, 张三" {

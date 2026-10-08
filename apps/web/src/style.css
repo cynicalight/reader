@@ -2433,7 +2433,7 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 4px 20px 28px;
+  padding: 20px 20px 28px;
 }
 .paper-detail-actions {
   display: flex;

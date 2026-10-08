@@ -78,7 +78,7 @@ const fieldLabels: Partial<Record<PaperMetadataField, string>> = {
   url: "链接",
   affiliation: "单位",
   shortTitle: "短标题",
-  translatedTitle: "译名",
+  remark: "备注",
   abstract: "摘要",
 };
 const placeholders: Partial<Record<PaperMetadataField, string>> = {
@@ -86,7 +86,7 @@ const placeholders: Partial<Record<PaperMetadataField, string>> = {
   doi: "10.xxxx/… 或 doi.org 链接",
   arxiv: "2401.01234",
   url: "https://",
-  translatedTitle: "译名",
+  remark: "备注",
 };
 
 function saveField(doc: Document, key: PaperMetadataField, value: unknown) {
@@ -154,6 +154,25 @@ export function PaperDetail({
   return (
     <aside className="paper-detail" aria-label="论文详情">
       <div className="paper-detail-body">
+        <Textarea
+          key={`${doc.id}:${doc.title}`}
+          rows={1}
+          aria-label="标题"
+          className="paper-title-input"
+          defaultValue={doc.title}
+          onBlur={(e) => {
+            const title = e.currentTarget.value.trim();
+            if (!title) e.currentTarget.value = doc.title;
+            else if (title !== doc.title) void patchPapers([[doc, { title }]]);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        <Field doc={doc} name="remark" multiline />
         <div className="paper-detail-actions">
           <Button size="sm" onClick={() => actions.open(doc)}>
             <BookOpen />
@@ -198,25 +217,6 @@ export function PaperDetail({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <Textarea
-          key={`${doc.id}:${doc.title}`}
-          rows={1}
-          aria-label="标题"
-          className="paper-title-input"
-          defaultValue={doc.title}
-          onBlur={(e) => {
-            const title = e.currentTarget.value.trim();
-            if (!title) e.currentTarget.value = doc.title;
-            else if (title !== doc.title) void patchPapers([[doc, { title }]]);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              e.currentTarget.blur();
-            }
-          }}
-        />
-        <Field doc={doc} name="translatedTitle" multiline />
         <dl className="paper-fields">
           <dt>分类</dt>
           <dd>

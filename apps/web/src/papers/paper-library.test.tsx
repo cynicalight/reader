@@ -440,3 +440,13 @@ it("tags a paper and collects it in a smart tag category", async () => {
   expect(host.querySelector(".library-title")?.textContent).toBe("图网络");
   expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
 });
+
+it("puts the remark and actions right under the title", async () => {
+  await act(async () => row("Attention Is All You Need").click());
+  const body = host.querySelector(".paper-detail-body")!;
+  const [title, remark, actions] = [...body.children];
+  expect(title.getAttribute("aria-label")).toBe("标题");
+  expect(remark.getAttribute("aria-label")).toBe("备注");
+  expect(actions.className).toBe("paper-detail-actions");
+  expect(body.textContent).not.toContain("译名");
+});
