@@ -408,7 +408,7 @@ export function Workspace({
     return () => {
       alive = false;
     };
-  }, [doc.id, doc.type, processing?.phase, processing?.updatedAt]);
+  }, [doc.id, doc.type, processing?.phase, processing?.status]);
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
