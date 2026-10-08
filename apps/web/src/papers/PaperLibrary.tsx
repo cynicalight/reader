@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   CheckSquare,
+  Columns3,
+  List,
+  Table2,
   FolderMinus,
   FolderPlus,
   Loader2,
@@ -18,6 +23,7 @@ import {
 } from "lucide-react";
 import type {
   Document,
+  PaperColumn,
   PaperSort,
   Processing,
   ReadingStatus,
@@ -25,6 +31,18 @@ import type {
 import { Button } from "@reader/ui/components/button";
 import { Checkbox } from "@reader/ui/components/checkbox";
 import { Input } from "@reader/ui/components/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@reader/ui/components/table";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@reader/ui/components/toggle-group";
 import {
   Select,
   SelectContent,
@@ -39,6 +57,7 @@ import {
 } from "@reader/ui/components/context-menu";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -59,9 +78,20 @@ import {
   setReadingStatus,
   setStarred,
 } from "./actions";
-import { paperByline } from "./format";
+import {
+  authorsShort,
+  paperByline,
+  paperYear,
+  relativeTime,
+  venueLabel,
+  wasOpened,
+} from "./format";
 import {
   categoryTree,
+  columnLabels,
+  columnSort,
+  defaultColumns,
+  descendingSorts,
   duplicateGroups,
   filterPapers,
   flattenCategories,
@@ -70,6 +100,7 @@ import {
   paperColors,
   sortLabels,
   statusLabels,
+  toggleColumn,
   viewLabels,
   type BuiltinView,
 } from "./model";
@@ -108,6 +139,8 @@ export function PaperLibrary({
 }: PaperLibraryProps) {
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
   const sort: PaperSort = prefs.sort || "opened";
+  const reverse = !!prefs.sortReverse;
+  const columns = prefs.columns || defaultColumns;
   const ui = usePaperUI();
   const { view, query, selectedId, picking, picked, naming, exporting } = ui;
   const listRef = useRef<HTMLDivElement>(null);
@@ -118,6 +151,7 @@ export function PaperLibrary({
         : filterPapers(documents, view, query, sort, jobs, {
             subcategories: prefs.subcategoryItems !== false,
             notDuplicates: prefs.notDuplicates,
+            reverse,
           }),
     [
       documents,
@@ -127,9 +161,17 @@ export function PaperLibrary({
       jobs,
       prefs.subcategoryItems,
       prefs.notDuplicates,
+      reverse,
     ],
   );
   const [merging, setMerging] = useState<Document[] | null>(null);
+  const table = prefs.layout === "table" && view !== "duplicates";
+  const sortBy = (next: PaperSort) =>
+    void savePaperPreferences((p) => ({
+      ...p,
+      sort: next,
+      sortReverse: (p.sort || "opened") === next ? !p.sortReverse : false,
+    }));
   const groups = useMemo(() => {
     if (view !== "duplicates") return [];
     const shown = new Set(visible.map((d) => d.id));
@@ -279,8 +321,9 @@ export function PaperLibrary({
       }
     }
   };
-  const renderRow = (doc: Document) => (
+  const renderRow = (doc: Document, tableColumns?: PaperColumn[]) => (
     <PaperRow
+      columns={tableColumns}
       key={doc.id}
       doc={doc}
       job={jobs.get(doc.id)}
@@ -345,6 +388,7 @@ export function PaperLibrary({
                   void savePaperPreferences((p) => ({
                     ...p,
                     sort: value as PaperSort,
+                    sortReverse: false,
                   }));
               }}
             >
@@ -359,6 +403,59 @@ export function PaperLibrary({
                 ))}
               </SelectContent>
             </Select>
+            <ToggleGroup
+              aria-label="显示方式"
+              size="sm"
+              variant="outline"
+              spacing={0}
+              value={[prefs.layout || "list"]}
+              onValueChange={(value: string[]) => {
+                if (value[0])
+                  void savePaperPreferences((p) => ({
+                    ...p,
+                    layout: value[0] as "list" | "table",
+                  }));
+              }}
+            >
+              <ToggleGroupItem value="list" aria-label="列表" title="列表">
+                <List />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="table" aria-label="表格" title="表格">
+                <Table2 />
+              </ToggleGroupItem>
+            </ToggleGroup>
+            {table && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label="显示的列"
+                      title="显示的列"
+                    />
+                  }
+                >
+                  <Columns3 />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  {(Object.keys(columnLabels) as PaperColumn[]).map((c) => (
+                    <DropdownMenuCheckboxItem
+                      key={c}
+                      checked={columns.includes(c)}
+                      onCheckedChange={() =>
+                        void savePaperPreferences((p) => ({
+                          ...p,
+                          columns: toggleColumn(p.columns || defaultColumns, c),
+                        }))
+                      }
+                    >
+                      {columnLabels[c]}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button
               size="sm"
               variant={picking ? "secondary" : "outline"}
@@ -579,6 +676,49 @@ export function PaperLibrary({
                     </section>
                   ))}
                 </div>
+              ) : table ? (
+                <div className="paper-list paper-table" ref={listRef}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {picking && <TableHead className="w-8" />}
+                        {(["title", ...columns] as const).map((c) => {
+                          const active = sort === columnSort[c];
+                          const descending =
+                            descendingSorts.has(sort) !== reverse;
+                          const Arrow = descending ? ArrowDown : ArrowUp;
+                          return (
+                            <TableHead
+                              key={c}
+                              data-column={c}
+                              aria-sort={
+                                active
+                                  ? descending
+                                    ? "descending"
+                                    : "ascending"
+                                  : undefined
+                              }
+                            >
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                className="paper-table-sort"
+                                onClick={() => sortBy(columnSort[c])}
+                              >
+                                {c === "title" ? "标题" : columnLabels[c]}
+                                {active && <Arrow />}
+                              </Button>
+                            </TableHead>
+                          );
+                        })}
+                        <TableHead className="w-8" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visible.map((doc) => renderRow(doc, columns))}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 <div className="paper-list" ref={listRef} role="list">
                   {visible.map((doc) => renderRow(doc))}
@@ -653,6 +793,7 @@ function PaperRow({
   picking,
   picked,
   colors,
+  columns,
   dragIds,
   onActivate,
   onOpen,
@@ -665,6 +806,8 @@ function PaperRow({
   picking: boolean;
   picked: boolean;
   colors: { name: string; color: string }[];
+  /** Table columns; the row renders as a list card without them. */
+  columns?: PaperColumn[];
   dragIds: () => string[];
   onActivate: (e: React.MouseEvent | React.KeyboardEvent) => void;
   onOpen: () => void;
@@ -673,12 +816,119 @@ function PaperRow({
 }) {
   const byline = paperByline(doc);
   const percent = Math.round(doc.percentage * 100);
+  const check = picking && (
+    <span className="paper-row-check" data-row-action>
+      <Checkbox
+        checked={picked}
+        aria-label={`选择 ${doc.title}`}
+        onCheckedChange={() => onActivate({} as React.MouseEvent)}
+      />
+    </span>
+  );
+  const title = (
+    <p className="paper-row-title" title={doc.title}>
+      {colors.length > 0 && (
+        <span
+          className="paper-row-colors"
+          role="img"
+          aria-label={colors.map((c) => c.name).join("、")}
+          title={colors.map((c) => c.name).join("、")}
+        >
+          {colors.map((c) => (
+            <span
+              key={c.name}
+              className="color-dot"
+              style={{ background: c.color }}
+            />
+          ))}
+        </span>
+      )}
+      {doc.favorite && (
+        <Star className="mr-1 inline size-3 fill-current text-amber-500" />
+      )}
+      {doc.title}
+    </p>
+  );
+  const status = (
+    <span className="paper-row-status" data-status={doc.readingStatus}>
+      {doc.readingStatus === "reading" && percent > 0
+        ? `${percent}%`
+        : statusLabels[doc.readingStatus]}
+    </span>
+  );
+  const counts = (
+    <>
+      {busy(job) && (
+        <span className="paper-row-job" title={job!.detail}>
+          <Loader2 className="size-3 animate-spin" />
+          解析中
+        </span>
+      )}
+      {doc.noteCount > 0 && (
+        <span title={`${doc.noteCount} 条笔记`}>
+          <StickyNote className="size-3" />
+          {doc.noteCount}
+        </span>
+      )}
+      {doc.openQuestionCount > 0 && (
+        <span title={`${doc.openQuestionCount} 个问题待回答`}>
+          <CircleHelp className="size-3" />
+          {doc.openQuestionCount}
+        </span>
+      )}
+      {doc.highlightCount > 0 && (
+        <span title={`${doc.highlightCount} 处划线`}>
+          <Highlighter className="size-3" />
+          {doc.highlightCount}
+        </span>
+      )}
+    </>
+  );
+  const more = (
+    <span data-row-action>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="paper-row-more"
+              aria-label={`${doc.title} 的更多操作`}
+            />
+          }
+        >
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {moreMenu}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  );
+  const cell = (column: PaperColumn) => {
+    switch (column) {
+      case "authors":
+        return authorsShort(doc, 2);
+      case "year":
+        return paperYear(doc.metadata);
+      case "venue":
+        return venueLabel(doc.metadata);
+      case "added":
+        return new Date(doc.createdAt).toLocaleDateString("zh-CN");
+      case "opened":
+        return wasOpened(doc) ? relativeTime(doc.lastOpenedAt) : "";
+      case "notes":
+        return <span className="paper-row-meta">{counts}</span>;
+      case "status":
+        return status;
+    }
+  };
   return (
     <ContextMenu>
       <ContextMenuTrigger
-        render={<article />}
-        role="listitem"
-        className="paper-row"
+        render={columns ? <tr /> : <article />}
+        role={columns ? undefined : "listitem"}
+        className={columns ? "paper-table-row" : "paper-row"}
         data-paper-id={doc.id}
         data-selected={selected || undefined}
         data-picked={picked || undefined}
@@ -710,94 +960,35 @@ function PaperRow({
           }
         }}
       >
-        {picking && (
-          <span className="paper-row-check" data-row-action>
-            <Checkbox
-              checked={picked}
-              aria-label={`选择 ${doc.title}`}
-              onCheckedChange={() => onActivate({} as React.MouseEvent)}
-            />
-          </span>
+        {columns ? (
+          <>
+            {picking && <TableCell className="w-8">{check}</TableCell>}
+            <TableCell className="paper-table-title">{title}</TableCell>
+            {columns.map((column) => (
+              <TableCell key={column} data-column={column}>
+                {cell(column)}
+              </TableCell>
+            ))}
+            <TableCell className="w-8">{more}</TableCell>
+          </>
+        ) : (
+          <>
+            {check}
+            <div className="paper-row-main">
+              {title}
+              {byline && (
+                <p className="paper-row-byline" title={byline}>
+                  {byline}
+                </p>
+              )}
+            </div>
+            <div className="paper-row-meta">
+              {counts}
+              {status}
+            </div>
+            {more}
+          </>
         )}
-        <div className="paper-row-main">
-          <p className="paper-row-title" title={doc.title}>
-            {colors.length > 0 && (
-              <span
-                className="paper-row-colors"
-                role="img"
-                aria-label={colors.map((c) => c.name).join("、")}
-                title={colors.map((c) => c.name).join("、")}
-              >
-                {colors.map((c) => (
-                  <span
-                    key={c.name}
-                    className="color-dot"
-                    style={{ background: c.color }}
-                  />
-                ))}
-              </span>
-            )}
-            {doc.favorite && (
-              <Star className="mr-1 inline size-3 fill-current text-amber-500" />
-            )}
-            {doc.title}
-          </p>
-          {byline && (
-            <p className="paper-row-byline" title={byline}>
-              {byline}
-            </p>
-          )}
-        </div>
-        <div className="paper-row-meta">
-          {busy(job) && (
-            <span className="paper-row-job" title={job!.detail}>
-              <Loader2 className="size-3 animate-spin" />
-              解析中
-            </span>
-          )}
-          {doc.noteCount > 0 && (
-            <span title={`${doc.noteCount} 条笔记`}>
-              <StickyNote className="size-3" />
-              {doc.noteCount}
-            </span>
-          )}
-          {doc.openQuestionCount > 0 && (
-            <span title={`${doc.openQuestionCount} 个问题待回答`}>
-              <CircleHelp className="size-3" />
-              {doc.openQuestionCount}
-            </span>
-          )}
-          {doc.highlightCount > 0 && (
-            <span title={`${doc.highlightCount} 处划线`}>
-              <Highlighter className="size-3" />
-              {doc.highlightCount}
-            </span>
-          )}
-          <span className="paper-row-status" data-status={doc.readingStatus}>
-            {doc.readingStatus === "reading" && percent > 0
-              ? `${percent}%`
-              : statusLabels[doc.readingStatus]}
-          </span>
-        </div>
-        <span data-row-action>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  className="paper-row-more"
-                  aria-label={`${doc.title} 的更多操作`}
-                />
-              }
-            >
-              <MoreHorizontal />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {moreMenu}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </span>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">{menu}</ContextMenuContent>
     </ContextMenu>

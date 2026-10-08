@@ -2285,6 +2285,68 @@ kbd {
 .paper-row[data-picked] {
   background: color-mix(in oklch, var(--foreground) 7%, transparent);
 }
+.paper-table table {
+  table-layout: fixed;
+}
+.paper-table th {
+  height: 32px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.paper-table th[data-column="authors"] {
+  width: 160px;
+}
+.paper-table th[data-column="year"] {
+  width: 64px;
+}
+.paper-table th[data-column="venue"] {
+  width: 150px;
+}
+.paper-table th[data-column="added"],
+.paper-table th[data-column="opened"] {
+  width: 96px;
+}
+.paper-table th[data-column="notes"] {
+  width: 96px;
+}
+.paper-table th[data-column="status"] {
+  width: 72px;
+}
+.paper-table-sort.paper-table-sort {
+  gap: 2px;
+  padding-inline: 6px;
+  color: inherit;
+  font-weight: 500;
+}
+.paper-table td {
+  overflow: hidden;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+}
+.paper-table td.paper-table-title {
+  color: var(--foreground);
+}
+.paper-table td .paper-row-title {
+  font-size: 13px;
+}
+.paper-table td .paper-row-meta {
+  gap: 8px;
+}
+.paper-table-row {
+  outline: none;
+  cursor: default;
+}
+.paper-table-row:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--ring) 60%, transparent);
+}
+.paper-table-row[data-selected],
+.paper-table-row[data-picked] {
+  background: color-mix(in oklch, var(--foreground) 7%, transparent);
+}
 .paper-row-main {
   flex: 1;
   min-width: 0;
@@ -2481,7 +2543,7 @@ textarea.paper-title-input {
   .paper-detail {
     width: 300px;
   }
-  .paper-row-meta > span:not(.paper-row-status) {
+  .paper-row .paper-row-meta > span:not(.paper-row-status) {
     display: none;
   }
 }

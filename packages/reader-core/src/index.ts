@@ -86,7 +86,18 @@ export type PaperMetadataField = Exclude<
   "sources" | "lookup" | "lookedUpAt"
 >;
 export type ReadingStatus = "unread" | "reading" | "done";
-export type PaperSort = "opened" | "added" | "year" | "title";
+export type PaperSort =
+  | "opened"
+  | "added"
+  | "year"
+  | "title"
+  | "author"
+  | "venue"
+  | "status"
+  | "notes";
+/** Optional columns of the paper table; the title is always shown. */
+export type PaperColumn =
+  "authors" | "year" | "venue" | "added" | "opened" | "notes" | "status";
 export interface PaperLibraryPreferences {
   /** Category (tag) order, including categories without papers. */
   categories?: string[];
@@ -103,6 +114,11 @@ export interface PaperLibraryPreferences {
   /** Colored categories; the n-th one is toggled with the number key n. */
   colorCategories?: { name: string; color: string }[];
   sort?: PaperSort;
+  /** Reverse the natural order of `sort`. */
+  sortReverse?: boolean;
+  layout?: "list" | "table";
+  /** Visible table columns in order. */
+  columns?: PaperColumn[];
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;
   citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";

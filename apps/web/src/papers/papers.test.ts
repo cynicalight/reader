@@ -17,6 +17,8 @@ import {
   pairKey,
   paperColors,
   setCategoryColor,
+  sortPapers,
+  toggleColumn,
   filterPapers,
   flattenCategories,
   matchesView,
@@ -342,4 +344,37 @@ it("offers unlinked papers matching every term as related candidates", () => {
     relatedCandidates(doc, docs, "attention 2020").map((d) => d.id),
   ).toEqual(["c"]);
   expect(relatedCandidates(doc, docs, " ")).toEqual([]);
+});
+
+it("sorts by every column in either direction", () => {
+  const docs = [
+    paper({
+      id: "a",
+      title: "B title",
+      readingStatus: "done",
+      noteCount: 1,
+      metadata: { creators: [{ given: "Z", family: "Zhang" }], venue: "ICML" },
+    }),
+    paper({
+      id: "b",
+      title: "A title",
+      readingStatus: "reading",
+      highlightCount: 5,
+      metadata: { creators: [{ name: "Alpha" }] },
+    }),
+    paper({ id: "c", title: "C title", metadata: { venue: "ACL" } }),
+  ];
+  const ids = (sort: Parameters<typeof sortPapers>[1], reverse = false) =>
+    sortPapers(docs, sort, reverse).map((d) => d.id);
+  expect(ids("author")).toEqual(["b", "a", "c"]);
+  expect(ids("venue")).toEqual(["c", "a", "b"]);
+  expect(ids("status")).toEqual(["b", "c", "a"]);
+  expect(ids("notes")).toEqual(["b", "a", "c"]);
+  expect(ids("title", true)).toEqual(["c", "a", "b"]);
+  expect(toggleColumn(["status", "authors"], "year")).toEqual([
+    "authors",
+    "year",
+    "status",
+  ]);
+  expect(toggleColumn(["authors", "year"], "authors")).toEqual(["year"]);
 });

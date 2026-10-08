@@ -1,5 +1,6 @@
 import type {
   Document,
+  PaperColumn,
   PaperLibraryPreferences,
   PaperSort,
   Processing,
@@ -48,7 +49,51 @@ export const sortLabels: Record<PaperSort, string> = {
   added: "最近添加",
   year: "年份",
   title: "标题",
+  author: "作者",
+  venue: "出处",
+  status: "阅读状态",
+  notes: "笔记数",
 };
+export const columnLabels: Record<PaperColumn, string> = {
+  authors: "作者",
+  year: "年份",
+  venue: "出处",
+  added: "添加时间",
+  opened: "上次打开",
+  notes: "笔记",
+  status: "状态",
+};
+export const defaultColumns: PaperColumn[] = [
+  "authors",
+  "year",
+  "venue",
+  "status",
+];
+/** The sort a column header applies. */
+export const columnSort: Record<PaperColumn | "title", PaperSort> = {
+  title: "title",
+  authors: "author",
+  year: "year",
+  venue: "venue",
+  added: "added",
+  opened: "opened",
+  notes: "notes",
+  status: "status",
+};
+/** Sorts whose natural order is newest or largest first. */
+export const descendingSorts: ReadonlySet<PaperSort> = new Set([
+  "opened",
+  "added",
+  "year",
+  "notes",
+]);
+/** Show or hide a column, keeping the canonical column order. */
+export function toggleColumn(columns: PaperColumn[], column: PaperColumn) {
+  const on = new Set(columns);
+  if (on.has(column)) on.delete(column);
+  else on.add(column);
+  return (Object.keys(columnLabels) as PaperColumn[]).filter((c) => on.has(c));
+}
 
 const busy = (job?: Processing) =>
   !!job && !["complete", "failed"].includes(job.status);
@@ -121,16 +166,41 @@ export function searchText(doc: Document) {
     .toLocaleLowerCase();
 }
 
-export function sortPapers(docs: Document[], sort: PaperSort) {
+const firstAuthor = (doc: Document) => {
+  const first = paperCreators(doc)[0];
+  return first ? first.family || first.name || first.given || "" : "";
+};
+const statusRank = { reading: 0, unread: 1, done: 2 };
+/** Text keys sort A–Z with empty values last. */
+const byText =
+  (key: (doc: Document) => string) => (a: Document, b: Document) => {
+    const x = key(a);
+    const y = key(b);
+    if (!x || !y) return (x ? 0 : 1) - (y ? 0 : 1);
+    return x.localeCompare(y, "zh");
+  };
+
+/** Natural order per key: newest, most annotated or A–Z first. */
+export function sortPapers(docs: Document[], sort: PaperSort, reverse = false) {
+  const title = byText((d) => d.title);
   const by: Record<PaperSort, (a: Document, b: Document) => number> = {
     opened: (a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt),
     added: (a, b) => b.createdAt.localeCompare(a.createdAt),
     year: (a, b) =>
       (b.metadata.date || "").localeCompare(a.metadata.date || "") ||
-      a.title.localeCompare(b.title, "zh"),
-    title: (a, b) => a.title.localeCompare(b.title, "zh"),
+      title(a, b),
+    title,
+    author: (a, b) => byText(firstAuthor)(a, b) || title(a, b),
+    venue: (a, b) => byText((d) => d.metadata.venue || "")(a, b) || title(a, b),
+    status: (a, b) =>
+      statusRank[a.readingStatus] - statusRank[b.readingStatus] ||
+      b.lastOpenedAt.localeCompare(a.lastOpenedAt),
+    notes: (a, b) =>
+      b.noteCount + b.highlightCount - (a.noteCount + a.highlightCount) ||
+      title(a, b),
   };
-  return [...docs].sort(by[sort]);
+  const compare = by[sort] || by.opened;
+  return [...docs].sort((a, b) => (reverse ? -compare(a, b) : compare(a, b)));
 }
 
 /**
@@ -143,7 +213,11 @@ export function filterPapers(
   query: string,
   sort: PaperSort,
   jobs: Map<string, Processing>,
-  options: { subcategories?: boolean; notDuplicates?: string[] } = {},
+  options: {
+    subcategories?: boolean;
+    notDuplicates?: string[];
+    reverse?: boolean;
+  } = {},
 ) {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const found = (doc: Document) => {
@@ -160,6 +234,7 @@ export function filterPapers(
         found(doc),
     ),
     sort,
+    options.reverse,
   );
 }
 

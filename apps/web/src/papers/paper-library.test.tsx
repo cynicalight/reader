@@ -334,3 +334,33 @@ it("links related papers from the detail panel", async () => {
   );
   expect(api.unrelateDocuments).toHaveBeenCalledExactlyOnceWith("a", "b");
 });
+
+it("shows papers as a table and sorts by a column header", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      libraryPreferences: {
+        mode: "papers",
+        papers: { sort: "title", layout: "table", columns: ["year", "venue"] },
+      },
+    }),
+  );
+  const headers = [...host.querySelectorAll("th")].map((th) =>
+    th.textContent?.trim(),
+  );
+  expect(headers).toEqual(["标题", "年份", "出处", ""]);
+  expect(row("Attention Is All You Need").textContent).toContain("2017");
+  const year = [...host.querySelectorAll<HTMLButtonElement>("th button")].find(
+    (b) => b.textContent === "年份",
+  )!;
+  await act(async () => year.click());
+  expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      papers: expect.objectContaining({ sort: "year", sortReverse: false }),
+    }),
+  );
+  const title = host.querySelector('th[data-column="title"]')!;
+  expect(title.getAttribute("aria-sort")).toBeNull();
+  expect(
+    host.querySelector('th[data-column="year"]')!.getAttribute("aria-sort"),
+  ).toBe("descending");
+});
