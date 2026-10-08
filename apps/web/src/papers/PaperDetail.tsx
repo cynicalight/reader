@@ -187,7 +187,6 @@ export function PaperDetail({
               render={<Button size="sm" variant="outline" />}
             >
               <Quote />
-              引用
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
               <CitationMenuItems kind="dropdown" docs={[doc]} />
