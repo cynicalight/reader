@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Bold, Loader2 } from "lucide-react";
-import type { ReaderTheme } from "@reader/core";
+import { defaultTheme, type ReaderTheme } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Select,
@@ -25,7 +25,10 @@ export function TranslationFontControls({
   theme: ReaderTheme;
   setTheme: (patch: Partial<ReaderTheme>) => void;
 }) {
-  const family = theme.translationFontFamily ?? "sans-serif";
+  const family =
+    theme.translationFontFamily ??
+    defaultTheme.translationFontFamily ??
+    "serif";
   const [installed, setInstalled] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   // A saved font stays selectable before the installed list is read.
@@ -113,7 +116,10 @@ export function TranslationFontControls({
           size="sm"
           variant="outline"
           aria-label="译文加粗"
-          pressed={theme.translationFontWeight === "bold"}
+          pressed={
+            (theme.translationFontWeight ??
+              defaultTheme.translationFontWeight) === "bold"
+          }
           onPressedChange={(pressed) =>
             setTheme({ translationFontWeight: pressed ? "bold" : "normal" })
           }

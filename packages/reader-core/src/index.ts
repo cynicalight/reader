@@ -253,7 +253,8 @@ export const defaultTheme: ReaderTheme = {
   scroll: false,
   zoom: "width",
   translationFontSize: 1,
-  translationFontFamily: "sans-serif",
+  translationFontFamily: "serif",
+  translationFontWeight: "bold",
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {

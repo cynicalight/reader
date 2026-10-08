@@ -55,5 +55,15 @@ it("keeps a saved font, reads installed fonts once and toggles bold", async () =
     "PingFang SC",
   ]);
   await act(async () => button("译文加粗").click());
+  expect(setTheme).toHaveBeenCalledWith({ translationFontWeight: "normal" });
+  await act(async () =>
+    root.render(
+      <TranslationFontControls
+        theme={{ ...defaultTheme, translationFontWeight: "normal" }}
+        setTheme={setTheme}
+      />,
+    ),
+  );
+  await act(async () => button("译文加粗").click());
   expect(setTheme).toHaveBeenCalledWith({ translationFontWeight: "bold" });
 });

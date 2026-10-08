@@ -21,7 +21,7 @@ import type {
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
-import { isPDFPageDecoration } from "@reader/core";
+import { defaultTheme, isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
@@ -759,7 +759,10 @@ export function PDFReadingView({
                 fontSize: `${theme.translationFontSize ?? 1}rem`,
                 fontFamily: translationFont(theme.translationFontFamily),
                 fontWeight:
-                  theme.translationFontWeight === "bold" ? 600 : undefined,
+                  (theme.translationFontWeight ??
+                    defaultTheme.translationFontWeight) === "bold"
+                    ? 600
+                    : undefined,
                 lineHeight: theme.lineHeight,
               }}
             >

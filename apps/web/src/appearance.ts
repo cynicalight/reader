@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import type { ReaderTheme } from "@reader/core";
+import { defaultTheme, type ReaderTheme } from "@reader/core";
 const query = "(prefers-color-scheme: dark)";
 function subscribe(callback: () => void) {
   const media = window.matchMedia(query);
@@ -45,13 +45,17 @@ const serifStack =
   '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", ui-serif, serif';
 
 /** CSS font-family for translated text; installed fonts fall back to sans. */
-export function translationFont(family = "sans-serif") {
+export function translationFont(
+  family = defaultTheme.translationFontFamily ?? "serif",
+) {
   if (family === "sans-serif") return "inherit";
   if (family === "serif") return serifStack;
   return `"${family.replace(/["\\]/g, "")}", system-ui, sans-serif`;
 }
 
-export const translationFontLabel = (family = "sans-serif") =>
+export const translationFontLabel = (
+  family = defaultTheme.translationFontFamily ?? "serif",
+) =>
   family === "sans-serif"
     ? "黑体 / 无衬线"
     : family === "serif"

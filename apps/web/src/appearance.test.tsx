@@ -69,7 +69,8 @@ it("follows live system changes and unsubscribes on unmount", () => {
 });
 
 it("builds translated text fonts, falling back for installed ones", () => {
-  expect(translationFont()).toBe("inherit");
+  expect(translationFont()).toContain("Songti SC");
+  expect(translationFont("sans-serif")).toBe("inherit");
   expect(translationFont("serif")).toContain("Songti SC");
   expect(translationFont('LXGW "WenKai"')).toBe(
     '"LXGW WenKai", system-ui, sans-serif',
