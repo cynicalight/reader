@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { SmartCategory } from "@reader/core";
 import type { PaperView } from "./model";
 
 /** Session state shared by the paper sidebar, list and detail panel. */
@@ -14,6 +15,9 @@ export const usePaperUI = create<{
   /** Parent of the category being named, "" for a top-level one. */
   namingParent: string;
   setNaming: (ids: string[] | null, parent?: string) => void;
+  /** The smart category being created or edited, or null when closed. */
+  smartEditing: SmartCategory | null;
+  setSmartEditing: (smart: SmartCategory | null) => void;
   /** Papers in the citation export dialog, or null when closed. */
   exporting: { ids: string[]; title: string } | null;
   setExporting: (exporting: { ids: string[]; title: string } | null) => void;
@@ -35,6 +39,8 @@ export const usePaperUI = create<{
   naming: null,
   namingParent: "",
   setNaming: (naming, namingParent = "") => set({ naming, namingParent }),
+  smartEditing: null,
+  setSmartEditing: (smartEditing) => set({ smartEditing }),
   exporting: null,
   setExporting: (exporting) => set({ exporting }),
   setView: (view) => set({ view }),

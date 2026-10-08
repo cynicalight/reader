@@ -99,11 +99,13 @@ export type PaperSort =
 export type PaperColumn =
   "authors" | "year" | "venue" | "added" | "opened" | "notes" | "status";
 export interface PaperLibraryPreferences {
-  /** Category (tag) order, including categories without papers. */
+  /** Category (folder) order, including categories without papers. */
   categories?: string[];
-  /** Pinned sidebar entries: "view:<id>", "tag:<name>" or "doc:<id>". */
+  /** Categories that collect every paper carrying all of their tags. */
+  smartCategories?: SmartCategory[];
+  /** Pinned sidebar entries: "view:<id>", "folder:<path>", "smart:<id>" or "doc:<id>". */
   pinned?: string[];
-  /** Hidden built-in views ("view:<id>") and categories ("tag:<name>"). */
+  /** Hidden built-in views ("view:<id>") and categories ("folder:<path>", "smart:<id>"). */
   hidden?: string[];
   /** Categories whose subcategories are folded in the sidebar. */
   collapsed?: string[];
@@ -124,6 +126,12 @@ export interface PaperLibraryPreferences {
   citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
   citationOrder?: "author" | "year" | "custom";
 }
+export interface SmartCategory {
+  id: string;
+  name: string;
+  /** A paper belongs when it has every one of these tags. */
+  tags: string[];
+}
 export interface LibraryPreferences {
   mode?: LibraryMode;
   papers?: PaperLibraryPreferences;
@@ -140,6 +148,8 @@ export interface Document {
   classificationStatus: "pending" | "running" | "failed" | "done";
   classificationError: string;
   tags: string[];
+  /** Paper-library categories; "a/b" is nested in "a". */
+  folders: string[];
   library: LibraryMode;
   /** Set while the document is in the trash. */
   deletedAt?: string;

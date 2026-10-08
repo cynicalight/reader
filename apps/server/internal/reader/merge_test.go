@@ -22,8 +22,8 @@ func uploadPapers(t *testing.T, s *Server, n int) []string {
 func TestMergeFoldsDuplicatesIntoTheChosenVersion(t *testing.T) {
 	s := testServer(t)
 	ids := uploadPapers(t, s, 3)
-	request(t, s, "PATCH", "/api/documents/"+ids[0], strings.NewReader(`{"tags":["ML"],"metadata":{"venue":"NeurIPS"}}`))
-	request(t, s, "PATCH", "/api/documents/"+ids[1], strings.NewReader(`{"tags":["ml","NLP"],"favorite":true,"readingStatus":"done","metadata":{"venue":"arXiv","doi":"10.1000/xyz","creators":[{"given":"Ashish","family":"Vaswani"}]}}`))
+	request(t, s, "PATCH", "/api/documents/"+ids[0], strings.NewReader(`{"tags":["ML"],"folders":["Reading"],"metadata":{"venue":"NeurIPS"}}`))
+	request(t, s, "PATCH", "/api/documents/"+ids[1], strings.NewReader(`{"tags":["ml","NLP"],"folders":["Survey"],"favorite":true,"readingStatus":"done","metadata":{"venue":"arXiv","doi":"10.1000/xyz","creators":[{"given":"Ashish","family":"Vaswani"}]}}`))
 	request(t, s, "PUT", "/api/documents/"+ids[1]+"/note", strings.NewReader(`{"body":"preprint note"}`))
 	request(t, s, "PUT", "/api/documents/"+ids[0]+"/note", strings.NewReader(`{"body":"main note"}`))
 	if _, err := s.Store.DB.Exec(`INSERT INTO annotations VALUES('a1', ?, '{}')`, ids[1]); err != nil {
@@ -37,7 +37,7 @@ func TestMergeFoldsDuplicatesIntoTheChosenVersion(t *testing.T) {
 	var result mergeResult
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	d := result.Document
-	if strings.Join(d.Tags, ",") != "ML,NLP" || !d.Favorite || d.ReadingStatus != "done" {
+	if strings.Join(d.Tags, ",") != "ML,NLP" || strings.Join(d.Folders, ",") != "Reading,Survey" || !d.Favorite || d.ReadingStatus != "done" {
 		t.Fatalf("merged: %+v", d)
 	}
 	m := d.Metadata

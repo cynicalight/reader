@@ -12,6 +12,7 @@ import {
   Loader2,
   Merge,
   MoreHorizontal,
+  Tag,
   PanelLeft,
   Search,
   Star,
@@ -69,8 +70,10 @@ import {
   createCategory,
   importReference,
   looksLikeReference,
+  addTag,
   removeFromCategory,
   savePaperPreferences,
+  toggleTagFor,
   toggleCategoryFor,
   setReadingStatus,
   setStarred,
@@ -92,8 +95,11 @@ import {
   duplicateGroups,
   filterPapers,
   flattenCategories,
+  hasTag,
   pairKey,
   paperCategories,
+  paperTags,
+  saveSmartCategory,
   paperColors,
   sortLabels,
   statusLabels,
@@ -107,6 +113,7 @@ import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CategoryDialog } from "./CategoryDialog";
 import { CitationDialog } from "./CitationDialog";
 import { MergeDialog } from "./MergeDialog";
+import { SmartCategoryDialog } from "./SmartCategoryDialog";
 import { copyCitations, exportCitations } from "./CitationMenu";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
 
@@ -147,6 +154,7 @@ export function PaperLibrary({
         ? []
         : filterPapers(documents, view, query, sort, jobs, {
             subcategories: prefs.subcategoryItems !== false,
+            smart: prefs.smartCategories,
             notDuplicates: prefs.notDuplicates,
             reverse,
           }),
@@ -157,11 +165,14 @@ export function PaperLibrary({
       sort,
       jobs,
       prefs.subcategoryItems,
+      prefs.smartCategories,
       prefs.notDuplicates,
       reverse,
     ],
   );
   const [merging, setMerging] = useState<Document[] | null>(null);
+  const [tagging, setTagging] = useState<string[] | null>(null);
+  const tags = paperTags(documents);
   const table = prefs.layout === "table" && view !== "duplicates";
   const sortBy = (next: PaperSort) =>
     void savePaperPreferences((p) => ({
@@ -180,13 +191,18 @@ export function PaperLibrary({
   const selected = documents.find((d) => d.id === selectedId);
   const pickedDocs = documents.filter((d) => picked.has(d.id));
   const categories = paperCategories(prefs, documents);
-  const category = view.startsWith("tag:") ? view.slice(4) : "";
+  const category = view.startsWith("folder:") ? view.slice(7) : "";
+  const smart = prefs.smartCategories || [];
   const title =
     view === "trash"
       ? "回收站"
-      : category.replaceAll("/", " / ") ||
-        viewLabels[view as BuiltinView] ||
-        "全部论文";
+      : view.startsWith("tag:")
+        ? `#${view.slice(4)}`
+        : view.startsWith("smart:")
+          ? smart.find((s) => `smart:${s.id}` === view)?.name || "智能标签分类"
+          : category.replaceAll("/", " / ") ||
+            viewLabels[view as BuiltinView] ||
+            "全部论文";
   useEffect(() => {
     // Pasting an arXiv ID, DOI or link anywhere outside a field imports it.
     const paste = (e: ClipboardEvent) => {
@@ -257,6 +273,7 @@ export function PaperLibrary({
       });
     },
     newCategory: (docs) => ui.setNaming(docs.map((d) => d.id)),
+    newTag: (docs) => setTagging(docs.map((d) => d.id)),
   };
   const menuDocs = (doc: Document) =>
     picking && picked.has(doc.id) ? pickedDocs : [doc];
@@ -605,6 +622,40 @@ export function PaperLibrary({
                     <Quote />
                     导出引用
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!pickedDocs.length}
+                        />
+                      }
+                    >
+                      <Tag />
+                      标签
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="max-h-80 w-48">
+                      {tags.map((tag) => (
+                        <DropdownMenuCheckboxItem
+                          key={tag}
+                          checked={pickedDocs.every((d) => hasTag(d, tag))}
+                          onCheckedChange={() =>
+                            void toggleTagFor(pickedDocs, tag)
+                          }
+                        >
+                          <span className="truncate">#{tag}</span>
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      {tags.length > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuItem
+                        onClick={() => actions.newTag(pickedDocs)}
+                      >
+                        <Tag />
+                        新标签…
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -751,6 +802,37 @@ export function PaperLibrary({
             ui.setView("all");
             ui.setQuery("");
             ui.select(doc.id);
+          }}
+        />
+      )}
+      {tagging && (
+        <CategoryDialog
+          kind="tag"
+          count={tagging.length}
+          onClose={() => setTagging(null)}
+          onSave={async (name) => {
+            const tag = name.trim().replace(/^#/, "");
+            if (!tag || [...tag].length > 40) {
+              toast.error("标签须为 1–40 个字符");
+              return false;
+            }
+            await addTag(
+              documents.filter((d) => tagging.includes(d.id)),
+              tag,
+            );
+            return true;
+          }}
+        />
+      )}
+      {ui.smartEditing && (
+        <SmartCategoryDialog
+          smart={ui.smartEditing}
+          isNew={!smart.some((s) => s.id === ui.smartEditing!.id)}
+          tags={tags}
+          onClose={() => ui.setSmartEditing(null)}
+          onSave={(next) => {
+            void savePaperPreferences((p) => saveSmartCategory(p, next));
+            ui.setView(`smart:${next.id}`);
           }}
         />
       )}

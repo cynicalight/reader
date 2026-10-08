@@ -11,18 +11,20 @@ import (
 )
 
 type Document struct {
-	Category             string        `json:"category"`
-	CategorySource       string        `json:"categorySource"`
-	ClassificationStatus string        `json:"classificationStatus"`
-	ClassificationError  string        `json:"classificationError"`
-	Tags                 []string      `json:"tags"`
-	Library              string        `json:"library"`
-	DeletedAt            string        `json:"deletedAt,omitempty"`
-	Metadata             PaperMetadata `json:"metadata"`
-	ReadingStatus        string        `json:"readingStatus"`
-	NoteCount            int           `json:"noteCount"`
-	HighlightCount       int           `json:"highlightCount"`
-	OpenQuestionCount    int           `json:"openQuestionCount"`
+	Category             string   `json:"category"`
+	CategorySource       string   `json:"categorySource"`
+	ClassificationStatus string   `json:"classificationStatus"`
+	ClassificationError  string   `json:"classificationError"`
+	Tags                 []string `json:"tags"`
+	// Folders are the paper library's categories; "a/b" is nested in "a".
+	Folders           []string      `json:"folders"`
+	Library           string        `json:"library"`
+	DeletedAt         string        `json:"deletedAt,omitempty"`
+	Metadata          PaperMetadata `json:"metadata"`
+	ReadingStatus     string        `json:"readingStatus"`
+	NoteCount         int           `json:"noteCount"`
+	HighlightCount    int           `json:"highlightCount"`
+	OpenQuestionCount int           `json:"openQuestionCount"`
 	// Related lists documents the user linked to this one, in both directions.
 	Related      []string        `json:"related"`
 	ID           string          `json:"id"`
@@ -111,7 +113,7 @@ func OpenStore(root string) (*Store, error) {
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
-const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,library,deleted_at,metadata,reading_status,` +
+const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,folders,library,deleted_at,metadata,reading_status,` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='note'),` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline')),` +
 	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='question' AND COALESCE(json_extract(a.body,'$.answerId'),'')='' AND NOT COALESCE(json_extract(a.body,'$.resolved'),0)),` +
@@ -121,10 +123,13 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanDocument(row rowScanner) (Document, error) {
 	var d Document
-	var progress, tags, metadata, related string
-	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount, &related)
+	var progress, tags, folders, metadata, related string
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &folders, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount, &related)
 	if err == nil {
 		err = json.Unmarshal([]byte(tags), &d.Tags)
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(folders), &d.Folders)
 	}
 	if err == nil {
 		err = json.Unmarshal([]byte(related), &d.Related)

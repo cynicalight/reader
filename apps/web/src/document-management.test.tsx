@@ -59,6 +59,7 @@ beforeEach(() => {
     highlightCount: 0,
     openQuestionCount: 0,
     related: [],
+    folders: [],
     tags: ["Web"],
   };
   vi.mocked(api.update).mockImplementation(async () => doc);

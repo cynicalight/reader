@@ -117,7 +117,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/models", s.agentModels)
 	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
 	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
-	mux.HandleFunc("POST /api/libraries/{library}/tags", s.changeLibraryTag)
+	mux.HandleFunc("POST /api/libraries/{library}/tags", s.changeLibraryLabels("tags"))
+	mux.HandleFunc("POST /api/libraries/{library}/folders", s.changeLibraryLabels("folders"))
 	mux.HandleFunc("GET /api/preferences/{key}", s.preferences)
 	mux.HandleFunc("PUT /api/preferences/{key}", s.savePreferences)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +280,7 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		}
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}
-	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "pending", []string{}
+	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags, d.Folders = "article", "default", "pending", []string{}, []string{}
 	if kind == "epub" {
 		d.Category = "book"
 	}
@@ -387,6 +388,7 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		Author     json.RawMessage            `json:"author"`
 		Category   json.RawMessage            `json:"category"`
 		Tags       json.RawMessage            `json:"tags"`
+		Folders    json.RawMessage            `json:"folders"`
 		Favorite   *bool                      `json:"favorite"`
 		Progress   json.RawMessage            `json:"progress"`
 		Percentage *float64                   `json:"percentage"`
@@ -397,7 +399,7 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &v) {
 		return
 	}
-	var title, author, category, tags, library, metadata, status any
+	var title, author, category, tags, folders, library, metadata, status any
 	if v.Title != nil {
 		title, err = metadataText(v.Title, 300, false)
 		if err != nil {
@@ -457,6 +459,15 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		b, _ := json.Marshal(normalized)
 		tags = string(b)
 	}
+	if v.Folders != nil {
+		normalized, e := normalizeTags(v.Folders)
+		if e != nil {
+			fail(w, 400, "分类必须为数组，最多 30 个，每个 1–40 个字符")
+			return
+		}
+		b, _ := json.Marshal(normalized)
+		folders = string(b)
+	}
 	if v.Library != nil {
 		if !validLibrary(*v.Library) {
 			fail(w, 400, "未知书库")
@@ -499,14 +510,14 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var openedAt any
 	// Organization and favorites must not move a document into recent reading.
-	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil && v.Library == nil && v.Metadata == nil && v.Status == nil) {
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Folders == nil && v.Title == nil && v.Author == nil && v.Library == nil && v.Metadata == nil && v.Status == nil) {
 		openedAt = now()
 	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, library, metadata, status, category, category, category, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),folders=COALESCE(?,folders),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, folders, library, metadata, status, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return

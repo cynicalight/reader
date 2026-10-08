@@ -12,6 +12,7 @@ import {
   FolderOpen,
   FolderPlus,
   Inbox,
+  Tags,
   Library,
   Loader2,
   Pin,
@@ -19,7 +20,12 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import type { Document, Processing, ReadingStatus } from "@reader/core";
+import type {
+  Document,
+  Processing,
+  ReadingStatus,
+  SmartCategory,
+} from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import {
@@ -75,6 +81,7 @@ import {
   moveCategory,
   paperCategories,
   recentPapers,
+  removeSmartCategory,
   MAX_COLOR_CATEGORIES,
   setCategoryColor,
   setHidden,
@@ -218,8 +225,15 @@ export function PaperSidebar({
   onNewCategory: () => void;
 }) {
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
-  const { view, setView, select, startPicking, selectedId, setNaming } =
-    usePaperUI();
+  const {
+    view,
+    setView,
+    select,
+    startPicking,
+    selectedId,
+    setNaming,
+    setSmartEditing,
+  } = usePaperUI();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -230,10 +244,14 @@ export function PaperSidebar({
   const categories = paperCategories(prefs, documents);
   const duplicates = duplicateGroups(documents, prefs.notDuplicates).flat()
     .length;
-  const count = (v: PaperView, sub = subcategoryItems) =>
+  const smart = prefs.smartCategories || [];
+  const context = { subcategories: subcategoryItems, smart };
+  const count = (v: PaperView, subcategories = subcategoryItems) =>
     v === "duplicates"
       ? duplicates
-      : documents.filter((d) => matchesView(d, v, jobs, sub)).length;
+      : documents.filter((d) =>
+          matchesView(d, v, jobs, { subcategories, smart }),
+        ).length;
   const byId = new Map(documents.map((d) => [d.id, d]));
   // Holding ⌥ marks every category that holds the selected paper.
   const marked = alt && selectedId ? byId.get(selectedId) : undefined;
@@ -304,7 +322,7 @@ export function PaperSidebar({
   const open = (name: string) => !collapsed.has(name.toLowerCase());
   const isHidden = (name: string) =>
     hidden.some(
-      (key) => key.startsWith("tag:") && withinCategory(name, key.slice(4)),
+      (key) => key.startsWith("folder:") && withinCategory(name, key.slice(7)),
     );
   const tree = categoryTree(categories.filter((name) => !isHidden(name)));
   const nested = tree.some((node) => node.children.length > 0);
@@ -313,7 +331,7 @@ export function PaperSidebar({
     isPinned = false,
   ) => {
     const { name } = node;
-    const key = `tag:${name}` as const;
+    const key = `folder:${name}` as const;
     const parent = categoryParent(name);
     const expanded = open(name);
     const indent = {
@@ -370,7 +388,9 @@ export function PaperSidebar({
         count={count(key)}
         active={view === key}
         pinned={isPinned}
-        highlighted={marked?.tags.some((tag) => withinCategory(tag, name))}
+        highlighted={marked?.folders.some((folder) =>
+          withinCategory(folder, name),
+        )}
         color={colored[colorIndex]?.color}
         onSelect={() => choose(key)}
         onDrop={(ids) => void addToCategory(docsFor(ids), name)}
@@ -466,7 +486,7 @@ export function PaperSidebar({
                 choose(key);
                 startPicking(
                   documents
-                    .filter((d) => matchesView(d, key, jobs, subcategoryItems))
+                    .filter((d) => matchesView(d, key, jobs, context))
                     .map((d) => d.id),
                 );
               }}
@@ -476,9 +496,7 @@ export function PaperSidebar({
             <ContextMenuItem
               onClick={() =>
                 exportCitations(
-                  documents.filter((d) =>
-                    matchesView(d, key, jobs, subcategoryItems),
-                  ),
+                  documents.filter((d) => matchesView(d, key, jobs, context)),
                   categoryLeaf(name),
                 )
               }
@@ -542,11 +560,72 @@ export function PaperSidebar({
       }
     />
   );
+  const newSmart = () =>
+    setSmartEditing({ id: crypto.randomUUID(), name: "", tags: [] });
+  const smartRow = (item: SmartCategory, isPinned = false) => {
+    const key = `smart:${item.id}` as const;
+    return (
+      <SidebarRow
+        key={key}
+        icon={Tags}
+        label={item.name}
+        title={`${item.name}：含 ${item.tags.map((t) => `#${t}`).join(" ")}`}
+        count={count(key)}
+        active={view === key}
+        pinned={isPinned}
+        onSelect={() => choose(key)}
+        menu={
+          <>
+            {pinItem(key)}
+            <ContextMenuItem onClick={() => setSmartEditing(item)}>
+              编辑…
+            </ContextMenuItem>
+            {!isPinned && hideItem(key)}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={() => {
+                choose(key);
+                startPicking(
+                  documents
+                    .filter((d) => matchesView(d, key, jobs, context))
+                    .map((d) => d.id),
+                );
+              }}
+            >
+              批量选择这个分类的论文
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() =>
+                exportCitations(
+                  documents.filter((d) => matchesView(d, key, jobs, context)),
+                  item.name,
+                )
+              }
+            >
+              导出这个分类的引用
+            </ContextMenuItem>
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => {
+                void savePaperPreferences((p) =>
+                  removeSmartCategory(p, item.id),
+                );
+                if (view === key) choose("all");
+              }}
+            >
+              <Trash2 />
+              删除智能标签分类
+            </ContextMenuItem>
+          </>
+        }
+      />
+    );
+  };
   const deleteSummary = (name: string) => {
     const subs = categories.filter(
       (item) => item !== name && withinCategory(item, name),
     ).length;
-    const papers = count(`tag:${name}`, true);
+    const papers = count(`folder:${name}`, true);
     return [
       subs && `其中的 ${subs} 个子分类也会删除。`,
       papers
@@ -562,8 +641,12 @@ export function PaperSidebar({
         const doc = byId.get(key.slice(4));
         return doc ? paperRow(doc, true) : null;
       }
-      if (key.startsWith("tag:")) {
-        const name = key.slice(4);
+      if (key.startsWith("smart:")) {
+        const item = smart.find((s) => s.id === key.slice(6));
+        return item ? smartRow(item, true) : null;
+      }
+      if (key.startsWith("folder:")) {
+        const name = key.slice(7);
         return categories.includes(name)
           ? categoryRow(
               { name, label: categoryLeaf(name), depth: 0, children: [] },
@@ -577,11 +660,17 @@ export function PaperSidebar({
     .filter(Boolean);
   const recent = recentPapers(documents, pinned, recentOpen ? 10 : 5);
   const recentTotal = recentPapers(documents, pinned, 10).length;
-  const hiddenItems = hidden.filter((key) =>
-    key.startsWith("tag:")
-      ? categories.includes(key.slice(4))
-      : managedViews.includes(key.slice(5) as BuiltinView),
-  );
+  const hiddenLabel = (key: string) =>
+    key.startsWith("folder:")
+      ? categories.includes(key.slice(7))
+        ? key.slice(7).replaceAll("/", " / ")
+        : ""
+      : key.startsWith("smart:")
+        ? smart.find((s) => s.id === key.slice(6))?.name || ""
+        : managedViews.includes(key.slice(5) as BuiltinView)
+          ? viewLabels[key.slice(5) as BuiltinView]
+          : "";
+  const hiddenItems = hidden.filter((key) => hiddenLabel(key));
   return (
     <div className="paper-sidebar">
       <nav className="space-y-1" aria-label="文献库">
@@ -610,22 +699,36 @@ export function PaperSidebar({
       <section>
         <h3 className="paper-nav-heading">
           分类
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="新建分类"
-            onClick={onNewCategory}
-          >
-            <Plus />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="icon-xs" variant="ghost" aria-label="新建分类" />
+              }
+            >
+              <Plus />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={onNewCategory}>
+                <Folder />
+                新建分类
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={newSmart}>
+                <Tags />
+                新建智能标签分类
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </h3>
         <nav className="space-y-0.5">
           {flattenCategories(
             tree,
             (node) => !open(node.name) && node.children.length > 0,
           ).map((node) => categoryRow(node))}
+          {smart
+            .filter((item) => !hidden.includes(`smart:${item.id}`))
+            .map((item) => smartRow(item))}
           {categories.length > 0 && count("unfiled") > 0 && viewRow("unfiled")}
-          {!categories.length && (
+          {!categories.length && !smart.length && (
             <Button
               variant="ghost"
               className="nav-item paper-nav-item text-muted-foreground"
@@ -658,11 +761,7 @@ export function PaperSidebar({
                   }
                 >
                   <Eye />
-                  显示“
-                  {key.startsWith("tag:")
-                    ? key.slice(4)
-                    : viewLabels[key.slice(5) as BuiltinView]}
-                  ”
+                  显示“{hiddenLabel(key)}”
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

@@ -18,6 +18,7 @@ vi.mock("@reader/api", () => ({
     restoreDocument: vi.fn(),
     saveLibraryPreferences: vi.fn(async (value) => value),
     changeLibraryTag: vi.fn(async () => ({ changed: 1 })),
+    changeLibraryFolder: vi.fn(async () => ({ changed: 1 })),
     mergeDocuments: vi.fn(async () => ({ trashed: [] })),
     relateDocuments: vi.fn(async () => ({})),
     unrelateDocuments: vi.fn(async () => ({})),
@@ -30,7 +31,7 @@ const docs: Document[] = [
   paper({
     id: "a",
     title: "Attention Is All You Need",
-    tags: ["ML"],
+    folders: ["ML"],
     metadata: {
       creators: [{ given: "Ashish", family: "Vaswani" }],
       date: "2017",
@@ -199,7 +200,7 @@ it("renames a category everywhere through the library endpoint", async () => {
       new SubmitEvent("submit", { bubbles: true, cancelable: true }),
     ),
   );
-  expect(api.changeLibraryTag).toHaveBeenCalledExactlyOnceWith(
+  expect(api.changeLibraryFolder).toHaveBeenCalledExactlyOnceWith(
     "papers",
     "ML",
     "Machine learning",
@@ -209,7 +210,7 @@ it("renames a category everywhere through the library endpoint", async () => {
 it("shows subcategories under their parent and renames only the leaf", async () => {
   await act(async () =>
     useReaderStore.setState({
-      documents: [{ ...docs[0], tags: ["ML/Vision"] }, docs[1]],
+      documents: [{ ...docs[0], folders: ["ML/Vision"] }, docs[1]],
     }),
   );
   expect(navButton("ML").textContent).toContain("1");
@@ -237,7 +238,7 @@ it("shows subcategories under their parent and renames only the leaf", async () 
       new SubmitEvent("submit", { bubbles: true, cancelable: true }),
     ),
   );
-  expect(api.changeLibraryTag).toHaveBeenCalledExactlyOnceWith(
+  expect(api.changeLibraryFolder).toHaveBeenCalledExactlyOnceWith(
     "papers",
     "ML/Vision",
     "ML/CV",
@@ -313,7 +314,9 @@ it("toggles a colored category with its number key", async () => {
       new KeyboardEvent("keydown", { key: "1", bubbles: true }),
     ),
   );
-  expect(api.update).toHaveBeenCalledExactlyOnceWith("b", { tags: ["Todo"] });
+  expect(api.update).toHaveBeenCalledExactlyOnceWith("b", {
+    folders: ["Todo"],
+  });
 });
 
 it("links related papers from the detail panel", async () => {
@@ -401,4 +404,39 @@ it("edits authors as capsules", async () => {
   expect(api.update).toHaveBeenLastCalledWith("a", {
     metadata: { creators: [{ family: "Shazeer", given: "Noam" }] },
   });
+});
+
+it("tags a paper and collects it in a smart tag category", async () => {
+  await act(async () => row("Graph Attention Networks").click());
+  const detail = host.querySelector(".paper-detail")!;
+  await act(async () =>
+    detail
+      .querySelector<HTMLButtonElement>('button[aria-label="添加标签"]')!
+      .click(),
+  );
+  const input = detail.querySelector<HTMLInputElement>(
+    'input[aria-label="添加标签"]',
+  )!;
+  input.value = "#GNN";
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    ),
+  );
+  expect(api.update).toHaveBeenLastCalledWith("b", { tags: ["GNN"] });
+  await act(async () =>
+    useReaderStore.setState({
+      documents: [docs[0], { ...docs[1], tags: ["GNN"] }],
+      libraryPreferences: {
+        mode: "papers",
+        papers: {
+          sort: "title",
+          smartCategories: [{ id: "s", name: "图网络", tags: ["gnn"] }],
+        },
+      },
+    }),
+  );
+  await act(async () => navButton("图网络").click());
+  expect(host.querySelector(".library-title")?.textContent).toBe("图网络");
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
 });

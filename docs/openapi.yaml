@@ -173,6 +173,17 @@
                                           "maxLength": 40,
                                         },
                                     },
+                                  "folders":
+                                    {
+                                      "type": "array",
+                                      "maxItems": 30,
+                                      "items":
+                                        {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 40,
+                                        },
+                                    },
                                   "favorite": { "type": "boolean" },
                                   "progress":
                                     {
@@ -2022,11 +2033,84 @@
                 },
             },
         },
+      "/api/libraries/{library}/folders":
+        {
+          "post":
+            {
+              "summary": "Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from": { "type": "string", "minLength": 1 },
+                                  "to":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 40,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Changed documents",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "changed": { "type": "number" } },
+                                  "required": ["changed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/libraries/{library}/tags":
         {
           "post":
             {
-              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Nested tags (from/child) follow; 400 when a renamed tag would exceed 40 characters",
+              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction",
               "parameters":
                 [
                   {
@@ -2462,6 +2546,14 @@
                       "items":
                         { "type": "string", "minLength": 1, "maxLength": 40 },
                     },
+                  "folders":
+                    {
+                      "type": "array",
+                      "maxItems": 30,
+                      "items":
+                        { "type": "string", "minLength": 1, "maxLength": 40 },
+                      "description": "Paper-library categories; a/b is nested in a",
+                    },
                   "id": { "type": "string" },
                   "type": { "enum": ["pdf", "epub"] },
                   "title": { "type": "string" },
@@ -2506,6 +2598,7 @@
                   "classificationStatus",
                   "classificationError",
                   "tags",
+                  "folders",
                   "id",
                   "type",
                   "title",

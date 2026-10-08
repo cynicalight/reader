@@ -9,18 +9,21 @@ import {
   DialogTitle,
 } from "@reader/ui/components/dialog";
 
-/** Names a new category; `count` papers are placed in it on save. */
+/** Names a new category or tag; `count` papers receive it on save. */
 export function CategoryDialog({
   count,
   parent,
+  kind = "category",
   onSave,
   onClose,
 }: {
   count: number;
   parent?: string;
+  kind?: "category" | "tag";
   onSave: (name: string) => Promise<boolean>;
   onClose: () => void;
 }) {
+  const noun = kind === "tag" ? "标签" : "分类";
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const save = async () => {
@@ -36,14 +39,19 @@ export function CategoryDialog({
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{parent ? "新建子分类" : "新建分类"}</DialogTitle>
+          <DialogTitle>
+            {kind === "tag" ? "新标签" : parent ? "新建子分类" : "新建分类"}
+          </DialogTitle>
           <DialogDescription className={count || parent ? "" : "sr-only"}>
             {[
               parent && `位于“${parent.replaceAll("/", " / ")}”`,
-              count && `放入所选的 ${count} 篇论文`,
+              count &&
+                (kind === "tag"
+                  ? `加到所选的 ${count} 篇论文`
+                  : `放入所选的 ${count} 篇论文`),
             ]
               .filter(Boolean)
-              .join("，") || "输入分类名"}
+              .join("，") || `输入${noun}名`}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -56,8 +64,8 @@ export function CategoryDialog({
           <Input
             autoFocus
             maxLength={40}
-            aria-label="分类名"
-            placeholder="分类名"
+            aria-label={`${noun}名`}
+            placeholder={`${noun}名`}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />

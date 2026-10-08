@@ -40,7 +40,7 @@ type mergeResult struct {
 	Trashed []string `json:"trashed"`
 }
 
-// mergeDocuments folds duplicates into the document at {id}: categories, star,
+// mergeDocuments folds duplicates into the document at {id}: tags, folders, star,
 // the furthest reading status, missing metadata and paper notes move over,
 // then the duplicates go to the trash with their files, annotations and chats.
 func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
@@ -89,11 +89,13 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 	beforeMeta, _ := json.Marshal(master.Metadata)
 	beforeTags, _ := json.Marshal(master.Tags)
 	tags := append([]string{}, master.Tags...)
+	folders := append([]string{}, master.Folders...)
 	favorite := master.Favorite
 	status := master.ReadingStatus
 	meta := master.Metadata
 	for _, d := range others {
 		tags = append(tags, d.Tags...)
+		folders = append(folders, d.Folders...)
 		favorite = favorite || d.Favorite
 		if readingRank[d.ReadingStatus] > readingRank[status] {
 			status = d.ReadingStatus
@@ -102,6 +104,12 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, _ := json.Marshal(tags)
 	merged, err := normalizeTags(raw)
+	if err != nil {
+		fail(w, 400, "合并后标签超过 30 个")
+		return
+	}
+	raw, _ = json.Marshal(folders)
+	mergedFolders, err := normalizeTags(raw)
 	if err != nil {
 		fail(w, 400, "合并后分类超过 30 个")
 		return
@@ -139,13 +147,14 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	tagsJSON, _ := json.Marshal(merged)
+	foldersJSON, _ := json.Marshal(mergedFolders)
 	metaJSON, _ := json.Marshal(meta)
 	fav := 0
 	if favorite {
 		fav = 1
 	}
-	result, err := tx.Exec("UPDATE documents SET tags=?,favorite=?,reading_status=?,metadata=?,author=? WHERE id=? AND deleted_at='' AND metadata=? AND tags=?",
-		string(tagsJSON), fav, status, string(metaJSON), author, id, string(beforeMeta), string(beforeTags))
+	result, err := tx.Exec("UPDATE documents SET tags=?,folders=?,favorite=?,reading_status=?,metadata=?,author=? WHERE id=? AND deleted_at='' AND metadata=? AND tags=?",
+		string(tagsJSON), string(foldersJSON), fav, status, string(metaJSON), author, id, string(beforeMeta), string(beforeTags))
 	if err != nil {
 		fail(w, 500, "合并失败")
 		return

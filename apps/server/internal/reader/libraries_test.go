@@ -223,28 +223,34 @@ func TestRenameAndRemoveLibraryTag(t *testing.T) {
 	}
 }
 
-func TestNestedLibraryTagsFollowTheirParent(t *testing.T) {
+func TestFoldersNestButTagsStayFlat(t *testing.T) {
 	s := testServer(t)
 	w := uploadTo(t, s, "papers", "p.pdf", testPDF(1))
 	var d Document
 	_ = json.Unmarshal(w.Body.Bytes(), &d)
-	request(t, s, "PATCH", "/api/documents/"+d.ID, strings.NewReader(`{"tags":["ML/Vision","ml/NLP/Parsing","MLOps","Other"]}`))
-	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"ML","to":"AI"}`)); w.Code != 200 {
+	request(t, s, "PATCH", "/api/documents/"+d.ID, strings.NewReader(`{"folders":["ML/Vision","ml/NLP/Parsing","MLOps"],"tags":["ML","ML/x"]}`))
+	if w = request(t, s, "POST", "/api/libraries/papers/folders", strings.NewReader(`{"from":"ML","to":"AI"}`)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
 	d, _ = s.Store.Document(d.ID)
-	if strings.Join(d.Tags, ",") != "AI/Vision,AI/NLP/Parsing,MLOps,Other" {
-		t.Fatalf("rename: %v", d.Tags)
+	if strings.Join(d.Folders, ",") != "AI/Vision,AI/NLP/Parsing,MLOps" || strings.Join(d.Tags, ",") != "ML,ML/x" {
+		t.Fatalf("folder rename: folders=%v tags=%v", d.Folders, d.Tags)
 	}
-	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"AI/NLP"}`)); w.Code != 200 {
+	if w = request(t, s, "POST", "/api/libraries/papers/folders", strings.NewReader(`{"from":"AI/NLP"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"ML","to":"Learning"}`)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
 	d, _ = s.Store.Document(d.ID)
-	if strings.Join(d.Tags, ",") != "AI/Vision,MLOps,Other" {
-		t.Fatalf("remove: %v", d.Tags)
+	if strings.Join(d.Folders, ",") != "AI/Vision,MLOps" || strings.Join(d.Tags, ",") != "Learning,ML/x" {
+		t.Fatalf("folders=%v tags=%v", d.Folders, d.Tags)
 	}
 	long := strings.Repeat("x", 39)
-	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"AI","to":"`+long+`"}`)); w.Code != 400 {
+	if w = request(t, s, "POST", "/api/libraries/papers/folders", strings.NewReader(`{"from":"AI","to":"`+long+`"}`)); w.Code != 400 {
 		t.Fatalf("too long after rename: %d", w.Code)
+	}
+	if w = request(t, s, "PATCH", "/api/documents/"+d.ID, strings.NewReader(`{"folders":"x"}`)); w.Code != 400 {
+		t.Fatalf("bad folders: %d", w.Code)
 	}
 }

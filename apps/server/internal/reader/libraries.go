@@ -106,8 +106,9 @@ func (s *Server) savePreferences(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, json.RawMessage(b))
 }
 
-// changeTag renames (to != "") or removes a tag on every document in a library,
-// including the trash, in one transaction. Nested tags ("from/child") follow.
+// changeLabels renames (to != "") or removes a tag or folder on every document
+// in a library, including the trash, in one transaction. Folders nest by "/",
+// so subfolders follow; tags are flat.
 // errInvalidTag is a rename that would produce an invalid tag on some document.
 type errInvalidTag struct{ error }
 
@@ -122,13 +123,14 @@ func tagSuffix(tag, name string) (string, bool) {
 	return "", false
 }
 
-func (s *Store) changeTag(library, from, to string) (int, error) {
+func (s *Store) changeLabels(library, column, from, to string) (int, error) {
+	nested := column == "folders"
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.Query("SELECT id,tags FROM documents WHERE library=?", library)
+	rows, err := tx.Query("SELECT id,"+column+" FROM documents WHERE library=?", library)
 	if err != nil {
 		return 0, err
 	}
@@ -143,7 +145,7 @@ func (s *Store) changeTag(library, from, to string) (int, error) {
 		}
 		next, hit := []string{}, false
 		for _, tag := range tags {
-			if rest, ok := tagSuffix(tag, from); ok {
+			if rest, ok := tagSuffix(tag, from); ok && (nested || rest == "") {
 				hit = true
 				if to == "" {
 					continue
@@ -166,14 +168,19 @@ func (s *Store) changeTag(library, from, to string) (int, error) {
 	}
 	rows.Close()
 	for _, c := range changes {
-		if _, err = tx.Exec("UPDATE documents SET tags=? WHERE id=?", c.tags, c.id); err != nil {
+		if _, err = tx.Exec("UPDATE documents SET "+column+"=? WHERE id=?", c.tags, c.id); err != nil {
 			return 0, err
 		}
 	}
 	return len(changes), tx.Commit()
 }
 
-func (s *Server) changeLibraryTag(w http.ResponseWriter, r *http.Request) {
+// changeLibraryLabels serves the tag and folder rename/remove endpoints.
+func (s *Server) changeLibraryLabels(column string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) { s.changeLibraryLabel(w, r, column) }
+}
+
+func (s *Server) changeLibraryLabel(w http.ResponseWriter, r *http.Request, column string) {
 	library := r.PathValue("library")
 	if !validLibrary(library) {
 		fail(w, 404, "未知书库")
@@ -198,17 +205,17 @@ func (s *Server) changeLibraryTag(w http.ResponseWriter, r *http.Request) {
 		to = names[0]
 	}
 	if from == "" {
-		fail(w, 400, "请指定分类")
+		fail(w, 400, "请指定名称")
 		return
 	}
-	count, err := s.Store.changeTag(library, from, to)
+	count, err := s.Store.changeLabels(library, column, from, to)
 	var invalid errInvalidTag
 	if errors.As(err, &invalid) {
-		fail(w, 400, "改名后的分类须为 1–40 个字符（含上级分类）")
+		fail(w, 400, "改名后的名称须为 1–40 个字符（分类含上级分类）")
 		return
 	}
 	if err != nil {
-		fail(w, 500, "分类保存失败")
+		fail(w, 500, "保存失败")
 		return
 	}
 	respond(w, 200, map[string]int{"changed": count})

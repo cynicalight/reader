@@ -7,6 +7,7 @@ import {
   Link2,
   Pin,
   Star,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { readerLink, type Document, type ReadingStatus } from "@reader/core";
@@ -40,13 +41,16 @@ import {
   savePaperPreferences,
   setReadingStatus,
   setStarred,
+  toggleTagFor,
 } from "./actions";
 import { paperLink } from "./format";
 import { CitationMenuItems } from "./CitationMenu";
 import {
   categoryTree,
   flattenCategories,
+  hasTag,
   paperCategories,
+  paperTags,
   statusLabels,
   togglePinned,
 } from "./model";
@@ -79,6 +83,7 @@ export interface PaperMenuActions {
   move: (doc: Document) => void;
   trash: (docs: Document[]) => void;
   newCategory: (docs: Document[]) => void;
+  newTag: (docs: Document[]) => void;
 }
 
 /** Menu items for one paper, or for every picked paper when it is picked. */
@@ -100,6 +105,7 @@ export function PaperMenuItems({
     prefs,
     all.filter((d) => d.library === "papers"),
   );
+  const tags = paperTags(all.filter((d) => d.library === "papers"));
   const one = docs.length === 1 ? docs[0] : undefined;
   const starred = docs.every((d) => d.favorite);
   const status = docs.every((d) => d.readingStatus === docs[0].readingStatus)
@@ -136,7 +142,7 @@ export function PaperMenuItems({
           {flattenCategories(categoryTree(categories)).map((node) => {
             const { name } = node;
             const inside = docs.every((d) =>
-              d.tags.some((t) => t.toLowerCase() === name.toLowerCase()),
+              d.folders.some((f) => f.toLowerCase() === name.toLowerCase()),
             );
             return (
               <K.Checkbox
@@ -161,6 +167,28 @@ export function PaperMenuItems({
           <K.Item onClick={() => actions.newCategory(docs)}>
             <FolderPlus />
             新建分类并放入…
+          </K.Item>
+        </K.SubContent>
+      </K.Sub>
+      <K.Sub>
+        <K.SubTrigger>标签</K.SubTrigger>
+        <K.SubContent className="max-h-80 min-w-44">
+          {tags.map((tag) => {
+            const on = docs.every((d) => hasTag(d, tag));
+            return (
+              <K.Checkbox
+                key={tag}
+                checked={on}
+                onCheckedChange={() => void toggleTagFor(docs, tag)}
+              >
+                <span className="truncate">#{tag}</span>
+              </K.Checkbox>
+            );
+          })}
+          {tags.length > 0 && <K.Separator />}
+          <K.Item onClick={() => actions.newTag(docs)}>
+            <Tag />
+            新标签…
           </K.Item>
         </K.SubContent>
       </K.Sub>

@@ -15,6 +15,7 @@ import {
   paperCategories,
   removeCategoryPreferences,
   renameCategoryPreferences,
+  hasTag,
   validCategory,
   withinCategory,
   type PaperView,
@@ -70,39 +71,56 @@ export async function patchPapers(changes: [Document, Patch][]) {
   return changes.length - failed;
 }
 
-const hasTag = (doc: Document, name: string) =>
-  doc.tags.some((tag) => tag.toLowerCase() === name.toLowerCase());
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const inFolder = (doc: Document, name: string) =>
+  doc.folders.some((folder) => same(folder, name));
 
 export function addToCategory(docs: Document[], name: string) {
+  return patchPapers(
+    docs
+      .filter((doc) => !inFolder(doc, name))
+      .map((doc) => [doc, { folders: [...doc.folders, name] }]),
+  );
+}
+export function removeFromCategory(docs: Document[], name: string) {
+  return patchPapers(
+    docs
+      .filter((doc) => inFolder(doc, name))
+      .map((doc) => [
+        doc,
+        { folders: doc.folders.filter((folder) => !same(folder, name)) },
+      ]),
+  );
+}
+/** Remove the category when every paper is in it, otherwise add all. */
+export const toggleCategoryFor = (docs: Document[], name: string) =>
+  docs.every((doc) => inFolder(doc, name))
+    ? removeFromCategory(docs, name)
+    : addToCategory(docs, name);
+
+export function addTag(docs: Document[], name: string) {
+  name = name.trim();
+  if (!name) return Promise.resolve(0);
   return patchPapers(
     docs
       .filter((doc) => !hasTag(doc, name))
       .map((doc) => [doc, { tags: [...doc.tags, name] }]),
   );
 }
-export function removeFromCategory(docs: Document[], name: string) {
+export function removeTag(docs: Document[], name: string) {
   return patchPapers(
     docs
       .filter((doc) => hasTag(doc, name))
       .map((doc) => [
         doc,
-        {
-          tags: doc.tags.filter(
-            (tag) => tag.toLowerCase() !== name.toLowerCase(),
-          ),
-        },
+        { tags: doc.tags.filter((tag) => !same(tag, name)) },
       ]),
   );
 }
-export const toggleCategory = (doc: Document, name: string) =>
-  hasTag(doc, name)
-    ? removeFromCategory([doc], name)
-    : addToCategory([doc], name);
-/** Remove the category when every paper has it, otherwise add it to all. */
-export const toggleCategoryFor = (docs: Document[], name: string) =>
+export const toggleTagFor = (docs: Document[], name: string) =>
   docs.every((doc) => hasTag(doc, name))
-    ? removeFromCategory(docs, name)
-    : addToCategory(docs, name);
+    ? removeTag(docs, name)
+    : addTag(docs, name);
 
 export const setReadingStatus = (
   docs: Document[],
@@ -148,13 +166,13 @@ export async function createCategory(
 /** Where the current view goes once `from` is renamed (`to`) or deleted. */
 function followCategory(from: string, to?: string) {
   const ui = usePaperUI.getState();
-  if (!ui.view.startsWith("tag:")) return;
-  const current = ui.view.slice(4);
+  if (!ui.view.startsWith("folder:")) return;
+  const current = ui.view.slice(7);
   if (!withinCategory(current, from)) return;
   ui.setView(
     to === undefined
       ? "all"
-      : (`tag:${to}${current.slice(from.length)}` as PaperView),
+      : (`folder:${to}${current.slice(from.length)}` as PaperView),
   );
 }
 
@@ -176,7 +194,7 @@ export async function renameCategory(from: string, to: string) {
     return false;
   }
   try {
-    await api.changeLibraryTag("papers", from, to);
+    await api.changeLibraryFolder("papers", from, to);
   } catch (e) {
     toast.error((e as Error).message);
     return false;
@@ -193,7 +211,7 @@ export async function renameCategory(from: string, to: string) {
 export async function deleteCategory(name: string) {
   const categories = paperCategories(paperPrefs(), papers());
   try {
-    await api.changeLibraryTag("papers", name);
+    await api.changeLibraryFolder("papers", name);
   } catch (e) {
     toast.error((e as Error).message);
     return;

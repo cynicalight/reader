@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   BookOpen,
   ExternalLink,
+  FolderPlus,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -29,6 +30,8 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@reader/ui/components/dropdown-menu";
 import { useReaderStore } from "../store";
@@ -36,8 +39,11 @@ import {
   lookupPaper,
   openLink,
   patchPapers,
+  addTag,
+  addToCategory,
+  removeFromCategory,
+  removeTag,
   setStarred,
-  toggleCategory,
 } from "./actions";
 import { copyText } from "../chat/clipboard";
 import {
@@ -49,7 +55,13 @@ import {
   parseCreators,
   relativeTime,
 } from "./format";
-import { paperCategories } from "./model";
+import {
+  categoryLeaf,
+  categoryTree,
+  flattenCategories,
+  paperCategories,
+} from "./model";
+import { usePaperUI } from "./state";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CitationMenuItems } from "./CitationMenu";
 import { RelatedPapers } from "./RelatedPapers";
@@ -205,34 +217,20 @@ export function PaperDetail({
           }}
         />
         <Field doc={doc} name="translatedTitle" multiline />
-        <div className="paper-categories" aria-label="分类">
-          {categories.map((name) => {
-            const on = doc.tags.some(
-              (t) => t.toLowerCase() === name.toLowerCase(),
-            );
-            return (
-              <Button
-                key={name}
-                size="xs"
-                variant={on ? "secondary" : "ghost"}
-                aria-pressed={on}
-                className="paper-category-chip"
-                onClick={() => void toggleCategory(doc, name)}
-              >
-                {name.replaceAll("/", " / ")}
-              </Button>
-            );
-          })}
-          <Button
-            size="xs"
-            variant="ghost"
-            className="paper-category-chip"
-            onClick={() => actions.newCategory([doc])}
-          >
-            <Plus />
-            新分类
-          </Button>
-        </div>
+        <dl className="paper-fields">
+          <dt>分类</dt>
+          <dd>
+            <FolderChips
+              doc={doc}
+              categories={categories}
+              onNew={() => actions.newCategory([doc])}
+            />
+          </dd>
+          <dt>标签</dt>
+          <dd>
+            <TagChips doc={doc} />
+          </dd>
+        </dl>
         <div className="paper-fields-heading">
           <h3>文献信息</h3>
           {m.lookup === "pending" && (
@@ -399,7 +397,7 @@ function AuthorChips({ doc }: { doc: Document }) {
       aria-label={index < creators.length ? "编辑作者" : "添加作者"}
       placeholder="姓, 名"
       defaultValue={value}
-      className="paper-author-input"
+      className="paper-chip-input"
       onKeyDown={(e) => {
         if (e.key === "Enter" && !e.nativeEvent.isComposing) {
           e.preventDefault();
@@ -413,30 +411,20 @@ function AuthorChips({ doc }: { doc: Document }) {
     />
   );
   return (
-    <div className="paper-authors" aria-label="作者">
+    <div className="paper-chips" aria-label="作者">
       {creators.map((c, index) =>
         editing === index ? (
           input(index, formatCreators([c]))
         ) : (
-          <span key={index} className="paper-author-chip">
-            <Button
-              size="xs"
-              variant="ghost"
-              title="单击复制，双击编辑"
-              onClick={() => void copyText(creatorName(c), "已复制作者")}
-              onDoubleClick={() => setEditing(index)}
-            >
-              {creatorName(c)}
-            </Button>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label={`删除作者 ${creatorName(c)}`}
-              onClick={() => save(creators.filter((_, i) => i !== index))}
-            >
-              <X />
-            </Button>
-          </span>
+          <Chip
+            key={index}
+            label={creatorName(c)}
+            title="单击复制，双击编辑"
+            removeLabel={`删除作者 ${creatorName(c)}`}
+            onClick={() => void copyText(creatorName(c), "已复制作者")}
+            onDoubleClick={() => setEditing(index)}
+            onRemove={() => save(creators.filter((_, i) => i !== index))}
+          />
         ),
       )}
       {editing === creators.length ? (
@@ -448,6 +436,164 @@ function AuthorChips({ doc }: { doc: Document }) {
           className="rounded-full"
           aria-label="添加作者"
           onClick={() => setEditing(creators.length)}
+        >
+          <Plus />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** A removable capsule. */
+function Chip({
+  label,
+  title,
+  removeLabel,
+  onClick,
+  onDoubleClick,
+  onRemove,
+}: {
+  label: string;
+  title?: string;
+  removeLabel: string;
+  onClick?: () => void;
+  onDoubleClick?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="paper-chip">
+      <Button
+        size="xs"
+        variant="ghost"
+        title={title || label}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+      >
+        {label}
+      </Button>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label={removeLabel}
+        onClick={onRemove}
+      >
+        <X />
+      </Button>
+    </span>
+  );
+}
+
+/** The categories (folders) a paper is filed in; click one to open it. */
+function FolderChips({
+  doc,
+  categories,
+  onNew,
+}: {
+  doc: Document;
+  categories: string[];
+  onNew: () => void;
+}) {
+  const setView = usePaperUI((s) => s.setView);
+  const inside = (name: string) =>
+    doc.folders.some((f) => f.toLowerCase() === name.toLowerCase());
+  return (
+    <div className="paper-chips" aria-label="分类">
+      {doc.folders.map((folder) => (
+        <Chip
+          key={folder}
+          label={folder.replaceAll("/", " / ")}
+          title={`打开“${categoryLeaf(folder)}”`}
+          removeLabel={`移出分类 ${folder}`}
+          onClick={() => setView(`folder:${folder}`)}
+          onRemove={() => void removeFromCategory([doc], folder)}
+        />
+      ))}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="rounded-full"
+              aria-label="加入分类"
+            />
+          }
+        >
+          <Plus />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-80 w-48">
+          {flattenCategories(categoryTree(categories))
+            .filter((node) => !inside(node.name))
+            .map((node) => (
+              <DropdownMenuItem
+                key={node.name}
+                onClick={() => void addToCategory([doc], node.name)}
+              >
+                <span
+                  className="truncate"
+                  style={{ paddingLeft: node.depth * 12 }}
+                >
+                  {node.label}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          {categories.some((name) => !inside(name)) && (
+            <DropdownMenuSeparator />
+          )}
+          <DropdownMenuItem onClick={onNew}>
+            <FolderPlus />
+            新建分类…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/** The paper's tags; click one to list every paper carrying it. */
+function TagChips({ doc }: { doc: Document }) {
+  const setView = usePaperUI((s) => s.setView);
+  const [adding, setAdding] = useState(false);
+  const add = (text: string) => {
+    setAdding(false);
+    const tag = text.trim().replace(/^#/, "");
+    if (tag) void addTag([doc], tag);
+  };
+  return (
+    <div className="paper-chips" aria-label="标签">
+      {doc.tags.map((tag) => (
+        <Chip
+          key={tag}
+          label={`#${tag}`}
+          title={`查看带 #${tag} 的论文`}
+          removeLabel={`删除标签 ${tag}`}
+          onClick={() => setView(`tag:${tag}`)}
+          onRemove={() => void removeTag([doc], tag)}
+        />
+      ))}
+      {adding ? (
+        <Input
+          autoFocus
+          maxLength={40}
+          aria-label="添加标签"
+          placeholder="标签名"
+          className="paper-chip-input"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              add(e.currentTarget.value);
+            }
+            if (e.key === "Escape") setAdding(false);
+          }}
+          onBlur={(e) => add(e.currentTarget.value)}
+        />
+      ) : (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          className="rounded-full"
+          aria-label="添加标签"
+          onClick={() => setAdding(true)}
         >
           <Plus />
         </Button>

@@ -208,6 +208,7 @@ export const api = {
       author?: string;
       category?: Document["category"];
       tags?: string[];
+      folders?: string[];
       favorite?: boolean;
       progress?: DocumentLocation;
       percentage?: number;
@@ -278,6 +279,11 @@ export const api = {
   providers: (checkAuth = true) =>
     request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
   /** Rename a category across a library, or remove it when `to` is omitted. */
+  changeLibraryFolder: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/folders`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
   changeLibraryTag: (library: LibraryMode, from: string, to?: string) =>
     request<{ changed: number }>(`/api/libraries/${library}/tags`, {
       method: "POST",

@@ -2,6 +2,7 @@ import type {
   Document,
   PaperColumn,
   PaperLibraryPreferences,
+  SmartCategory,
   PaperSort,
   Processing,
   ReadingStatus,
@@ -18,8 +19,16 @@ export type BuiltinView =
   | "questions"
   | "unfiled"
   | "duplicates";
-/** A built-in view, a category ("tag:<name>") or the trash. */
-export type PaperView = BuiltinView | `tag:${string}` | "trash";
+/**
+ * A built-in view, a category ("folder:<path>"), a smart tag category
+ * ("smart:<id>"), one tag ("tag:<name>") or the trash.
+ */
+export type PaperView =
+  | BuiltinView
+  | `folder:${string}`
+  | `smart:${string}`
+  | `tag:${string}`
+  | "trash";
 
 export const viewLabels: Record<BuiltinView, string> = {
   all: "全部论文",
@@ -112,20 +121,41 @@ export function withinCategory(tag: string, name: string) {
   return a === b || a.startsWith(`${b}/`);
 }
 
+const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+export const hasTag = (doc: Pick<Document, "tags">, name: string) =>
+  doc.tags.some((tag) => sameName(tag, name));
+
+/** A smart category holds the papers that carry every one of its tags. */
+export const inSmartCategory = (
+  doc: Pick<Document, "tags">,
+  smart: Pick<SmartCategory, "tags">,
+) => smart.tags.length > 0 && smart.tags.every((tag) => hasTag(doc, tag));
+
+export interface ViewContext {
+  /** A category also lists its subcategories' papers (default on). */
+  subcategories?: boolean;
+  smart?: SmartCategory[];
+}
+
 export function matchesView(
   doc: Document,
   view: PaperView,
   jobs: Map<string, Processing>,
-  subcategories = true,
+  context: ViewContext = {},
 ) {
-  if (view.startsWith("tag:")) {
-    const name = view.slice(4);
-    return doc.tags.some((tag) =>
-      subcategories
-        ? withinCategory(tag, name)
-        : tag.toLowerCase() === name.toLowerCase(),
+  if (view.startsWith("folder:")) {
+    const name = view.slice(7);
+    return doc.folders.some((folder) =>
+      context.subcategories === false
+        ? sameName(folder, name)
+        : withinCategory(folder, name),
     );
   }
+  if (view.startsWith("smart:")) {
+    const smart = context.smart?.find((item) => item.id === view.slice(6));
+    return !!smart && inSmartCategory(doc, smart);
+  }
+  if (view.startsWith("tag:")) return hasTag(doc, view.slice(4));
   switch (view) {
     case "reading":
     case "unread":
@@ -138,7 +168,7 @@ export function matchesView(
     case "questions":
       return doc.openQuestionCount > 0;
     case "unfiled":
-      return doc.tags.length === 0;
+      return doc.folders.length === 0;
     case "duplicates":
       // Needs the whole library: see duplicateGroups.
       return false;
@@ -213,11 +243,7 @@ export function filterPapers(
   query: string,
   sort: PaperSort,
   jobs: Map<string, Processing>,
-  options: {
-    subcategories?: boolean;
-    notDuplicates?: string[];
-    reverse?: boolean;
-  } = {},
+  options: ViewContext & { notDuplicates?: string[]; reverse?: boolean } = {},
 ) {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const found = (doc: Document) => {
@@ -228,11 +254,7 @@ export function filterPapers(
   if (view === "duplicates")
     return duplicateGroups(docs, options.notDuplicates).flat().filter(found);
   return sortPapers(
-    docs.filter(
-      (doc) =>
-        matchesView(doc, view, jobs, options.subcategories ?? true) &&
-        found(doc),
-    ),
+    docs.filter((doc) => matchesView(doc, view, jobs, options) && found(doc)),
     sort,
     options.reverse,
   );
@@ -317,9 +339,9 @@ export function paperCategories(
   const known = new Set(saved.map((name) => name.toLowerCase()));
   const extra = new Map<string, string>();
   for (const doc of docs)
-    for (const tag of doc.tags)
-      if (!known.has(tag.toLowerCase()) && !extra.has(tag.toLowerCase()))
-        extra.set(tag.toLowerCase(), tag);
+    for (const folder of doc.folders)
+      if (!known.has(folder.toLowerCase()) && !extra.has(folder.toLowerCase()))
+        extra.set(folder.toLowerCase(), folder);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const name of [
@@ -432,11 +454,11 @@ export function setCategoryColor(
 
 /** Colors of the colored categories that hold a paper, in key order. */
 export function paperColors(
-  doc: Pick<Document, "tags">,
+  doc: Pick<Document, "folders">,
   colored: { name: string; color: string }[] = [],
 ) {
   return colored.filter((item) =>
-    doc.tags.some((tag) => withinCategory(tag, item.name)),
+    doc.folders.some((folder) => withinCategory(folder, item.name)),
   );
 }
 
@@ -448,7 +470,7 @@ export function renameCategoryPreferences(
   to: string,
 ): PaperLibraryPreferences {
   const swap = (items?: string[]) =>
-    items?.map((item) => renamePath(item, from, to, "tag:"));
+    items?.map((item) => renamePath(item, from, to, "folder:"));
   return {
     ...prefs,
     categories: categories.map((name) => renamePath(name, from, to)),
@@ -468,7 +490,7 @@ export function removeCategoryPreferences(
   name: string,
 ): PaperLibraryPreferences {
   const drop = (items?: string[]) =>
-    items?.filter((item) => !insideKey(item, name, "tag:"));
+    items?.filter((item) => !insideKey(item, name, "folder:"));
   return {
     ...prefs,
     categories: categories.filter((item) => !withinCategory(item, name)),
@@ -542,3 +564,43 @@ export function recentPapers(docs: Document[], pinned: string[], limit = 10) {
 }
 
 export { paperYear };
+
+/** Every tag used by the papers, A–Z, keeping the first spelling seen. */
+export function paperTags(docs: Pick<Document, "tags">[]) {
+  const seen = new Map<string, string>();
+  for (const doc of docs)
+    for (const tag of doc.tags)
+      if (!seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, "zh"));
+}
+
+/** Save a new or edited smart category; tags are de-duplicated. */
+export function saveSmartCategory(
+  prefs: PaperLibraryPreferences,
+  smart: SmartCategory,
+): PaperLibraryPreferences {
+  const tags = paperTags([
+    { tags: smart.tags.map((t) => t.trim()).filter(Boolean) },
+  ]);
+  const next = { ...smart, name: smart.name.trim(), tags };
+  const list = prefs.smartCategories || [];
+  return {
+    ...prefs,
+    smartCategories: list.some((item) => item.id === smart.id)
+      ? list.map((item) => (item.id === smart.id ? next : item))
+      : [...list, next],
+  };
+}
+
+export function removeSmartCategory(
+  prefs: PaperLibraryPreferences,
+  id: string,
+): PaperLibraryPreferences {
+  const key = `smart:${id}`;
+  return {
+    ...prefs,
+    smartCategories: prefs.smartCategories?.filter((item) => item.id !== id),
+    pinned: prefs.pinned?.filter((item) => item !== key),
+    hidden: prefs.hidden?.filter((item) => item !== key),
+  };
+}

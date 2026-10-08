@@ -37,6 +37,7 @@ const docs: Document[] = ["Alpha", "Beta"].map((title, i) => ({
   highlightCount: 0,
   openQuestionCount: 0,
   related: [],
+  folders: [],
   tags: [],
   size: 100,
   createdAt: "",

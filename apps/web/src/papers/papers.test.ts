@@ -17,6 +17,9 @@ import {
   pairKey,
   paperColors,
   setCategoryColor,
+  removeSmartCategory,
+  saveSmartCategory,
+  paperTags,
   sortPapers,
   toggleColumn,
   filterPapers,
@@ -100,7 +103,7 @@ it("filters by view and every search term, then sorts", () => {
     paper({
       id: "a",
       title: "Alpha",
-      tags: ["ML"],
+      folders: ["ML"],
       readingStatus: "reading",
       metadata: { date: "2020", venue: "NeurIPS" },
     }),
@@ -110,13 +113,13 @@ it("filters by view and every search term, then sorts", () => {
       favorite: true,
       metadata: { date: "2023", abstract: "graph neural networks" },
     }),
-    paper({ id: "c", title: "Gamma", tags: ["ml"] }),
+    paper({ id: "c", title: "Gamma", folders: ["ml"] }),
   ];
   const jobs = new Map<string, Processing>([
     ["c", { documentId: "c", status: "running" } as Processing],
   ]);
   const ids = (list: Document[]) => list.map((d) => d.id);
-  expect(ids(filterPapers(docs, "tag:ML", "", "title", jobs))).toEqual([
+  expect(ids(filterPapers(docs, "folder:ML", "", "title", jobs))).toEqual([
     "a",
     "c",
   ]);
@@ -138,8 +141,11 @@ it("filters by view and every search term, then sorts", () => {
   ]);
 });
 
-it("keeps saved category order and appends tags found on papers", () => {
-  const docs = [paper({ tags: ["Zeta", "alpha"] }), paper({ tags: ["Beta"] })];
+it("keeps saved category order and appends folders found on papers", () => {
+  const docs = [
+    paper({ folders: ["Zeta", "alpha"] }),
+    paper({ folders: ["Beta"] }),
+  ];
   expect(paperCategories({ categories: ["Alpha", "Empty"] }, docs)).toEqual([
     "Alpha",
     "Empty",
@@ -152,13 +158,13 @@ it("keeps saved category order and appends tags found on papers", () => {
 
 it("updates pinned and hidden keys when categories change", () => {
   const prefs = {
-    pinned: ["tag:ML", "doc:x"],
-    hidden: ["tag:ML", "view:done"],
+    pinned: ["folder:ML", "doc:x"],
+    hidden: ["folder:ML", "view:done"],
   };
   expect(renameCategoryPreferences(prefs, ["ML", "CV"], "ML", "NLP")).toEqual({
     categories: ["NLP", "CV"],
-    pinned: ["tag:NLP", "doc:x"],
-    hidden: ["tag:NLP", "view:done"],
+    pinned: ["folder:NLP", "doc:x"],
+    hidden: ["folder:NLP", "view:done"],
   });
   expect(removeCategoryPreferences(prefs, ["ML", "CV"], "ML")).toEqual({
     categories: ["CV"],
@@ -185,9 +191,9 @@ it("lists recently opened papers without pinned ones", () => {
 
 it("nests categories by slash and lists implied parents", () => {
   const docs = [
-    paper({ id: "a", tags: ["ML/Vision/Detection"] }),
-    paper({ id: "b", tags: ["ML"] }),
-    paper({ id: "c", tags: [] }),
+    paper({ id: "a", folders: ["ML/Vision/Detection"] }),
+    paper({ id: "b", folders: ["ML"] }),
+    paper({ id: "c", folders: [] }),
   ];
   const categories = paperCategories(
     { categories: ["Reading", "ml/NLP"] },
@@ -216,9 +222,11 @@ it("nests categories by slash and lists implied parents", () => {
     ),
   ).toEqual(["Reading", "ml"]);
   const jobs = new Map();
-  expect(matchesView(docs[0], "tag:ML", jobs)).toBe(true);
-  expect(matchesView(docs[0], "tag:ML", jobs, false)).toBe(false);
-  expect(matchesView(docs[0], "tag:ML/Vis", jobs)).toBe(false);
+  expect(matchesView(docs[0], "folder:ML", jobs)).toBe(true);
+  expect(
+    matchesView(docs[0], "folder:ML", jobs, { subcategories: false }),
+  ).toBe(false);
+  expect(matchesView(docs[0], "folder:ML/Vis", jobs)).toBe(false);
   expect(docs.filter((d) => matchesView(d, "unfiled", jobs))).toEqual([
     docs[2],
   ]);
@@ -246,19 +254,19 @@ it("moves, renames and removes a category with its subcategories", () => {
   expect(moveCategory(categories, "A/x", -1)).toEqual(categories);
   expect(siblingPosition(categories, "A/y")).toEqual({ index: 1, count: 2 });
   const prefs = {
-    pinned: ["tag:A/x", "tag:AB"],
-    hidden: ["tag:A"],
+    pinned: ["folder:A/x", "folder:AB"],
+    hidden: ["folder:A"],
     collapsed: ["A", "B"],
   };
   expect(renameCategoryPreferences(prefs, categories, "A", "C")).toEqual({
     categories: ["C", "C/x", "C/y", "B", "B/z"],
-    pinned: ["tag:C/x", "tag:AB"],
-    hidden: ["tag:C"],
+    pinned: ["folder:C/x", "folder:AB"],
+    hidden: ["folder:C"],
     collapsed: ["C", "B"],
   });
   expect(removeCategoryPreferences(prefs, categories, "A")).toEqual({
     categories: ["B", "B/z"],
-    pinned: ["tag:AB"],
+    pinned: ["folder:AB"],
     hidden: [],
     collapsed: ["B"],
   });
@@ -328,7 +336,7 @@ it("keeps up to nine colored categories in key order", () => {
   expect(colored).toHaveLength(8);
   expect(colored[2]).toEqual({ name: "c3", color: "#4a8fe0" });
   expect(
-    paperColors(paper({ tags: ["c3/x", "c5"] }), colored).map((c) => c.name),
+    paperColors(paper({ folders: ["c3/x", "c5"] }), colored).map((c) => c.name),
   ).toEqual(["c3", "c5"]);
 });
 
@@ -377,4 +385,31 @@ it("sorts by every column in either direction", () => {
     "status",
   ]);
   expect(toggleColumn(["authors", "year"], "authors")).toEqual(["year"]);
+});
+
+it("lists tag views and smart tag categories that need every tag", () => {
+  const docs = [
+    paper({ id: "a", tags: ["LLM", "RL"] }),
+    paper({ id: "b", tags: ["llm"] }),
+    paper({ id: "c", tags: ["RL"], folders: ["Survey"] }),
+  ];
+  const jobs = new Map<string, Processing>();
+  let prefs = saveSmartCategory(
+    { pinned: ["smart:s"] },
+    { id: "s", name: " RLHF ", tags: ["llm", " RL", "LLM", ""] },
+  );
+  expect(prefs.smartCategories).toEqual([
+    { id: "s", name: "RLHF", tags: ["llm", "RL"] },
+  ]);
+  const smart = prefs.smartCategories;
+  const ids = (view: Parameters<typeof filterPapers>[1]) =>
+    filterPapers(docs, view, "", "title", jobs, { smart }).map((d) => d.id);
+  expect(ids("smart:s")).toEqual(["a"]);
+  expect(ids("tag:LLM")).toEqual(["a", "b"]);
+  expect(ids("unfiled")).toEqual(["a", "b"]);
+  expect(ids("smart:missing")).toEqual([]);
+  expect(paperTags(docs)).toEqual(["LLM", "RL"]);
+  prefs = removeSmartCategory(prefs, "s");
+  expect(prefs.smartCategories).toEqual([]);
+  expect(prefs.pinned).toEqual([]);
 });

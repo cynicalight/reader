@@ -154,6 +154,7 @@ export interface paths {
             /** @enum {unknown} */
             category?: "book" | "article" | "paper";
             tags?: string[];
+            folders?: string[];
             favorite?: boolean;
             progress?: components["schemas"]["DocumentLocation"];
             percentage?: number;
@@ -1817,6 +1818,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/libraries/{library}/folders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          library: "books" | "papers";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            from: string;
+            to?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Changed documents */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              changed: number;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/libraries/{library}/tags": {
     parameters: {
       query?: never;
@@ -1826,7 +1883,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Nested tags (from/child) follow; 400 when a renamed tag would exceed 40 characters */
+    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction */
     post: {
       parameters: {
         query?: never;
@@ -2120,6 +2177,8 @@ export interface components {
       classificationStatus: "pending" | "running" | "failed" | "done";
       classificationError: string;
       tags: string[];
+      /** @description Paper-library categories; a/b is nested in a */
+      folders: string[];
       id: string;
       /** @enum {unknown} */
       type: "pdf" | "epub";
