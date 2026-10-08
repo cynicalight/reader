@@ -417,24 +417,6 @@ export function PaperLibrary({
                 ))}
               </SelectContent>
             </Select>
-            <Tabs
-              value={prefs.layout || "list"}
-              onValueChange={(value) =>
-                void savePaperPreferences((p) => ({
-                  ...p,
-                  layout: value as "list" | "table",
-                }))
-              }
-            >
-              <TabsList aria-label="显示方式">
-                <TabsTrigger value="list" aria-label="列表" title="列表">
-                  <List />
-                </TabsTrigger>
-                <TabsTrigger value="table" aria-label="表格" title="表格">
-                  <Table2 />
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
             {table && (
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -467,6 +449,24 @@ export function PaperLibrary({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            <Tabs
+              value={prefs.layout || "list"}
+              onValueChange={(value) =>
+                void savePaperPreferences((p) => ({
+                  ...p,
+                  layout: value as "list" | "table",
+                }))
+              }
+            >
+              <TabsList aria-label="显示方式">
+                <TabsTrigger value="table" aria-label="表格" title="表格">
+                  <Table2 />
+                </TabsTrigger>
+                <TabsTrigger value="list" aria-label="列表" title="列表">
+                  <List />
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Button
               size="sm"
               variant={picking ? "secondary" : "outline"}

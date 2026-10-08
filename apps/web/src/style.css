@@ -2453,8 +2453,9 @@ kbd {
   padding: 20px 20px 28px;
 }
 .paper-detail-open.paper-detail-open {
-  height: 56px;
+  height: 48px;
   margin-bottom: -6px;
+  border-radius: 999px;
   font-size: 14px;
 }
 /* Cite, star, pin and more share the row equally. */
