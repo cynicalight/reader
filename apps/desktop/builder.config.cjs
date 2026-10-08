@@ -11,6 +11,8 @@ module.exports = {
     target: ["dmg"],
     category: "public.app-category.books",
     identity: "-",
+    // Replaces the ad-hoc identity with the fixed release certificate when available.
+    sign: (options) => require("./mac-sign.cjs")(options),
     hardenedRuntime: false,
     notarize: false,
     artifactName: "Reader-${version}-mac-${arch}.${ext}",
