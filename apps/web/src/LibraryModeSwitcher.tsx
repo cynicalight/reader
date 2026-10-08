@@ -12,8 +12,8 @@ export const libraryModes: Record<
   LibraryMode,
   { label: string; description: string }
 > = {
-  books: { label: "图书库", description: "EPUB 与 PDF 书籍、文章" },
   papers: { label: "文献库", description: "论文、文献信息与引用" },
+  books: { label: "图书库", description: "EPUB 与 PDF 书籍、文章" },
 };
 
 export function LibraryModeSwitcher({

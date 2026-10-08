@@ -65,12 +65,19 @@ export async function refreshAIConfig() {
   if (useReaderStore.getState().aiConfig === before)
     useReaderStore.getState().setAIConfig(config);
 }
+export const primaryLibraryMode = (
+  preferences: LibraryPreferences,
+): LibraryMode => (preferences.primaryMode === "books" ? "books" : "papers");
 export const libraryMode = (preferences: LibraryPreferences): LibraryMode =>
-  preferences.mode === "papers" ? "papers" : "books";
+  preferences.mode === "books" || preferences.mode === "papers"
+    ? preferences.mode
+    : primaryLibraryMode(preferences);
 export async function loadLibraryPreferences() {
-  useReaderStore
-    .getState()
-    .setLibraryPreferences(await api.libraryPreferences());
+  const preferences = await api.libraryPreferences();
+  useReaderStore.getState().setLibraryPreferences({
+    ...preferences,
+    mode: primaryLibraryMode(preferences),
+  });
 }
 let preferenceWrite = Promise.resolve();
 /** Apply locally at once; writes are serialized so the last change wins. */

@@ -135,6 +135,8 @@ export interface SmartCategory {
   tags: string[];
 }
 export interface LibraryPreferences {
+  /** Library opened at startup; defaults to papers. */
+  primaryMode?: LibraryMode;
   mode?: LibraryMode;
   papers?: PaperLibraryPreferences;
 }

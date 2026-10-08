@@ -14,7 +14,7 @@ import {
 import { ProviderIdentity } from "./ProviderIdentity";
 import { TaskModels } from "./TaskModels";
 import { api } from "@reader/api";
-import type { Provider } from "@reader/core";
+import type { LibraryMode, Provider } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -43,7 +43,12 @@ import {
   TabsTrigger,
 } from "@reader/ui/components/tabs";
 import { HighlightColorsEditor } from "./HighlightColorsEditor";
-import { updateLibraryPreferences, useReaderStore } from "./store";
+import {
+  primaryLibraryMode,
+  updateLibraryPreferences,
+  useReaderStore,
+} from "./store";
+import { libraryModes } from "./LibraryModeSwitcher";
 import { Checkbox } from "@reader/ui/components/checkbox";
 import { toast } from "sonner";
 export function Settings({
@@ -68,6 +73,7 @@ export function Settings({
     aiConfig: config,
     setAIConfig,
     aiModelSaving,
+    libraryPreferences,
   } = useReaderStore();
   const paperPreferences =
     useReaderStore((s) => s.libraryPreferences.papers) || {};
@@ -186,6 +192,42 @@ export function Settings({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="display" className="settings-panel" keepMounted>
+            <section className="mb-6">
+              <h3
+                id="primary-library-label"
+                className="mb-3 text-sm font-medium"
+              >
+                主要模式
+              </h3>
+              <Select
+                value={primaryLibraryMode(libraryPreferences)}
+                onValueChange={(value) => {
+                  if (value !== "papers" && value !== "books") return;
+                  void updateLibraryPreferences({ primaryMode: value }).catch(
+                    (error) => toast.error((error as Error).message),
+                  );
+                }}
+              >
+                <SelectTrigger
+                  aria-labelledby="primary-library-label"
+                  className="w-48"
+                >
+                  <SelectValue>
+                    {libraryModes[primaryLibraryMode(libraryPreferences)].label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(libraryModes) as LibraryMode[]).map((mode) => (
+                    <SelectItem key={mode} value={mode}>
+                      {libraryModes[mode].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-xs text-muted-foreground">
+                下次启动时默认进入此模式。
+              </p>
+            </section>
             <section>
               <h3 className="mb-3 text-sm font-medium">界面主题</h3>
               <div className="flex gap-2">
