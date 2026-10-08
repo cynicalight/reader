@@ -15,7 +15,8 @@ export type BuiltinView =
   | "starred"
   | "processing"
   | "questions"
-  | "unfiled";
+  | "unfiled"
+  | "duplicates";
 /** A built-in view, a category ("tag:<name>") or the trash. */
 export type PaperView = BuiltinView | `tag:${string}` | "trash";
 
@@ -28,6 +29,7 @@ export const viewLabels: Record<BuiltinView, string> = {
   processing: "解析中",
   questions: "待回答的问题",
   unfiled: "未分类",
+  duplicates: "重复的论文",
 };
 /** Views the user can hide or pin; "all" is always shown. */
 export const managedViews: BuiltinView[] = [
@@ -92,6 +94,9 @@ export function matchesView(
       return doc.openQuestionCount > 0;
     case "unfiled":
       return doc.tags.length === 0;
+    case "duplicates":
+      // Needs the whole library: see duplicateGroups.
+      return false;
     default:
       return true;
   }
@@ -128,25 +133,101 @@ export function sortPapers(docs: Document[], sort: PaperSort) {
   return [...docs].sort(by[sort]);
 }
 
-/** Every whitespace-separated term must appear somewhere in the paper. */
+/**
+ * Every whitespace-separated term must appear somewhere in the paper. The
+ * duplicates view keeps each group together instead of sorting.
+ */
 export function filterPapers(
   docs: Document[],
   view: PaperView,
   query: string,
   sort: PaperSort,
   jobs: Map<string, Processing>,
-  subcategories = true,
+  options: { subcategories?: boolean; notDuplicates?: string[] } = {},
 ) {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const found = (doc: Document) => {
+    if (!terms.length) return true;
+    const text = searchText(doc);
+    return terms.every((term) => text.includes(term));
+  };
+  if (view === "duplicates")
+    return duplicateGroups(docs, options.notDuplicates).flat().filter(found);
   return sortPapers(
-    docs.filter((doc) => {
-      if (!matchesView(doc, view, jobs, subcategories)) return false;
-      if (!terms.length) return true;
-      const text = searchText(doc);
-      return terms.every((term) => text.includes(term));
-    }),
+    docs.filter(
+      (doc) =>
+        matchesView(doc, view, jobs, options.subcategories ?? true) &&
+        found(doc),
+    ),
     sort,
   );
+}
+
+const comparableTitle = (title: string) =>
+  title
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+/** arXiv DOIs (10.48550/arXiv.…) name the preprint, not a published version. */
+const publishedDOI = (doi?: string) =>
+  doi && !/^10\.48550\//i.test(doi) ? doi.toLowerCase() : "";
+/** Key for a pair of papers the user marked as not duplicates. */
+export const pairKey = (a: string, b: string) =>
+  a < b ? `${a}:${b}` : `${b}:${a}`;
+
+/**
+ * Papers that are probably the same work: a shared DOI or arXiv ID, or the
+ * same title with no conflicting DOI and years at most one apart (a preprint
+ * and its published version). Groups list their oldest import first.
+ */
+export function duplicateGroups(
+  docs: Document[],
+  notDuplicates: string[] = [],
+) {
+  const distinct = new Set(notDuplicates);
+  const parent = docs.map((_, i) => i);
+  const find = (i: number): number =>
+    parent[i] === i ? i : (parent[i] = find(parent[i]));
+  const buckets = new Map<string, number[]>();
+  const add = (key: string, i: number) => {
+    const list = buckets.get(key);
+    if (list) list.push(i);
+    else buckets.set(key, [i]);
+  };
+  docs.forEach((doc, i) => {
+    const m = doc.metadata;
+    if (publishedDOI(m.doi)) add(`doi:${publishedDOI(m.doi)}`, i);
+    if (m.arxiv) add(`arxiv:${m.arxiv.toLowerCase().replace(/v\d+$/, "")}`, i);
+    const title = comparableTitle(doc.title);
+    if ([...title].length >= 10) add(`title:${title}`, i);
+  });
+  const compatible = (a: Document, b: Document) => {
+    const doiA = publishedDOI(a.metadata.doi);
+    const doiB = publishedDOI(b.metadata.doi);
+    if (doiA && doiB && doiA !== doiB) return false;
+    const yearA = Number(paperYear(a.metadata));
+    const yearB = Number(paperYear(b.metadata));
+    return !yearA || !yearB || Math.abs(yearA - yearB) <= 1;
+  };
+  for (const [key, list] of buckets)
+    for (let x = 0; x < list.length; x++)
+      for (let y = x + 1; y < list.length; y++) {
+        const a = docs[list[x]];
+        const b = docs[list[y]];
+        if (distinct.has(pairKey(a.id, b.id))) continue;
+        if (key.startsWith("title:") && !compatible(a, b)) continue;
+        parent[find(list[x])] = find(list[y]);
+      }
+  const groups = new Map<number, Document[]>();
+  docs.forEach((doc, i) => {
+    const root = find(i);
+    groups.set(root, [...(groups.get(root) || []), doc]);
+  });
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) =>
+      [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    );
 }
 
 /**

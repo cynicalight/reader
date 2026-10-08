@@ -1503,6 +1503,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/merge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            from: string[];
+          };
+        };
+      };
+      responses: {
+        /** @description Merged */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              document: components["schemas"]["Document"];
+              trashed: string[];
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/documents/{id}/trash": {
     parameters: {
       query?: never;

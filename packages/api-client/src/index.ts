@@ -172,6 +172,11 @@ export const api = {
     request<Document>(`/api/documents/${encodeURIComponent(id)}/trash`, {
       method: "POST",
     }),
+  mergeDocuments: (id: string, from: string[]) =>
+    request<{ document: Document; trashed: string[] }>(
+      `/api/documents/${encodeURIComponent(id)}/merge`,
+      { method: "POST", body: JSON.stringify({ from }) },
+    ),
   restoreDocument: (id: string) =>
     request<Document>(`/api/documents/${encodeURIComponent(id)}/restore`, {
       method: "POST",

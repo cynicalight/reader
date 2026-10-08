@@ -98,6 +98,8 @@ export interface PaperLibraryPreferences {
   collapsed?: string[];
   /** A category also lists papers filed in its subcategories (default on). */
   subcategoryItems?: boolean;
+  /** Paper pairs ("<id>:<id>", ids sorted) marked as not duplicates. */
+  notDuplicates?: string[];
   sort?: PaperSort;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;

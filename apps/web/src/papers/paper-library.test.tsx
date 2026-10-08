@@ -18,6 +18,7 @@ vi.mock("@reader/api", () => ({
     restoreDocument: vi.fn(),
     saveLibraryPreferences: vi.fn(async (value) => value),
     changeLibraryTag: vi.fn(async () => ({ changed: 1 })),
+    mergeDocuments: vi.fn(async () => ({ trashed: [] })),
   },
 }));
 vi.mock("sonner", () => ({
@@ -248,4 +249,38 @@ it("shows subcategories under their parent and renames only the leaf", async () 
       papers: expect.objectContaining({ collapsed: ["ML"] }),
     }),
   );
+});
+
+it("merges duplicates into the version with the reading work", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      documents: [
+        { ...docs[0], metadata: { ...docs[0].metadata, doi: "10.1/x" } },
+        paper({
+          id: "c",
+          title: "Attention is all you need (preprint)",
+          noteCount: 3,
+          metadata: { doi: "10.1/X" },
+        }),
+        docs[1],
+      ],
+    }),
+  );
+  await act(async () => navButton("重复的论文").click());
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(2);
+  const merge = [...host.querySelectorAll("button")].find(
+    (b) => b.textContent === "合并…",
+  )!;
+  await act(async () => merge.click());
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(
+    dialog
+      .querySelector('[role="radio"][aria-checked="true"]')
+      ?.closest("label")?.textContent,
+  ).toContain("preprint");
+  const confirm = [...dialog.querySelectorAll("button")].find(
+    (b) => b.textContent === "合并",
+  )!;
+  await act(async () => confirm.click());
+  expect(api.mergeDocuments).toHaveBeenCalledExactlyOnceWith("c", ["a"]);
 });

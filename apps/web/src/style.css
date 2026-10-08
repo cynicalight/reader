@@ -2148,6 +2148,33 @@ kbd {
     transition: none;
   }
 }
+.paper-duplicate-group + .paper-duplicate-group {
+  margin-top: 12px;
+}
+.paper-duplicate-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.paper-duplicate-head > span {
+  flex: 1;
+}
+.paper-merge-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  cursor: default;
+}
+.paper-merge-option:hover,
+.paper-merge-option:has([data-checked]) {
+  background: color-mix(in oklch, var(--foreground) 5%, transparent);
+}
 .paper-nav-edit {
   display: flex;
   align-items: center;

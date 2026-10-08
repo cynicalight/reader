@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("DELETE /api/documents/{id}", s.deleteDocument)
 	mux.HandleFunc("POST /api/documents/{id}/trash", s.trashDocument)
+	mux.HandleFunc("POST /api/documents/{id}/merge", s.mergeDocuments)
 	mux.HandleFunc("POST /api/documents/{id}/restore", s.restoreDocument)
 	mux.HandleFunc("GET /api/trash", s.trashList)
 	mux.HandleFunc("DELETE /api/trash", s.emptyTrash)

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckSquare,
   FolderMinus,
   FolderPlus,
   Loader2,
+  Merge,
   MoreHorizontal,
   PanelLeft,
   Search,
@@ -60,8 +61,10 @@ import {
 import { paperByline } from "./format";
 import {
   categoryTree,
+  duplicateGroups,
   filterPapers,
   flattenCategories,
+  pairKey,
   paperCategories,
   sortLabels,
   statusLabels,
@@ -73,6 +76,7 @@ import { PaperDetail } from "./PaperDetail";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CategoryDialog } from "./CategoryDialog";
 import { CitationDialog } from "./CitationDialog";
+import { MergeDialog } from "./MergeDialog";
 import { copyCitations, exportCitations } from "./CitationMenu";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
 
@@ -109,16 +113,28 @@ export function PaperLibrary({
     () =>
       view === "trash"
         ? []
-        : filterPapers(
-            documents,
-            view,
-            query,
-            sort,
-            jobs,
-            prefs.subcategoryItems !== false,
-          ),
-    [documents, view, query, sort, jobs, prefs.subcategoryItems],
+        : filterPapers(documents, view, query, sort, jobs, {
+            subcategories: prefs.subcategoryItems !== false,
+            notDuplicates: prefs.notDuplicates,
+          }),
+    [
+      documents,
+      view,
+      query,
+      sort,
+      jobs,
+      prefs.subcategoryItems,
+      prefs.notDuplicates,
+    ],
   );
+  const [merging, setMerging] = useState<Document[] | null>(null);
+  const groups = useMemo(() => {
+    if (view !== "duplicates") return [];
+    const shown = new Set(visible.map((d) => d.id));
+    return duplicateGroups(documents, prefs.notDuplicates)
+      .map((group) => group.filter((d) => shown.has(d.id)))
+      .filter((group) => group.length > 0);
+  }, [view, visible, documents, prefs.notDuplicates]);
   const visibleIds = visible.map((d) => d.id);
   const selected = documents.find((d) => d.id === selectedId);
   const pickedDocs = documents.filter((d) => picked.has(d.id));
@@ -246,6 +262,33 @@ export function PaperLibrary({
       }
     }
   };
+  const renderRow = (doc: Document) => (
+    <PaperRow
+      key={doc.id}
+      doc={doc}
+      job={jobs.get(doc.id)}
+      selected={!picking && selectedId === doc.id}
+      picking={picking}
+      picked={picked.has(doc.id)}
+      dragIds={() => (picked.has(doc.id) ? [...picked] : [doc.id])}
+      onActivate={(e) => {
+        if (picking || e.metaKey || e.ctrlKey || e.shiftKey)
+          ui.togglePick(doc.id, e.shiftKey, visibleIds);
+        else ui.select(selectedId === doc.id ? null : doc.id);
+      }}
+      onOpen={() => openDocument(doc)}
+      menu={
+        <PaperMenuItems kind="context" docs={menuDocs(doc)} actions={actions} />
+      }
+      moreMenu={
+        <PaperMenuItems
+          kind="dropdown"
+          docs={menuDocs(doc)}
+          actions={actions}
+        />
+      }
+    />
+  );
   return (
     <main className="library-main paper-library">
       <header className="library-topbar">
@@ -471,41 +514,58 @@ export function PaperLibrary({
                 <Loader2 className="animate-spin text-muted-foreground" />
               </div>
             ) : visible.length ? (
-              <div className="paper-list" ref={listRef} role="list">
-                {visible.map((doc) => (
-                  <PaperRow
-                    key={doc.id}
-                    doc={doc}
-                    job={jobs.get(doc.id)}
-                    selected={!picking && selectedId === doc.id}
-                    picking={picking}
-                    picked={picked.has(doc.id)}
-                    dragIds={() =>
-                      picked.has(doc.id) ? [...picked] : [doc.id]
-                    }
-                    onActivate={(e) => {
-                      if (picking || e.metaKey || e.ctrlKey || e.shiftKey)
-                        ui.togglePick(doc.id, e.shiftKey, visibleIds);
-                      else ui.select(selectedId === doc.id ? null : doc.id);
-                    }}
-                    onOpen={() => openDocument(doc)}
-                    menu={
-                      <PaperMenuItems
-                        kind="context"
-                        docs={menuDocs(doc)}
-                        actions={actions}
-                      />
-                    }
-                    moreMenu={
-                      <PaperMenuItems
-                        kind="dropdown"
-                        docs={menuDocs(doc)}
-                        actions={actions}
-                      />
-                    }
-                  />
-                ))}
-              </div>
+              view === "duplicates" ? (
+                <div className="paper-list" ref={listRef}>
+                  {groups.map((group) => (
+                    <section
+                      key={group[0].id}
+                      className="paper-duplicate-group"
+                      aria-label={`${group.length} 个版本`}
+                    >
+                      <header className="paper-duplicate-head">
+                        <span>{group.length} 个版本</span>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() =>
+                            void savePaperPreferences((p) => ({
+                              ...p,
+                              notDuplicates: [
+                                ...new Set([
+                                  ...(p.notDuplicates || []),
+                                  ...group.flatMap((a, x) =>
+                                    group
+                                      .slice(x + 1)
+                                      .map((b) => pairKey(a.id, b.id)),
+                                  ),
+                                ]),
+                              ],
+                            }))
+                          }
+                        >
+                          不是重复
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={group.length < 2}
+                          onClick={() => setMerging(group)}
+                        >
+                          <Merge />
+                          合并…
+                        </Button>
+                      </header>
+                      <div role="list">
+                        {group.map((doc) => renderRow(doc))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="paper-list" ref={listRef} role="list">
+                  {visible.map((doc) => renderRow(doc))}
+                </div>
+              )
             ) : (
               <div className="empty-state">
                 <h2>{documents.length ? "没有符合条件的论文" : "暂无论文"}</h2>
@@ -546,6 +606,9 @@ export function PaperLibrary({
             ui.select(doc.id);
           }}
         />
+      )}
+      {merging && (
+        <MergeDialog group={merging} onClose={() => setMerging(null)} />
       )}
       {naming && (
         <CategoryDialog

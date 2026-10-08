@@ -12,6 +12,8 @@ import {
 import {
   categoryTree,
   cleanCategory,
+  duplicateGroups,
+  pairKey,
   filterPapers,
   flattenCategories,
   matchesView,
@@ -255,4 +257,55 @@ it("moves, renames and removes a category with its subcategories", () => {
     hidden: [],
     collapsed: ["B"],
   });
+});
+
+it("groups probable duplicates by identifier or title", () => {
+  const docs = [
+    paper({
+      id: "pre",
+      title: "Attention Is All You Need",
+      createdAt: "2026-01-01",
+      metadata: {
+        arxiv: "1706.03762v5",
+        doi: "10.48550/arXiv.1706.03762",
+        date: "2017",
+      },
+    }),
+    paper({
+      id: "pub",
+      title: "Attention is all you need.",
+      createdAt: "2026-02-01",
+      metadata: { doi: "10.5555/3295222.3295349", date: "2017-12" },
+    }),
+    paper({ id: "v1", title: "Other", metadata: { arxiv: "1706.03762v1" } }),
+    paper({
+      id: "same-title-other-doi",
+      title: "Attention Is All You Need",
+      metadata: { doi: "10.1000/other", date: "2017" },
+    }),
+    paper({
+      id: "same-title-years-apart",
+      title: "A Survey of Graph Neural Networks",
+      metadata: { date: "2019" },
+    }),
+    paper({
+      id: "survey",
+      title: "A survey of graph neural networks",
+      metadata: { date: "2023" },
+    }),
+  ];
+  const ids = (groups: ReturnType<typeof duplicateGroups>) =>
+    groups.map((group) => group.map((d) => d.id));
+  // The arXiv DOI does not conflict with the published DOI; "v1" shares the
+  // arXiv ID. A different published DOI or distant years are different works,
+  // unless another identifier links them.
+  expect(ids(duplicateGroups(docs))).toEqual([
+    ["pre", "pub", "v1", "same-title-other-doi"],
+  ]);
+  expect(
+    ids(duplicateGroups(docs.slice(1, 4), [pairKey("pub", "v1")])),
+  ).toEqual([]);
+  expect(
+    ids(duplicateGroups(docs.slice(0, 3), [pairKey("pub", "pre")])),
+  ).toEqual([["pre", "v1"]]);
 });

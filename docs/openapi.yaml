@@ -1675,6 +1675,89 @@
                 },
             },
         },
+      "/api/documents/{id}/merge":
+        {
+          "post":
+            {
+              "summary": "Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                      "minItems": 1,
+                                      "maxItems": 20,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Merged",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "document":
+                                        {
+                                          "$ref": "#/components/schemas/Document",
+                                        },
+                                      "trashed":
+                                        {
+                                          "type": "array",
+                                          "items": { "type": "string" },
+                                        },
+                                    },
+                                  "required": ["document", "trashed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/trash":
         {
           "post":

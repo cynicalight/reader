@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -27,28 +28,34 @@ func (s *Store) TrashedDocuments(library string) ([]Document, error) {
 func (s *Server) trashDocument(w http.ResponseWriter, r *http.Request) {
 	s.importMu.Lock()
 	defer s.importMu.Unlock()
-	id := r.PathValue("id")
+	d, status, message := s.moveToTrash(r.Context(), r.PathValue("id"))
+	if status != 0 {
+		fail(w, status, message)
+		return
+	}
+	respond(w, 200, d)
+}
+
+// moveToTrash marks a document deleted and stops its background work. The
+// caller holds importMu. A non-zero status is an HTTP error for message.
+func (s *Server) moveToTrash(ctx context.Context, id string) (Document, int, string) {
 	s.documentMu.Lock()
 	if s.deletingDocuments[id] {
 		s.documentMu.Unlock()
-		fail(w, 409, "文档正在删除")
-		return
+		return Document{}, 409, "文档正在删除"
 	}
 	d, err := s.Store.Document(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		s.documentMu.Unlock()
-		fail(w, 404, "文档不存在")
-		return
+		return Document{}, 404, "文档不存在"
 	}
 	if err != nil {
 		s.documentMu.Unlock()
-		fail(w, 500, "无法读取文档")
-		return
+		return Document{}, 500, "无法读取文档"
 	}
 	if d.DeletedAt != "" {
 		s.documentMu.Unlock()
-		respond(w, 200, d)
-		return
+		return d, 0, ""
 	}
 	interrupted := false
 	if p, e := s.Store.processing(id); e == nil {
@@ -57,8 +64,7 @@ func (s *Server) trashDocument(w http.ResponseWriter, r *http.Request) {
 	// Marking first rejects new work; running work is then cancelled and joined.
 	if _, err = s.Store.DB.Exec("UPDATE documents SET deleted_at=? WHERE id=?", now(), id); err != nil {
 		s.documentMu.Unlock()
-		fail(w, 500, "无法移到回收站")
-		return
+		return Document{}, 500, "无法移到回收站"
 	}
 	tasks := []*documentTask{}
 	for task := range s.documentTasks[id] {
@@ -69,20 +75,18 @@ func (s *Server) trashDocument(w http.ResponseWriter, r *http.Request) {
 	for _, task := range tasks {
 		select {
 		case <-task.done:
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			// The document is already in the trash; the task stops on its own.
-			fail(w, 408, "已移到回收站，后台任务仍在停止")
-			return
+			return Document{}, 408, "已移到回收站，后台任务仍在停止"
 		}
 	}
 	if interrupted {
 		s.requeueInterrupted(id, "已暂停，恢复后继续")
 	}
 	if d, err = s.Store.Document(id); err != nil {
-		fail(w, 500, "无法读取文档")
-		return
+		return Document{}, 500, "无法读取文档"
 	}
-	respond(w, 200, d)
+	return d, 0, ""
 }
 
 // requeueInterrupted returns work stopped by the trash to the queue.

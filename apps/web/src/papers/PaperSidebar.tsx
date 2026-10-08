@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Circle,
   CircleHelp,
+  Copy,
   Eye,
   FileText,
   Folder,
@@ -60,6 +61,7 @@ import {
   categoryLeaf,
   categoryParent,
   categoryTree,
+  duplicateGroups,
   flattenCategories,
   managedViews,
   matchesView,
@@ -90,6 +92,7 @@ const viewIcons: Record<BuiltinView, typeof Library> = {
   processing: Loader2,
   questions: CircleHelp,
   unfiled: Inbox,
+  duplicates: Copy,
 };
 
 /** True while ⌥ is held, to show the categories of the selected paper. */
@@ -214,8 +217,12 @@ export function PaperSidebar({
   const hidden = prefs.hidden || [];
   const subcategoryItems = prefs.subcategoryItems !== false;
   const categories = paperCategories(prefs, documents);
+  const duplicates = duplicateGroups(documents, prefs.notDuplicates).flat()
+    .length;
   const count = (v: PaperView, sub = subcategoryItems) =>
-    documents.filter((d) => matchesView(d, v, jobs, sub)).length;
+    v === "duplicates"
+      ? duplicates
+      : documents.filter((d) => matchesView(d, v, jobs, sub)).length;
   const byId = new Map(documents.map((d) => [d.id, d]));
   // Holding ⌥ marks every category that holds the selected paper.
   const marked = alt && selectedId ? byId.get(selectedId) : undefined;
@@ -545,6 +552,7 @@ export function PaperSidebar({
             .map((v) => viewRow(v))}
           {count("processing") > 0 && viewRow("processing")}
           {count("questions") > 0 && viewRow("questions")}
+          {(duplicates > 0 || view === "duplicates") && viewRow("duplicates")}
         </nav>
       </section>
       <section>
