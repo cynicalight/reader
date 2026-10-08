@@ -855,7 +855,6 @@ export function Workspace({
             <PanelLeft />
           </IconButton>
           <span className="toolbar-divider" />
-          <BookOpen className="size-4 text-muted-foreground" />
           <span className="reader-title" title={doc.title}>
             {doc.title}
           </span>
