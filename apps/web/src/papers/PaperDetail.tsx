@@ -5,6 +5,7 @@ import {
   FolderPlus,
   Loader2,
   MoreHorizontal,
+  Pin,
   Plus,
   Quote,
   RefreshCw,
@@ -43,6 +44,7 @@ import {
   addToCategory,
   removeFromCategory,
   removeTag,
+  savePaperPreferences,
   setStarred,
 } from "./actions";
 import { copyText } from "../chat/clipboard";
@@ -60,6 +62,7 @@ import {
   categoryTree,
   flattenCategories,
   paperCategories,
+  togglePinned,
 } from "./model";
 import { usePaperUI } from "./state";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
@@ -151,6 +154,8 @@ export function PaperDetail({
   const m = doc.metadata;
   const link = paperLink(m);
   const percent = Math.round(doc.percentage * 100);
+  const pinKey = `doc:${doc.id}`;
+  const pinned = !!prefs.pinned?.includes(pinKey);
   return (
     <aside className="paper-detail" aria-label="论文详情">
       <div className="paper-detail-body">
@@ -172,12 +177,11 @@ export function PaperDetail({
             }
           }}
         />
-        <Field doc={doc} name="remark" multiline />
+        <Button className="paper-detail-open" onClick={() => actions.open(doc)}>
+          <BookOpen />
+          {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
+        </Button>
         <div className="paper-detail-actions">
-          <Button size="sm" onClick={() => actions.open(doc)}>
-            <BookOpen />
-            {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button size="sm" variant="outline" />}
@@ -185,14 +189,15 @@ export function PaperDetail({
               <Quote />
               引用
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="start" className="w-48">
               <CitationMenuItems kind="dropdown" docs={[doc]} />
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
-            size="icon-sm"
+            size="sm"
             variant="outline"
             aria-label={doc.favorite ? "取消星标" : "加星标"}
+            title={doc.favorite ? "取消星标" : "加星标"}
             aria-pressed={doc.favorite}
             onClick={() => void setStarred([doc], !doc.favorite)}
           >
@@ -200,24 +205,41 @@ export function PaperDetail({
               className={doc.favorite ? "fill-current text-amber-500" : ""}
             />
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={pinned ? "取消置顶" : "置顶到侧栏"}
+            title={pinned ? "取消置顶" : "置顶到侧栏"}
+            aria-pressed={pinned}
+            onClick={() =>
+              void savePaperPreferences((p) => togglePinned(p, pinKey))
+            }
+          >
+            <Pin className={pinned ? "fill-current" : ""} />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="更多操作"
-                />
+                <Button size="sm" variant="outline" aria-label="更多操作" />
               }
             >
               <MoreHorizontal />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <PaperMenuItems kind="dropdown" docs={[doc]} actions={actions} />
+              <PaperMenuItems
+                kind="dropdown"
+                docs={[doc]}
+                actions={actions}
+                inPanel
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         <dl className="paper-fields">
+          <dt>备注</dt>
+          <dd>
+            <Field doc={doc} name="remark" multiline />
+          </dd>
           <dt>分类</dt>
           <dd>
             <FolderChips

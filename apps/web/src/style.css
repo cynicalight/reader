@@ -2452,13 +2452,16 @@ kbd {
   gap: 14px;
   padding: 20px 20px 28px;
 }
-.paper-detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.paper-detail-open.paper-detail-open {
+  height: 56px;
+  margin-bottom: -6px;
+  font-size: 14px;
 }
-.paper-detail-actions > :first-child {
-  flex: 1;
+/* Cite, star, pin and more share the row equally. */
+.paper-detail-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 textarea.paper-title-input,
 .paper-field-input {

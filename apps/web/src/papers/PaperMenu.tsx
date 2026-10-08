@@ -92,11 +92,14 @@ export function PaperMenuItems({
   docs,
   actions,
   extra,
+  inPanel = false,
 }: {
   kind: keyof typeof kits;
   docs: Document[];
   actions: PaperMenuActions;
   extra?: React.ReactNode;
+  /** The detail panel has its own open, star and pin buttons. */
+  inPanel?: boolean;
 }) {
   const K = kits[kind];
   const all = useReaderStore((s) => s.documents);
@@ -115,27 +118,31 @@ export function PaperMenuItems({
   const link = one ? paperLink(one.metadata) : "";
   return (
     <>
-      {one && (
-        <K.Item onClick={() => actions.open(one)}>
-          <BookOpen />
-          打开阅读
-        </K.Item>
+      {!inPanel && (
+        <>
+          {one && (
+            <K.Item onClick={() => actions.open(one)}>
+              <BookOpen />
+              打开阅读
+            </K.Item>
+          )}
+          <K.Item onClick={() => void setStarred(docs, !starred)}>
+            <Star />
+            {starred ? "取消星标" : "加星标"}
+          </K.Item>
+          {one && (
+            <K.Item
+              onClick={() =>
+                void savePaperPreferences((p) => togglePinned(p, pinKey))
+              }
+            >
+              <Pin />
+              {prefs.pinned?.includes(pinKey) ? "取消置顶" : "置顶到侧栏"}
+            </K.Item>
+          )}
+          <K.Separator />
+        </>
       )}
-      <K.Item onClick={() => void setStarred(docs, !starred)}>
-        <Star />
-        {starred ? "取消星标" : "加星标"}
-      </K.Item>
-      {one && (
-        <K.Item
-          onClick={() =>
-            void savePaperPreferences((p) => togglePinned(p, pinKey))
-          }
-        >
-          <Pin />
-          {prefs.pinned?.includes(pinKey) ? "取消置顶" : "置顶到侧栏"}
-        </K.Item>
-      )}
-      <K.Separator />
       <K.Sub>
         <K.SubTrigger>分类</K.SubTrigger>
         <K.SubContent className="max-h-80 min-w-44">
