@@ -43,26 +43,27 @@
   --input: oklch(0.34 0 0);
   --ring: oklch(0.55 0 0);
 }
-/* Paper: a warm light theme for the whole window, not just the page. */
+/* Paper: a warm light theme for the whole window, after Anthropic's
+   ivory, cloud and slate palette. */
 :root[data-theme="sepia"] {
   color-scheme: light;
-  --background: #f5efdf;
-  --foreground: #3b3226;
-  --card: #f8f3e7;
-  --card-foreground: #3b3226;
-  --popover: #faf6ec;
-  --popover-foreground: #3b3226;
-  --primary: #3b3226;
-  --primary-foreground: #f8f3e7;
-  --secondary: #ece4d0;
-  --secondary-foreground: #3b3226;
-  --muted: #ece4d0;
-  --muted-foreground: #7b6f5b;
-  --accent: #e7ddc6;
-  --accent-foreground: #3b3226;
-  --border: #e2d7bd;
-  --input: #d9ccae;
-  --ring: #a8987a;
+  --background: #faf9f5;
+  --foreground: #1f1e1d;
+  --card: #faf9f5;
+  --card-foreground: #1f1e1d;
+  --popover: #fdfcf9;
+  --popover-foreground: #1f1e1d;
+  --primary: #1f1e1d;
+  --primary-foreground: #faf9f5;
+  --secondary: #f0eee6;
+  --secondary-foreground: #1f1e1d;
+  --muted: #f0eee6;
+  --muted-foreground: #73726c;
+  --accent: #ebe9e0;
+  --accent-foreground: #1f1e1d;
+  --border: #e8e6dc;
+  --input: #dedcd1;
+  --ring: #d97757;
 }
 @theme inline {
   --color-background: var(--background);
@@ -652,7 +653,7 @@ kbd {
   background: #252525;
 }
 .reader-stage[data-theme="sepia"] {
-  background: #eee8da;
+  background: #f0eee6;
 }
 .reader-host {
   position: absolute;

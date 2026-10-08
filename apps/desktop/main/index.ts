@@ -127,7 +127,7 @@ async function startServer() {
 }
 /** Window background before the renderer paints, matching the theme. */
 function windowBackground(appearance: unknown) {
-  if (appearance === "sepia") return "#f5efdf";
+  if (appearance === "sepia") return "#f3f1ea";
   return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
 }
 async function importPaths(
