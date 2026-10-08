@@ -31,6 +31,7 @@ import type {
   SearchResult,
   TOCItem,
 } from "@reader/core";
+import { selectSentence, sentenceRoot } from "./sentence-selection";
 export class EPUBReaderAdapter implements ReaderAdapter {
   private navigator?: EpubNavigator;
   private publication?: Publication;
@@ -199,6 +200,12 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.clearState();
     };
     const released = (event: MouseEvent) => {
+      // A double click selects the whole sentence instead of one word.
+      if (event.detail === 2) {
+        const selection = doc.getSelection();
+        const root = sentenceRoot(selection?.anchorNode ?? null);
+        if (root) selectSentence(selection, root);
+      }
       this.pointers.set(wnd, { x: event.clientX, y: event.clientY });
       changed();
     };

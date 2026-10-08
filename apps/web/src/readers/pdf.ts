@@ -27,6 +27,7 @@ import type {
 } from "@reader/core";
 import { publicationURL } from "@reader/api";
 import { zoomCommand } from "@reader/core";
+import { selectSentence } from "./sentence-selection";
 pdfjs.GlobalWorkerOptions.workerSrc = workerURL;
 export class PDFReaderAdapter implements ReaderAdapter {
   private pdf?: pdfjs.PDFDocumentProxy;
@@ -404,6 +405,13 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private onMouseUp = (event: MouseEvent) => {
     this.selecting = false;
     if (!isSelectionToolbar(event.target)) {
+      // A double click selects the whole sentence instead of one word.
+      const layer =
+        event.detail === 2 && event.target instanceof Element
+          ? event.target.closest(".textLayer")
+          : null;
+      if (layer && this.container.contains(layer))
+        selectSentence(window.getSelection(), layer);
       this.pointer = { x: event.clientX, y: event.clientY };
       this.onSelection();
     }
