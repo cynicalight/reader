@@ -2693,7 +2693,8 @@ textarea.paper-note-input {
   font-size: 12px;
   line-height: 1.7;
 }
-.notes-filter {
+.notes-filter.notes-filter {
+  width: 100%;
   margin-bottom: 12px;
 }
 .note-question {

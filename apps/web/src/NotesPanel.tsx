@@ -34,6 +34,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@reader/ui/components/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { toast } from "sonner";
 import { annotationLabels } from "./AnnotationToolbar";
 import { copyText } from "./chat/clipboard";
@@ -469,28 +470,23 @@ export function NotesPanel({
             documentId={doc.id}
             annotations={annotations}
           />
-          <ToggleGroup
-            aria-label="筛选记录"
-            size="sm"
-            spacing={0}
-            variant="outline"
-            className="notes-filter"
-            value={[filter]}
-            onValueChange={(value: string[]) =>
-              value[0] && setFilter(value[0] as NotesFilter)
-            }
+          <Tabs
+            value={filter}
+            onValueChange={(value) => setFilter(value as NotesFilter)}
           >
-            {(Object.keys(filterLabels) as NotesFilter[]).map((key) => (
-              <ToggleGroupItem key={key} value={key} className="px-2 text-xs">
-                {filterLabels[key]}
-                {key !== "all" && counts[key] > 0 && (
-                  <small className="ml-0.5 text-muted-foreground">
-                    {counts[key]}
-                  </small>
-                )}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            <TabsList aria-label="筛选记录" className="notes-filter">
+              {(Object.keys(filterLabels) as NotesFilter[]).map((key) => (
+                <TabsTrigger key={key} value={key} className="px-2 text-xs">
+                  {filterLabels[key]}
+                  {key !== "all" && counts[key] > 0 && (
+                    <small className="text-muted-foreground">
+                      {counts[key]}
+                    </small>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           {(facets.colors.length > 0 || facets.tags.length > 0) && (
             <div className="notes-facets">
               {facets.colors.length > 0 && (
