@@ -102,6 +102,13 @@ func initialProcessing(id string) Processing {
 	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "paused", Detail: "翻译未开始", UpdatedAt: now()}
 }
 
+// Rows written before pause controls always ran; keep them runnable so queued,
+// interrupted and retried work still continues.
+func (s *Store) enableLegacyProcessing() error {
+	_, err := s.DB.Exec("UPDATE document_processing SET body=json_set(body,'$.enabled',json('true')) WHERE json_type(body,'$.enabled') IS NULL")
+	return err
+}
+
 // Only document creation reads this preference; updating settings never wakes a job.
 func importedProcessing(id, value string) Processing {
 	p := initialProcessing(id)
@@ -242,6 +249,9 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 		log.Printf("cannot recover processing usage: %v", err)
 	}
 	if err := s.Store.dropSettlingState(); err != nil {
+		log.Printf("cannot migrate processing state: %v", err)
+	}
+	if err := s.Store.enableLegacyProcessing(); err != nil {
 		log.Printf("cannot migrate processing state: %v", err)
 	}
 	var workers sync.WaitGroup

@@ -240,3 +240,22 @@ func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
 		})
 	}
 }
+
+func TestStartupKeepsLegacyProcessingRunnable(t *testing.T) {
+	s, _ := processingFixture(t)
+	legacy := `{"documentId":"doc","phase":"translating","status":"queued","detail":"等待翻译正文","translating":{"status":"queued"}}`
+	if _, err := s.Store.DB.Exec("UPDATE document_processing SET status='queued',body=? WHERE document_id='doc'", legacy); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.StartProcessing(ctx)()
+	got, _ := s.Store.processing("doc")
+	if !got.Enabled || got.Status != "queued" {
+		t.Fatalf("legacy job was stranded: %+v", got)
+	}
+	s.Token = "test-secret"
+	if r := request(t, s, "POST", "/api/documents/doc/processing", nil); r.Code != 200 {
+		t.Fatalf("legacy retry: %d %s", r.Code, r.Body.String())
+	}
+}
