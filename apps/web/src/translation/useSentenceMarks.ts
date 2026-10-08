@@ -80,18 +80,38 @@ export function useSentenceMarks(
       return cache.get(key)!;
     };
     const hover = new SentenceHover(host);
-    let hoverFrame = 0;
+    let enterTimer: ReturnType<typeof setTimeout> | undefined;
+    let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+    let anchor: { x: number; y: number } | undefined;
+    let activeRanges: Range[] = [];
+    const cancelEnter = () => {
+      clearTimeout(enterTimer);
+      enterTimer = undefined;
+      anchor = undefined;
+    };
+    const cancelLeave = () => {
+      clearTimeout(leaveTimer);
+      leaveTimer = undefined;
+    };
+    const deferClear = () => {
+      if (leaveTimer !== undefined || !activeRanges.length) return;
+      leaveTimer = setTimeout(() => {
+        leaveTimer = undefined;
+        activeRanges = [];
+        hover.clear();
+      }, 500);
+    };
     const clearHover = () => {
       pointer.current = undefined;
-      cancelAnimationFrame(hoverFrame);
-      hoverFrame = 0;
-      hover.clear();
+      cancelEnter();
+      deferClear();
     };
     const interruptHover = () => {
       geometry = new WeakMap();
       pointer.current = undefined;
-      cancelAnimationFrame(hoverFrame);
-      hoverFrame = 0;
+      cancelEnter();
+      cancelLeave();
+      activeRanges = [];
       hover.clear(true);
     };
     const targetCache = new Map<string, Range[]>();
@@ -160,7 +180,8 @@ export function useSentenceMarks(
         registry.set(name, highlight);
         names.push(name);
       }
-      if (pointer.current) resolveHover(pointer.current);
+      if (pointer.current && activeRanges.length && leaveTimer === undefined)
+        resolveHover(pointer.current);
     };
     const schedule = () => {
       cancelAnimationFrame(frame);
@@ -176,7 +197,7 @@ export function useSentenceMarks(
         target.closest("a,button,input,textarea,[data-block-action]") ||
         window.getSelection()?.toString().trim()
       ) {
-        hover.clear();
+        deferClear();
         return;
       }
       const translated = target.closest<HTMLElement>("[data-sentence]");
@@ -198,13 +219,13 @@ export function useSentenceMarks(
             containsPoint(r, event.clientX, event.clientY),
           )
         ) {
-          hover.clear();
+          deferClear();
           return;
         }
       } else {
         const page = target.closest<HTMLElement>(".page[data-page-number]");
         if (!page) {
-          hover.clear();
+          deferClear();
           return;
         }
         const rect = page.getBoundingClientRect();
@@ -242,13 +263,17 @@ export function useSentenceMarks(
           );
       }
       if (!t || index < 0 || !t.sentences[index]) {
-        hover.clear();
+        deferClear();
         return;
       }
       const ranges = [
         ...(!fromTranslation || linked ? sourceRanges(t, index) : []),
         ...(fromTranslation || linked ? targetRanges(t.blockId, index) : []),
       ];
+      cancelLeave();
+      activeRanges = fromTranslation
+        ? targetRanges(t.blockId, index)
+        : sourceRanges(t, index);
       hover.show(`${t.blockId}:${index}:${fromTranslation}`, ranges);
     };
     const move = (event: PointerEvent) => {
@@ -265,11 +290,31 @@ export function useSentenceMarks(
         x: event.clientX,
         y: event.clientY,
       };
-      if (!hoverFrame)
-        hoverFrame = requestAnimationFrame(() => {
-          hoverFrame = 0;
-          if (pointer.current) resolveHover(pointer.current);
-        });
+      // Reuse cached rectangles while inside the active sentence. No text
+      // matching or layout reads are needed for normal pointer movement.
+      if (
+        activeRanges.some((range) =>
+          containsPoint(range, event.clientX, event.clientY),
+        )
+      ) {
+        cancelEnter();
+        cancelLeave();
+        return;
+      }
+      deferClear();
+      // Tolerate hand jitter without postponing the dwell indefinitely.
+      if (
+        anchor &&
+        Math.hypot(anchor.x - event.clientX, anchor.y - event.clientY) <= 4
+      )
+        return;
+      cancelEnter();
+      anchor = { x: event.clientX, y: event.clientY };
+      enterTimer = setTimeout(() => {
+        enterTimer = undefined;
+        anchor = undefined;
+        if (pointer.current) resolveHover(pointer.current);
+      }, 400);
     };
     let pressed: { x: number; y: number } | undefined;
     const down = (event: PointerEvent) => {
@@ -340,7 +385,8 @@ export function useSentenceMarks(
       observer.disconnect();
       resize.disconnect();
       cancelAnimationFrame(frame);
-      cancelAnimationFrame(hoverFrame);
+      cancelEnter();
+      cancelLeave();
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerleave", clearHover);
       host.removeEventListener("pointerdown", down, true);
