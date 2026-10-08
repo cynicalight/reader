@@ -847,6 +847,14 @@ export function Workspace({
           >
             <ArrowLeft />
           </IconButton>
+          <IconButton
+            label="目录与搜索"
+            active={left}
+            expanded={left}
+            onClick={() => setLeft(!left)}
+          >
+            <PanelLeft />
+          </IconButton>
           <span className="toolbar-divider" />
           <BookOpen className="size-4 text-muted-foreground" />
           <span className="reader-title" title={doc.title}>
@@ -869,14 +877,6 @@ export function Workspace({
           {doc.type === "pdf" && <div ref={setPDFToolbar} />}
           {doc.type !== "pdf" && pageNavigation}
           <span className="toolbar-divider" />
-          <IconButton
-            label="目录与搜索"
-            active={left}
-            expanded={left}
-            onClick={() => setLeft(!left)}
-          >
-            <PanelLeft />
-          </IconButton>
           <IconButton
             label="添加书签"
             onClick={() => void annotate("bookmark")}
