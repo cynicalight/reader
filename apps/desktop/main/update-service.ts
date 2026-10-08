@@ -75,11 +75,14 @@ export async function startUpdateService(window: BrowserWindow) {
             });
           return;
         }
+        const windows = process.platform === "win32";
         const selected = await dialog.showMessageBox(window, {
           type: "info",
           message: `Reader ${result.update.version} 可用`,
-          detail: `当前版本：${app.getVersion()}。下载并校验后将打开 DMG，请将 Reader 拖入 Applications 完成更新。安装前请退出当前 Reader。`,
-          buttons: ["下载安装包", "稍后"],
+          detail: windows
+            ? `当前版本：${app.getVersion()}。下载并校验后将运行安装程序，Reader 会先保存阅读数据并退出。`
+            : `当前版本：${app.getVersion()}。下载并校验后将打开 DMG，请将 Reader 拖入 Applications 完成更新。安装前请退出当前 Reader。`,
+          buttons: [windows ? "下载并安装" : "下载安装包", "稍后"],
           defaultId: 0,
           cancelId: 1,
         });
@@ -94,6 +97,8 @@ export async function startUpdateService(window: BrowserWindow) {
         if (!alive()) return;
         const error = await shell.openPath(path);
         if (error) throw new Error(`无法打开安装包：${error}`);
+        // NSIS replaces files in place; the running app must exit first.
+        if (windows) app.quit();
       } catch (error) {
         if (alive()) {
           if (wantsFeedback || downloading)

@@ -13,13 +13,15 @@ function release(version = "0.2.0") {
     tag_name: `v${version}`,
     draft: false,
     prerelease: false,
-    assets: [`Reader-${version}-mac-arm64.dmg`, "SHA256SUMS.txt"].map(
-      (name) => ({
-        name,
-        state: "uploaded",
-        browser_download_url: `https://github.com/cynicalight/reader/releases/download/v${version}/${name}`,
-      }),
-    ),
+    assets: [
+      `Reader-${version}-mac-arm64.dmg`,
+      `Reader-${version}-win-x64.exe`,
+      "SHA256SUMS.txt",
+    ].map((name) => ({
+      name,
+      state: "uploaded",
+      browser_download_url: `https://github.com/cynicalight/reader/releases/download/v${version}/${name}`,
+    })),
   };
 }
 describe("release boundaries", () => {
@@ -49,6 +51,20 @@ describe("release boundaries", () => {
     const bad = release();
     bad.assets[0].browser_download_url = "https://example.com/payload.dmg";
     expect(() => selectRelease(bad, "0.1.0", "darwin", "arm64")).toThrow();
+  });
+  it("selects the installer for the running platform", () => {
+    const mac = selectRelease(release(), "0.1.0", "darwin", "arm64");
+    const windows = selectRelease(release(), "0.1.0", "win32", "x64");
+    expect(mac.status === "available" && mac.update.installer).toBe(
+      "Reader-0.2.0-mac-arm64.dmg",
+    );
+    expect(windows.status === "available" && windows.update).toMatchObject({
+      installer: "Reader-0.2.0-win-x64.exe",
+      downloadURL:
+        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-win-x64.exe",
+    });
+    expect(() => selectRelease(release(), "0.1.0", "win32", "arm64")).toThrow();
+    expect(() => selectRelease(release(), "0.1.0", "linux", "x64")).toThrow();
   });
   it("retries a release whose build assets are not ready", () => {
     expect(

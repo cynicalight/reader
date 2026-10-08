@@ -46,13 +46,13 @@ pnpm package      # 构建 DMG 或 NSIS 安装包，并执行相同检查
 
 安装后的 Reader 会在启动 15 秒后检查是否已到每日检查时间。应用运行期间也会检查到期时间；应用关闭时不运行后台任务，下次启动会补查。检查时间保存在用户数据目录的 `update-state.json`，重启不会重置每日间隔。失败或 Release 安装包尚未上传完成时，至少间隔一小时再试。开发模式不访问更新 API。
 
-更新来源为 `cynicalight/reader` 的最新正式 GitHub Release。仅提示比当前版本更新的正式版，不提示草稿、预发布版或旧版本。Release 必须同时提供当前 Apple Silicon Mac 对应的 DMG 和 `SHA256SUMS.txt`。在“关于 Reader”中可手动检查，手动检查不受每日间隔限制。
+更新来源为 `cynicalight/reader` 的最新正式 GitHub Release。仅提示比当前版本更新的正式版，不提示草稿、预发布版或旧版本。Release 必须同时提供当前平台（Apple Silicon Mac 或 Windows x64）对应的安装包和 `SHA256SUMS.txt`。在“关于 Reader”中可手动检查，手动检查不受每日间隔限制。
 
-发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用系统代理，并在本地核对 SHA-256。校验成功后打开 DMG；请先退出 Reader，再将新 Reader 拖入 Applications 完成替换。应用不会自动退出或替换正在运行的程序。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
+发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用系统代理，并在本地核对 SHA-256。校验成功后：macOS 打开 DMG，请先退出 Reader，再将新 Reader 拖入 Applications 完成替换，应用不会自动退出；Windows 运行 NSIS 安装程序并退出 Reader（退出前照常保存阅读数据），由安装程序替换原安装目录，书库在用户数据目录中不受影响。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
 
 当前 macOS 采用 ad-hoc 签名；若要改用标准的自动下载、重启安装机制，需要另行配置可验证的应用签名和更新产物。参见 [Electron 自动更新要求](https://www.electronjs.org/docs/latest/api/auto-updater)与 [electron-builder 更新产物要求](https://www.electron.build/v26/docs/features/auto-update/)。
 
-人工检查：安装含此功能的包，打开“关于 Reader → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；确认 DMG 打开、手动安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
+人工检查：安装含此功能的包，打开“关于 Reader → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；确认 DMG 打开（Windows 为安装程序启动且 Reader 退出），安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
 
 ## 自动检查的范围
 

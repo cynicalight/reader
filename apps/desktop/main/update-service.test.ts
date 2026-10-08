@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   download: vi.fn(),
   open: vi.fn(),
   app: {
+    quit: vi.fn(),
     isPackaged: true,
     getPath: () => "/test/user-data",
     getVersion: () => "0.1.0",
@@ -45,7 +46,11 @@ beforeEach(() => {
       tag_name: "v0.2.0",
       draft: false,
       prerelease: false,
-      assets: ["Reader-0.2.0-mac-arm64.dmg", "SHA256SUMS.txt"].map((name) => ({
+      assets: [
+        "Reader-0.2.0-mac-arm64.dmg",
+        "Reader-0.2.0-win-x64.exe",
+        "SHA256SUMS.txt",
+      ].map((name) => ({
         name,
         state: "uploaded",
         browser_download_url: `https://github.com/cynicalight/reader/releases/download/v0.2.0/${name}`,
@@ -98,6 +103,35 @@ it("opens only verified downloads and reports download failures even after a bac
   await service.check();
   expect(mocks.open).toHaveBeenCalledWith("/test/verified.dmg");
   expect(window.setProgressBar).toHaveBeenLastCalledWith(-1);
+});
+it("keeps a Mac running after opening the DMG", async () => {
+  mocks.dialog.mockResolvedValue({ response: 0 });
+  mocks.download.mockResolvedValue("/test/verified.dmg");
+  mocks.open.mockResolvedValue("");
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await service.check();
+  expect(mocks.open).toHaveBeenCalledWith("/test/verified.dmg");
+  expect(mocks.app.quit).not.toHaveBeenCalled();
+});
+it("runs the verified Windows installer and then quits so files can be replaced", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32", arch: "x64" });
+  mocks.dialog.mockResolvedValue({ response: 0 });
+  mocks.download.mockResolvedValue("C:\\test\\Reader-0.2.0-win-x64.exe");
+  mocks.open.mockResolvedValue("");
+  const service = await startUpdateService(window);
+  stop = service.stop;
+  await service.check();
+  expect(mocks.download).toHaveBeenCalledWith(
+    expect.objectContaining({ installer: "Reader-0.2.0-win-x64.exe" }),
+    expect.any(String),
+    expect.any(Function),
+  );
+  expect(mocks.open).toHaveBeenCalledWith("C:\\test\\Reader-0.2.0-win-x64.exe");
+  expect(mocks.app.quit).toHaveBeenCalledTimes(1);
+  mocks.open.mockResolvedValue("Access denied");
+  await service.check();
+  expect(mocks.app.quit).toHaveBeenCalledTimes(1);
 });
 it("does not contact GitHub in development mode", async () => {
   mocks.app.isPackaged = false;
