@@ -339,6 +339,8 @@ export function App() {
           />
         ) : (
           <>
+            {/* Outside the sidebar, which is transformed while collapsed. */}
+            <div className="window-top-drag" aria-hidden="true" />
             <aside
               className={`library-sidebar ${nav ? "" : "collapsed"}`}
               inert={!nav}

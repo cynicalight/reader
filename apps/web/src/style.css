@@ -1621,8 +1621,24 @@ kbd {
 }
 .app[data-platform="darwin"] .window-drag-handle {
   display: block;
-  height: 20px;
+  /* Reaches the window's top edge through the sidebar padding. */
+  height: 44px;
+  margin-top: -24px;
   flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+/* The gap above the floating library panel belongs to the window frame. */
+.window-top-drag {
+  display: none;
+}
+.app[data-platform="darwin"] .window-top-drag {
+  display: block;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 50;
+  height: 10px;
   -webkit-app-region: drag;
 }
 .app[data-platform="darwin"] :is(.library-topbar, .reader-toolbar) {
