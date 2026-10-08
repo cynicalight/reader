@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Annotation, Message } from "@reader/core";
-import { exportCounts, notesMarkdown } from "./notes-export";
+import { annotationDigest, exportCounts, notesMarkdown } from "./notes-export";
 import { paper } from "./papers/fixtures";
 
 const mark = (patch: Partial<Annotation>): Annotation => ({
@@ -75,4 +75,37 @@ it("leaves out unchosen parts and counts what each part holds", () => {
     bookmarks: 1,
     chat: 2,
   });
+});
+
+it("quotes annotations into the paper note once, in reading order", () => {
+  const link = (a: Annotation) => `reader://open?id=p&annotation=${a.id}`;
+  const marks = [
+    mark({
+      id: "q",
+      kind: "question",
+      note: "Why\nscale?",
+      quote: "dk",
+      location: { type: "pdf", page: 4 },
+    }),
+    mark({
+      id: "h",
+      quote: "multi\n head",
+      note: "key idea\nsecond line",
+      location: { type: "pdf", page: 2 },
+    }),
+    mark({ id: "b", kind: "bookmark" }),
+    mark({ id: "e" }),
+  ];
+  const date = new Date("2026-10-08T12:00:00");
+  const digest = annotationDigest(marks, "", link, date);
+  expect(digest).toBe(
+    [
+      "### 批注摘录 · 2026/10/8",
+      "- [第 2 页](reader://open?id=p&annotation=h)：“multi head”",
+      "  key idea",
+      "  second line",
+      "- [第 4 页](reader://open?id=p&annotation=q) 问题：Why scale?（关于“dk”）",
+    ].join("\n"),
+  );
+  expect(annotationDigest(marks, digest, link, date)).toBe("");
 });

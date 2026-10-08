@@ -120,6 +120,41 @@ export function notesMarkdown(
   return out.join("\n\n") + "\n";
 }
 
+/**
+ * Annotations not yet quoted in `note`, as a Markdown list in reading order.
+ * Each item links back to its place, which also marks it as quoted.
+ */
+export function annotationDigest(
+  annotations: Annotation[],
+  note: string,
+  link: (annotation: Annotation) => string,
+  date = new Date(),
+) {
+  const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+  const marks = annotations
+    .filter(
+      (a) =>
+        a.kind !== "bookmark" &&
+        (a.quote.trim() || a.note.trim()) &&
+        !note.includes(link(a)),
+    )
+    .sort(documentOrder);
+  if (!marks.length) return "";
+  const lines = marks.map((a) => {
+    const where = `[${locationLabel(a.location)}](${link(a)})`;
+    const quoted = a.quote.trim() ? `“${flat(a.quote)}”` : "";
+    if (a.kind === "question")
+      return `- ${where} 问题：${flat(a.note)}${quoted ? `（关于${quoted}）` : ""}`;
+    const body = a.note.trim()
+      ? `\n  ${a.note.trim().replace(/\n/g, "\n  ")}`
+      : "";
+    return `- ${where}${quoted ? `：${quoted}` : ""}${body}`;
+  });
+  return [`### 批注摘录 · ${date.toLocaleDateString("zh-CN")}`, ...lines].join(
+    "\n",
+  );
+}
+
 /** How many items each part would export, to show beside its checkbox. */
 export function exportCounts(data: {
   annotations: Annotation[];

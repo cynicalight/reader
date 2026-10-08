@@ -5,6 +5,7 @@ import {
   CircleHelp,
   Download,
   Link,
+  ListPlus,
   Loader2,
   Pencil,
   Sparkles,
@@ -36,6 +37,7 @@ import { toast } from "sonner";
 import { annotationLabels } from "./AnnotationToolbar";
 import { copyText } from "./chat/clipboard";
 import { documentOrder } from "./annotations";
+import { annotationDigest } from "./notes-export";
 
 export { documentOrder };
 
@@ -67,7 +69,13 @@ const plain = (markdown: string) =>
     .trim();
 
 /** One free-form note per document, saved shortly after typing stops. */
-function PaperNote({ documentId }: { documentId: string }) {
+function PaperNote({
+  documentId,
+  annotations,
+}: {
+  documentId: string;
+  annotations: Annotation[];
+}) {
   const [body, setBody] = useState("");
   const [state, setState] = useState<"loading" | "idle" | "saving" | "saved">(
     "loading",
@@ -104,6 +112,12 @@ function PaperNote({ documentId }: { documentId: string }) {
       toast.error((e as Error).message);
     }
   };
+  const digest =
+    state === "loading"
+      ? ""
+      : annotationDigest(annotations, body, (a) =>
+          readerLink({ id: documentId, annotation: a.id }),
+        );
   // Save on unmount so switching documents never drops the last edit.
   const latest = useRef(body);
   latest.current = body;
@@ -143,6 +157,23 @@ function PaperNote({ documentId }: { documentId: string }) {
           onBlur={() => void save(body)}
           className="paper-note-input"
         />
+        <Button
+          size="xs"
+          variant="ghost"
+          className="mt-1 text-muted-foreground"
+          disabled={state === "loading" || !digest}
+          title={digest ? undefined : "所有批注都已摘录"}
+          onClick={() => {
+            const text = body.trimEnd()
+              ? `${body.trimEnd()}\n\n${digest}\n`
+              : `${digest}\n`;
+            setBody(text);
+            void save(text);
+          }}
+        >
+          <ListPlus />
+          摘录批注
+        </Button>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -356,7 +387,11 @@ export function NotesPanel({
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="notes-list">
-          <PaperNote key={doc.id} documentId={doc.id} />
+          <PaperNote
+            key={doc.id}
+            documentId={doc.id}
+            annotations={annotations}
+          />
           <ToggleGroup
             aria-label="筛选记录"
             size="sm"
