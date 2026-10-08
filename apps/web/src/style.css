@@ -2371,6 +2371,29 @@ kbd {
 .paper-table td.paper-table-title {
   color: var(--foreground);
 }
+.paper-table-title-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.paper-table-title-content > .paper-row-title {
+  flex: 1;
+  min-width: 0;
+}
+.paper-title-processing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.paper-title-processing .processing-progress {
+  width: 48px;
+}
 .paper-table td .paper-row-title {
   font-size: 13px;
 }

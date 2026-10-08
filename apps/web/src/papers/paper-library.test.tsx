@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
-import type { Document } from "@reader/core";
+import type { Document, Processing } from "@reader/core";
 import { useReaderStore } from "../store";
 import { PaperLibrary } from "./PaperLibrary";
 import { PaperSidebar } from "./PaperSidebar";
@@ -43,13 +43,14 @@ const docs: Document[] = [
 ];
 let root: Root, host: HTMLDivElement;
 const open = vi.fn();
+let jobs = new Map<string, Processing>();
 function Harness() {
   const documents = useReaderStore((s) => s.documents);
   return (
     <>
       <PaperSidebar
         documents={documents}
-        jobs={new Map()}
+        jobs={jobs}
         trashCount={0}
         openDocument={open}
         onNewCategory={() => {}}
@@ -57,7 +58,7 @@ function Harness() {
       <PaperLibrary
         documents={documents}
         trash={[]}
-        jobs={new Map()}
+        jobs={jobs}
         loading={false}
         openDocument={open}
         moveToBooks={() => {}}
@@ -78,6 +79,7 @@ beforeEach(async () => {
     },
   );
   vi.clearAllMocks();
+  jobs = new Map();
   vi.mocked(api.documents).mockImplementation(
     async () => useReaderStore.getState().documents,
   );
@@ -463,4 +465,34 @@ it("puts reading and paper actions under the title, the remark first", async () 
       papers: expect.objectContaining({ pinned: ["doc:a"] }),
     }),
   );
+});
+
+
+it.each([
+  { phase: "learning" as const, label: "解析中", percent: 15 },
+  { phase: "translating" as const, label: "翻译中", percent: 25 },
+])("shows $label progress beside the table title without the notes column", async ({ phase, label, percent }) => {
+  jobs = new Map([["a", {
+    documentId: "a", phase, status: "running",
+    pagesDone: 3, pagesTotal: 20,
+    translationsDone: 5, translationsTotal: 20,
+    detail: "", updatedAt: "2026-10-08T00:00:00Z",
+  }]]);
+  await act(async () => {
+    useReaderStore.setState({
+      libraryPreferences: {
+        mode: "papers",
+        papers: { layout: "table", columns: ["year"] },
+      },
+    });
+    root.render(<Harness />);
+  });
+  const paperRow = row("Attention Is All You Need");
+  const progress = paperRow.querySelector('[role="progressbar"]');
+  expect(progress).not.toBeNull();
+  expect(progress!.closest(".paper-table-title")).not.toBeNull();
+  expect(progress!.getAttribute("aria-valuenow")).toBe(String(percent));
+  expect(paperRow.textContent).toContain(label);
+  expect(paperRow.textContent).not.toMatch(/3\s*\/\s*20|5\s*\/\s*20/);
+  expect(paperRow.querySelector('[data-column="notes"]')).toBeNull();
 });

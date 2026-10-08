@@ -32,6 +32,7 @@ import type {
 import { Button } from "@reader/ui/components/button";
 import { Checkbox } from "@reader/ui/components/checkbox";
 import { Input } from "@reader/ui/components/input";
+import { Progress } from "@reader/ui/components/progress";
 import {
   Table,
   TableBody,
@@ -857,6 +858,34 @@ export function PaperLibrary({
   );
 }
 
+function PaperProcessing({ job }: { job?: Processing }) {
+  if (!job || job.phase === "ready" || job.status === "complete") return null;
+  const parsing = job.phase === "learning";
+  const status = parsing ? job.status : (job.translating?.status ?? job.status);
+  const name = parsing ? "解析" : "翻译";
+  const label =
+    status === "queued"
+      ? `等待${name}`
+      : status === "waiting"
+        ? "等待 AI 配置"
+        : status === "failed"
+          ? `${name}失败`
+          : `${name}中`;
+  const done = parsing ? job.pagesDone : job.translationsDone;
+  const total = parsing ? job.pagesTotal : job.translationsTotal;
+  const value = total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : null;
+  return (
+    <span className="paper-title-processing" role="status">
+      <span>{label}</span>
+      <Progress
+        aria-label={`${name}进度`}
+        value={value}
+        className="processing-progress"
+      />
+    </span>
+  );
+}
+
 function PaperRow({
   doc,
   job,
@@ -929,7 +958,7 @@ function PaperRow({
   );
   const counts = (
     <>
-      {busy(job) && (
+      {!columns && busy(job) && (
         <span className="paper-row-job" title={job!.detail}>
           <Loader2 className="size-3 animate-spin" />
           解析中
@@ -1034,7 +1063,12 @@ function PaperRow({
         {columns ? (
           <>
             {picking && <TableCell className="w-8">{check}</TableCell>}
-            <TableCell className="paper-table-title">{title}</TableCell>
+            <TableCell className="paper-table-title">
+              <div className="paper-table-title-content">
+                {title}
+                <PaperProcessing job={job} />
+              </div>
+            </TableCell>
             {columns.map((column) => (
               <TableCell key={column} data-column={column}>
                 {cell(column)}
