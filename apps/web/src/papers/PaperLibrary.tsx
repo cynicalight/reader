@@ -39,10 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@reader/ui/components/table";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import {
   Select,
   SelectContent,
@@ -403,27 +400,24 @@ export function PaperLibrary({
                 ))}
               </SelectContent>
             </Select>
-            <ToggleGroup
-              aria-label="显示方式"
-              size="sm"
-              variant="outline"
-              spacing={0}
-              value={[prefs.layout || "list"]}
-              onValueChange={(value: string[]) => {
-                if (value[0])
-                  void savePaperPreferences((p) => ({
-                    ...p,
-                    layout: value[0] as "list" | "table",
-                  }));
-              }}
+            <Tabs
+              value={prefs.layout || "list"}
+              onValueChange={(value) =>
+                void savePaperPreferences((p) => ({
+                  ...p,
+                  layout: value as "list" | "table",
+                }))
+              }
             >
-              <ToggleGroupItem value="list" aria-label="列表" title="列表">
-                <List />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="table" aria-label="表格" title="表格">
-                <Table2 />
-              </ToggleGroupItem>
-            </ToggleGroup>
+              <TabsList aria-label="显示方式">
+                <TabsTrigger value="list" aria-label="列表" title="列表">
+                  <List />
+                </TabsTrigger>
+                <TabsTrigger value="table" aria-label="表格" title="表格">
+                  <Table2 />
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             {table && (
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -742,12 +736,7 @@ export function PaperLibrary({
             )}
           </section>
           {selected && !picking && (
-            <PaperDetail
-              key={selected.id}
-              doc={selected}
-              actions={actions}
-              onClose={() => ui.select(null)}
-            />
+            <PaperDetail key={selected.id} doc={selected} actions={actions} />
           )}
         </div>
       )}

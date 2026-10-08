@@ -364,3 +364,41 @@ it("shows papers as a table and sorts by a column header", async () => {
     host.querySelector('th[data-column="year"]')!.getAttribute("aria-sort"),
   ).toBe("descending");
 });
+
+it("edits authors as capsules", async () => {
+  await act(async () => row("Attention Is All You Need").click());
+  const detail = host.querySelector(".paper-detail")!;
+  expect(detail.textContent).not.toContain("论文详情");
+  expect(detail.querySelector('[aria-label="阅读状态"]')).toBeNull();
+  const add = detail.querySelector<HTMLButtonElement>(
+    'button[aria-label="添加作者"]',
+  )!;
+  await act(async () => add.click());
+  const input = detail.querySelector<HTMLInputElement>(
+    'input[aria-label="添加作者"]',
+  )!;
+  input.value = "Shazeer, Noam";
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    ),
+  );
+  expect(api.update).toHaveBeenLastCalledWith("a", {
+    metadata: {
+      creators: [
+        { given: "Ashish", family: "Vaswani" },
+        { family: "Shazeer", given: "Noam" },
+      ],
+    },
+  });
+  await act(async () =>
+    detail
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="删除作者 Ashish Vaswani"]',
+      )!
+      .click(),
+  );
+  expect(api.update).toHaveBeenLastCalledWith("a", {
+    metadata: { creators: [{ family: "Shazeer", given: "Noam" }] },
+  });
+});

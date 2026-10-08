@@ -11,10 +11,10 @@ import {
   X,
 } from "lucide-react";
 import type {
+  Creator,
   Document,
   PaperItemType,
   PaperMetadataField,
-  ReadingStatus,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
@@ -27,10 +27,6 @@ import {
   SelectValue,
 } from "@reader/ui/components/select";
 import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
@@ -40,18 +36,20 @@ import {
   lookupPaper,
   openLink,
   patchPapers,
-  setReadingStatus,
   setStarred,
   toggleCategory,
 } from "./actions";
+import { copyText } from "../chat/clipboard";
 import {
+  creatorName,
   formatCreators,
   itemTypeLabels,
+  paperCreators,
   paperLink,
   parseCreators,
   relativeTime,
 } from "./format";
-import { paperCategories, statusLabels } from "./model";
+import { paperCategories } from "./model";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CitationMenuItems } from "./CitationMenu";
 import { RelatedPapers } from "./RelatedPapers";
@@ -125,11 +123,9 @@ function Field({
 export function PaperDetail({
   doc,
   actions,
-  onClose,
 }: {
   doc: Document;
   actions: PaperMenuActions;
-  onClose: () => void;
 }) {
   const all = useReaderStore((s) => s.documents);
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
@@ -145,17 +141,6 @@ export function PaperDetail({
   const percent = Math.round(doc.percentage * 100);
   return (
     <aside className="paper-detail" aria-label="论文详情">
-      <header className="paper-detail-header">
-        <span>论文详情</span>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="关闭详情"
-          onClick={onClose}
-        >
-          <X />
-        </Button>
-      </header>
       <div className="paper-detail-body">
         <div className="paper-detail-actions">
           <Button size="sm" onClick={() => actions.open(doc)}>
@@ -248,23 +233,6 @@ export function PaperDetail({
             新分类
           </Button>
         </div>
-        <ToggleGroup
-          aria-label="阅读状态"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          value={[doc.readingStatus]}
-          onValueChange={(value: string[]) => {
-            if (value[0])
-              void setReadingStatus([doc], value[0] as ReadingStatus);
-          }}
-        >
-          {(Object.keys(statusLabels) as ReadingStatus[]).map((key) => (
-            <ToggleGroupItem key={key} value={key} className="px-3">
-              {statusLabels[key]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
         <div className="paper-fields-heading">
           <h3>文献信息</h3>
           {m.lookup === "pending" && (
@@ -312,42 +280,11 @@ export function PaperDetail({
           </dd>
           <dt>作者</dt>
           <dd>
-            <Textarea
-              key={`${doc.id}:${JSON.stringify(m.creators)}:${doc.author}`}
-              rows={1}
-              aria-label="作者，每行一位"
-              placeholder="每行一位：姓, 名"
-              className="paper-field-input"
-              defaultValue={formatCreators(
-                m.creators?.length
-                  ? m.creators
-                  : parseCreators(
-                      doc.author.split(/\s*[,;，；]\s*/).join("\n"),
-                    ),
-              )}
-              onBlur={(e) => {
-                const creators = parseCreators(e.currentTarget.value);
-                if (
-                  JSON.stringify(creators) !== JSON.stringify(m.creators || [])
-                )
-                  void saveField(doc, "creators", creators);
-              }}
-            />
+            <AuthorChips doc={doc} />
           </dd>
-          {(
-            [
-              "date",
-              "venue",
-              "volume",
-              "issue",
-              "pages",
-              "publisher",
-              "doi",
-              "arxiv",
-            ] as PaperMetadataField[]
-          ).map((name) => (
-            <FieldRow key={name} doc={doc} name={name} />
-          ))}
+          <FieldRow doc={doc} name="date" />
+          <FieldRow doc={doc} name="doi" />
+          <FieldRow doc={doc} name="arxiv" />
           <dt>链接</dt>
           <dd className="flex items-center gap-1">
             <Field doc={doc} name="url" />
@@ -363,7 +300,18 @@ export function PaperDetail({
               </Button>
             )}
           </dd>
-          <FieldRow doc={doc} name="affiliation" />
+          {(
+            [
+              "venue",
+              "volume",
+              "issue",
+              "pages",
+              "publisher",
+              "affiliation",
+            ] as PaperMetadataField[]
+          ).map((name) => (
+            <FieldRow key={name} doc={doc} name={name} />
+          ))}
           <FieldRow doc={doc} name="shortTitle" />
           <dt>添加于</dt>
           <dd className="paper-field-static">
@@ -426,5 +374,84 @@ function FieldRow({ doc, name }: { doc: Document; name: PaperMetadataField }) {
         <Field doc={doc} name={name} />
       </dd>
     </>
+  );
+}
+
+/** One capsule per author: click copies, double click edits, × removes. */
+function AuthorChips({ doc }: { doc: Document }) {
+  const creators = paperCreators(doc);
+  const [editing, setEditing] = useState<number | null>(null);
+  const save = (next: Creator[]) => {
+    if (JSON.stringify(next) !== JSON.stringify(doc.metadata.creators || []))
+      void saveField(doc, "creators", next);
+  };
+  const commit = (index: number, text: string) => {
+    setEditing(null);
+    const parsed = parseCreators(text.replace(/\n/g, " "));
+    const next = [...creators];
+    next.splice(index, 1, ...parsed.slice(0, 1));
+    if (index < creators.length || parsed.length) save(next);
+  };
+  const input = (index: number, value: string) => (
+    <Input
+      key={`edit-${index}`}
+      autoFocus
+      aria-label={index < creators.length ? "编辑作者" : "添加作者"}
+      placeholder="姓, 名"
+      defaultValue={value}
+      className="paper-author-input"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          commit(index, e.currentTarget.value);
+        }
+        if (e.key === "Escape") setEditing(null);
+      }}
+      onBlur={(e) => {
+        if (editing === index) commit(index, e.currentTarget.value);
+      }}
+    />
+  );
+  return (
+    <div className="paper-authors" aria-label="作者">
+      {creators.map((c, index) =>
+        editing === index ? (
+          input(index, formatCreators([c]))
+        ) : (
+          <span key={index} className="paper-author-chip">
+            <Button
+              size="xs"
+              variant="ghost"
+              title="单击复制，双击编辑"
+              onClick={() => void copyText(creatorName(c), "已复制作者")}
+              onDoubleClick={() => setEditing(index)}
+            >
+              {creatorName(c)}
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label={`删除作者 ${creatorName(c)}`}
+              onClick={() => save(creators.filter((_, i) => i !== index))}
+            >
+              <X />
+            </Button>
+          </span>
+        ),
+      )}
+      {editing === creators.length ? (
+        input(creators.length, "")
+      ) : (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          className="rounded-full"
+          aria-label="添加作者"
+          onClick={() => setEditing(creators.length)}
+        >
+          <Plus />
+        </Button>
+      )}
+    </div>
   );
 }
