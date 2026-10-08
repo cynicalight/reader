@@ -100,6 +100,8 @@ export interface PaperLibraryPreferences {
   subcategoryItems?: boolean;
   /** Paper pairs ("<id>:<id>", ids sorted) marked as not duplicates. */
   notDuplicates?: string[];
+  /** Colored categories; the n-th one is toggled with the number key n. */
+  colorCategories?: { name: string; color: string }[];
   sort?: PaperSort;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;

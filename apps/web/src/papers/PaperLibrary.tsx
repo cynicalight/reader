@@ -55,6 +55,7 @@ import {
   looksLikeReference,
   removeFromCategory,
   savePaperPreferences,
+  toggleCategoryFor,
   setReadingStatus,
   setStarred,
 } from "./actions";
@@ -66,6 +67,7 @@ import {
   flattenCategories,
   pairKey,
   paperCategories,
+  paperColors,
   sortLabels,
   statusLabels,
   viewLabels,
@@ -239,6 +241,21 @@ export function PaperLibrary({
       else ui.select(null);
       return;
     }
+    // Number keys toggle the colored category in that position.
+    const colored = prefs.colorCategories?.[Number(e.key) - 1];
+    if (
+      /^[1-9]$/.test(e.key) &&
+      colored &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey
+    ) {
+      const targets = picking ? pickedDocs : selected ? [selected] : [];
+      if (!targets.length) return;
+      e.preventDefault();
+      void toggleCategoryFor(targets, colored.name);
+      return;
+    }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const index = visibleIds.indexOf(
@@ -270,6 +287,7 @@ export function PaperLibrary({
       selected={!picking && selectedId === doc.id}
       picking={picking}
       picked={picked.has(doc.id)}
+      colors={paperColors(doc, prefs.colorCategories)}
       dragIds={() => (picked.has(doc.id) ? [...picked] : [doc.id])}
       onActivate={(e) => {
         if (picking || e.metaKey || e.ctrlKey || e.shiftKey)
@@ -634,6 +652,7 @@ function PaperRow({
   selected,
   picking,
   picked,
+  colors,
   dragIds,
   onActivate,
   onOpen,
@@ -645,6 +664,7 @@ function PaperRow({
   selected: boolean;
   picking: boolean;
   picked: boolean;
+  colors: { name: string; color: string }[];
   dragIds: () => string[];
   onActivate: (e: React.MouseEvent | React.KeyboardEvent) => void;
   onOpen: () => void;
@@ -701,6 +721,22 @@ function PaperRow({
         )}
         <div className="paper-row-main">
           <p className="paper-row-title" title={doc.title}>
+            {colors.length > 0 && (
+              <span
+                className="paper-row-colors"
+                role="img"
+                aria-label={colors.map((c) => c.name).join("、")}
+                title={colors.map((c) => c.name).join("、")}
+              >
+                {colors.map((c) => (
+                  <span
+                    key={c.name}
+                    className="color-dot"
+                    style={{ background: c.color }}
+                  />
+                ))}
+              </span>
+            )}
             {doc.favorite && (
               <Star className="mr-1 inline size-3 fill-current text-amber-500" />
             )}

@@ -284,3 +284,32 @@ it("merges duplicates into the version with the reading work", async () => {
   await act(async () => confirm.click());
   expect(api.mergeDocuments).toHaveBeenCalledExactlyOnceWith("c", ["a"]);
 });
+
+it("toggles a colored category with its number key", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      libraryPreferences: {
+        mode: "papers",
+        papers: {
+          sort: "title",
+          colorCategories: [
+            { name: "Todo", color: "#e5534b" },
+            { name: "ML", color: "#4a8fe0" },
+          ],
+        },
+      },
+    }),
+  );
+  expect(
+    row("Attention Is All You Need")
+      .querySelector(".paper-row-colors")
+      ?.getAttribute("aria-label"),
+  ).toBe("ML");
+  await act(async () => row("Graph Attention Networks").click());
+  await act(async () =>
+    row("Graph Attention Networks").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    ),
+  );
+  expect(api.update).toHaveBeenCalledExactlyOnceWith("b", { tags: ["Todo"] });
+});

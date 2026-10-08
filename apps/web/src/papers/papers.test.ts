@@ -14,6 +14,8 @@ import {
   cleanCategory,
   duplicateGroups,
   pairKey,
+  paperColors,
+  setCategoryColor,
   filterPapers,
   flattenCategories,
   matchesView,
@@ -308,4 +310,21 @@ it("groups probable duplicates by identifier or title", () => {
   expect(
     ids(duplicateGroups(docs.slice(0, 3), [pairKey("pub", "pre")])),
   ).toEqual([["pre", "v1"]]);
+});
+
+it("keeps up to nine colored categories in key order", () => {
+  let prefs = {};
+  for (let i = 0; i < 9; i++)
+    prefs = setCategoryColor(prefs, `c${i}`, "#e5534b")!;
+  expect(setCategoryColor(prefs, "c9", "#e5534b")).toBeNull();
+  prefs = setCategoryColor(prefs, "c3", "#4a8fe0")!;
+  prefs = setCategoryColor(prefs, "c0", null)!;
+  const colored = (
+    prefs as { colorCategories: { name: string; color: string }[] }
+  ).colorCategories;
+  expect(colored).toHaveLength(8);
+  expect(colored[2]).toEqual({ name: "c3", color: "#4a8fe0" });
+  expect(
+    paperColors(paper({ tags: ["c3/x", "c5"] }), colored).map((c) => c.name),
+  ).toEqual(["c3", "c5"]);
 });

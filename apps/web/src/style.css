@@ -2148,6 +2148,19 @@ kbd {
     transition: none;
   }
 }
+.color-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.paper-row-colors {
+  display: inline-flex;
+  gap: 3px;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
 .paper-duplicate-group + .paper-duplicate-group {
   margin-top: 12px;
 }

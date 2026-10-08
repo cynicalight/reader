@@ -27,7 +27,13 @@ import {
   ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@reader/ui/components/context-menu";
 import {
@@ -58,6 +64,7 @@ import {
 import { toast } from "sonner";
 import { shortTitle } from "./format";
 import {
+  categoryColors,
   categoryLeaf,
   categoryParent,
   categoryTree,
@@ -68,6 +75,8 @@ import {
   moveCategory,
   paperCategories,
   recentPapers,
+  MAX_COLOR_CATEGORIES,
+  setCategoryColor,
   setHidden,
   siblingPosition,
   togglePinned,
@@ -133,6 +142,7 @@ function SidebarRow({
   menu,
   title,
   highlighted,
+  color,
 }: {
   icon: typeof Library;
   label: string;
@@ -144,6 +154,7 @@ function SidebarRow({
   menu?: React.ReactNode;
   title?: string;
   highlighted?: boolean;
+  color?: string;
 }) {
   const [over, setOver] = useState(false);
   const row = (
@@ -178,7 +189,7 @@ function SidebarRow({
           : undefined
       }
     >
-      <Icon className="size-4" />
+      <Icon className="size-4" style={color ? { color } : undefined} />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {pinned && <Pin className="size-3 text-muted-foreground" />}
       {count !== undefined && <span className="nav-count">{count}</span>}
@@ -348,6 +359,8 @@ export function PaperSidebar({
       );
     const position = siblingPosition(categories, name);
     const hasChildren = node.children.length > 0;
+    const colored = prefs.colorCategories || [];
+    const colorIndex = colored.findIndex((item) => item.name === name);
     const row = (
       <SidebarRow
         key={key}
@@ -358,6 +371,7 @@ export function PaperSidebar({
         active={view === key}
         pinned={isPinned}
         highlighted={marked?.tags.some((tag) => withinCategory(tag, name))}
+        color={colored[colorIndex]?.color}
         onSelect={() => choose(key)}
         onDrop={(ids) => void addToCategory(docsFor(ids), name)}
         menu={
@@ -395,6 +409,44 @@ export function PaperSidebar({
               下移
             </ContextMenuItem>
             {!isPinned && hideItem(key)}
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>颜色</ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-40">
+                <ContextMenuRadioGroup
+                  value={colored[colorIndex]?.color || ""}
+                  onValueChange={(value: string) => {
+                    const next = setCategoryColor(prefs, name, value || null);
+                    if (next) void savePaperPreferences(() => next);
+                    else
+                      toast.error(
+                        `最多 ${MAX_COLOR_CATEGORIES} 个彩色分类，对应数字键 1–9`,
+                      );
+                  }}
+                >
+                  {categoryColors.map((c) => (
+                    <ContextMenuRadioItem key={c.value} value={c.value}>
+                      <span
+                        className="color-dot"
+                        style={{ background: c.value }}
+                      />
+                      {c.label}
+                    </ContextMenuRadioItem>
+                  ))}
+                  <ContextMenuRadioItem value="">无颜色</ContextMenuRadioItem>
+                </ContextMenuRadioGroup>
+                {colorIndex >= 0 && (
+                  <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem disabled>
+                      快捷键
+                      <ContextMenuShortcut>
+                        {colorIndex + 1}
+                      </ContextMenuShortcut>
+                    </ContextMenuItem>
+                  </>
+                )}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             {hasChildren && (
               <ContextMenuCheckboxItem
                 checked={subcategoryItems}

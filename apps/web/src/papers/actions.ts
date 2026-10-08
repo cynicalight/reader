@@ -98,6 +98,11 @@ export const toggleCategory = (doc: Document, name: string) =>
   hasTag(doc, name)
     ? removeFromCategory([doc], name)
     : addToCategory([doc], name);
+/** Remove the category when every paper has it, otherwise add it to all. */
+export const toggleCategoryFor = (docs: Document[], name: string) =>
+  docs.every((doc) => hasTag(doc, name))
+    ? removeFromCategory(docs, name)
+    : addToCategory(docs, name);
 
 export const setReadingStatus = (
   docs: Document[],

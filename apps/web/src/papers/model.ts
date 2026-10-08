@@ -321,6 +321,50 @@ export const validCategory = (name: string) =>
   // eslint-disable-next-line no-control-regex
   !/[\u0000-\u001f\u007f]/.test(name);
 
+export const categoryColors = [
+  { value: "#e5534b", label: "红色" },
+  { value: "#e8883a", label: "橙色" },
+  { value: "#d9a520", label: "黄色" },
+  { value: "#4fae6a", label: "绿色" },
+  { value: "#3aa7a3", label: "青色" },
+  { value: "#4a8fe0", label: "蓝色" },
+  { value: "#9a6fdc", label: "紫色" },
+  { value: "#d562a6", label: "粉色" },
+  { value: "#8a8f98", label: "灰色" },
+] as const;
+export const MAX_COLOR_CATEGORIES = 9;
+
+/** Color a category, recolor it in place, or remove its color (null). */
+export function setCategoryColor(
+  prefs: PaperLibraryPreferences,
+  name: string,
+  color: string | null,
+): PaperLibraryPreferences | null {
+  const list = prefs.colorCategories || [];
+  const at = list.findIndex((item) => item.name === name);
+  if (color === null)
+    return { ...prefs, colorCategories: list.filter((_, i) => i !== at) };
+  if (at >= 0)
+    return {
+      ...prefs,
+      colorCategories: list.map((item, i) =>
+        i === at ? { name, color } : item,
+      ),
+    };
+  if (list.length >= MAX_COLOR_CATEGORIES) return null;
+  return { ...prefs, colorCategories: [...list, { name, color }] };
+}
+
+/** Colors of the colored categories that hold a paper, in key order. */
+export function paperColors(
+  doc: Pick<Document, "tags">,
+  colored: { name: string; color: string }[] = [],
+) {
+  return colored.filter((item) =>
+    doc.tags.some((tag) => withinCategory(tag, item.name)),
+  );
+}
+
 /** Rename a category and its subcategories in every preference list. */
 export function renameCategoryPreferences(
   prefs: PaperLibraryPreferences,
@@ -336,6 +380,10 @@ export function renameCategoryPreferences(
     pinned: swap(prefs.pinned),
     hidden: swap(prefs.hidden),
     collapsed: prefs.collapsed?.map((name) => renamePath(name, from, to)),
+    colorCategories: prefs.colorCategories?.map((item) => ({
+      ...item,
+      name: renamePath(item.name, from, to),
+    })),
   };
 }
 
@@ -352,6 +400,9 @@ export function removeCategoryPreferences(
     pinned: drop(prefs.pinned),
     hidden: drop(prefs.hidden),
     collapsed: prefs.collapsed?.filter((item) => !withinCategory(item, name)),
+    colorCategories: prefs.colorCategories?.filter(
+      (item) => !withinCategory(item.name, name),
+    ),
   };
 }
 
