@@ -21,7 +21,6 @@ import {
   Sparkles,
   Settings2,
   Underline,
-  Languages,
   MessageSquare,
   X,
   StickyNote,
@@ -1250,14 +1249,6 @@ export function Workspace({
                   <CircleHelp />
                 </IconButton>
                 <IconButton
-                  label="翻译选区"
-                  onClick={() =>
-                    void send("请忠实地将这段文字翻译成简体中文。", [selection])
-                  }
-                >
-                  <Languages />
-                </IconButton>
-                <IconButton
                   label="问 AI"
                   onClick={() =>
                     void send(
@@ -1270,15 +1261,6 @@ export function Workspace({
                 </IconButton>
                 <IconButton label="引用到对话" onClick={addQuote}>
                   <Quote />
-                </IconButton>
-                <IconButton
-                  label="取消选区"
-                  onClick={() => {
-                    adapter?.clearSelection();
-                    setSelection(null);
-                  }}
-                >
-                  <X />
                 </IconButton>
               </SelectionToolbar>
             )}

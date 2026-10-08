@@ -215,7 +215,7 @@ it("shows passive feedback during positioning, fades it on completion and keeps 
     ),
   );
   expect(page.querySelector('[data-block-action="explain"]')).not.toBeNull();
-  expect(page.querySelector('[data-block-action="translate"]')).not.toBeNull();
+  expect(page.querySelector('[data-block-action="translate"]')).toBeNull();
   expect(outline()).toBeNull(); // no double tint on the same block
   host.dispatchEvent(new Event("scroll"));
   expect(outline()?.children).toHaveLength(0);
