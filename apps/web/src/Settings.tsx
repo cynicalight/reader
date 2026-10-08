@@ -262,6 +262,22 @@ export function Settings({
             </section>
           </TabsContent>
           <TabsContent value="reading" className="settings-panel" keepMounted>
+            <section className="mb-6">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={theme.linkTranslationAnnotations !== false}
+                  onCheckedChange={(checked) =>
+                    setTheme({ linkTranslationAnnotations: !!checked })
+                  }
+                />
+                <span>
+                  译文原文划线关联
+                  <span className="block text-xs text-muted-foreground">
+                    悬停与批注同步到另一侧对应的完整句子
+                  </span>
+                </span>
+              </label>
+            </section>
             <section>
               <h3 className="mb-3 text-sm font-medium">高亮颜色</h3>
               <HighlightColorsEditor />

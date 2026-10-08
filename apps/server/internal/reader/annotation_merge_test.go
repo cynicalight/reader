@@ -248,3 +248,22 @@ func TestEPUBUnderlineUnion(t *testing.T) {
 		t.Fatal("legacy DOM range did not merge")
 	}
 }
+
+func TestLinkedAndTranslatedUnderlinesKeepTheirAnchors(t *testing.T) {
+	for _, field := range []string{"translation", "sentenceLink"} {
+		a := pdfUnderline("a", []annotationRect{{0.1, 0.2, 0.2, 0.02}}, "first")
+		b := pdfUnderline("b", []annotationRect{{0.1, 0.2, 0.2, 0.02}}, "second")
+		var location map[string]json.RawMessage
+		if err := json.Unmarshal(b.Location, &location); err != nil {
+			t.Fatal(err)
+		}
+		location[field] = json.RawMessage(`{"blockId":"p1-b1"}`)
+		b.Location, _ = json.Marshal(location)
+		if _, ok := mergeUnderline(a, b); ok {
+			t.Fatalf("merged and lost %s anchor", field)
+		}
+		if _, ok := mergeUnderline(b, a); ok {
+			t.Fatalf("merged incompatible %s anchors", field)
+		}
+	}
+}

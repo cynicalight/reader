@@ -12,6 +12,17 @@ export type PDFLocation = {
   x?: number;
   y?: number;
   quote?: string;
+  /** Sentence pairs captured when marking; both sides share one annotation. */
+  sentenceLink?: {
+    origin: "source" | "translation";
+    parts: {
+      blockId: string;
+      sourceHash: string;
+      sentenceIndex: number;
+      source: string;
+      target: string;
+    }[];
+  };
   translation?: {
     blockId: string;
     sourceHash: string;
@@ -234,6 +245,7 @@ export interface ReaderTheme {
   translationFontSize?: number;
   /** "sans-serif", "serif" or an installed font family name. */
   translationFontFamily?: string;
+  linkTranslationAnnotations?: boolean;
   translationFontWeight?: "normal" | "bold";
   /** The highlight palette, in order; the defaults apply when unset. */
   highlightColors?: HighlightColor[];
@@ -255,6 +267,7 @@ export const defaultTheme: ReaderTheme = {
   translationFontSize: 1,
   translationFontFamily: "serif",
   translationFontWeight: "bold",
+  linkTranslationAnnotations: true,
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
@@ -327,6 +340,8 @@ export interface ReaderAdapter {
     sources: string[],
     scroll?: boolean,
   ): Promise<void>;
+  sentenceRanges?(passages: PDFPassage[]): Range[];
+  prepareAnnotation?(selection: ReaderSelection): Promise<ReaderSelection>;
   focusPassages?(passages: PDFPassage[], scroll?: boolean): Promise<void>;
   matchSentences?(
     location: PDFLocation,

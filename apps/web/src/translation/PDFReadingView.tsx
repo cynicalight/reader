@@ -33,7 +33,8 @@ import { animatePDFScroll } from "../readers/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
-import { paintTranslatedAnnotations } from "./annotations";
+import { useSentenceMarks } from "./useSentenceMarks";
+import { linkTranslatedSelection, sentenceLink } from "./sentence-links";
 import { translatedSelection as captureTranslationSelection } from "./selection";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { translationFont } from "../appearance";
@@ -137,8 +138,18 @@ export function PDFReadingView({
       cancelTranslationMotion();
     };
   }, [mode, doc.id]);
-  const state = useRef({ mode, blocks, translations, events });
-  state.current = { mode, blocks, translations, events };
+  const state = useRef({ mode, blocks, translations, events, theme });
+  state.current = { mode, blocks, translations, events, theme };
+  useSentenceMarks(
+    root,
+    engine,
+    blocks,
+    translations,
+    annotations,
+    theme.linkTranslationAnnotations !== false,
+    mode,
+    events,
+  );
   const byId = useMemo(
     () => new Map(translations.map((t) => [t.blockId, t])),
     [translations],
@@ -188,6 +199,12 @@ export function PDFReadingView({
       clearTimeout(timer);
     };
   }, [doc.id]);
+  useEffect(() => {
+    if (theme.linkTranslationAnnotations === false) {
+      setLinked(undefined);
+      void engine?.focusSentences?.("", []);
+    }
+  }, [theme.linkTranslationAnnotations, engine]);
   const translate = async (blockId = "") => {
     try {
       await api.translate(doc.id, blockId);
@@ -374,6 +391,34 @@ export function PDFReadingView({
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
       get(target, key) {
+        if (key === "prepareAnnotation")
+          return async (value: ReaderSelection) => {
+            if (value.location.type !== "pdf") return value;
+            if (state.current.theme.linkTranslationAnnotations === false) {
+              const { sentenceLink: _, ...location } = value.location;
+              return { ...value, location };
+            }
+            if (value.location.sentenceLink) return value;
+            if (value.location.translation)
+              return linkTranslatedSelection(value, state.current.translations);
+            const currentTranslations = state.current.translations;
+            const links =
+              (await target.matchSentences?.(
+                value.location,
+                currentTranslations,
+              )) ?? [];
+            return {
+              ...value,
+              location: {
+                ...value.location,
+                sentenceLink: sentenceLink(
+                  links,
+                  currentTranslations,
+                  "source",
+                ),
+              },
+            };
+          };
         if (key === "goTo")
           return (l: DocumentLocation) => actions.current.go(l);
         if (key === "next" || key === "previous")
@@ -514,26 +559,6 @@ export function PDFReadingView({
       window.removeEventListener("pointercancel", release);
     };
   }, []);
-  useEffect(() => {
-    const host = pane.current;
-    if (!host) return;
-    let clean: (() => void) | undefined;
-    const paint = () => {
-      clean?.();
-      clean = paintTranslatedAnnotations(host, annotations, translations);
-    };
-    paint();
-    const observer = new MutationObserver(paint);
-    observer.observe(host, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    });
-    return () => {
-      observer.disconnect();
-      clean?.();
-    };
-  }, [mode, annotations, translations]);
   const input = (active: typeof side.current) => {
     cancelTranslationMotion();
     if (explicitFocus.current.moving || active === "translation")
@@ -548,7 +573,11 @@ export function PDFReadingView({
     if (side.current !== "source") return;
     selection.current = value;
     events.selection(value);
-    if (!value || value.location.type !== "pdf") {
+    if (
+      !value ||
+      value.location.type !== "pdf" ||
+      theme.linkTranslationAnnotations === false
+    ) {
       setLinked(undefined);
       return;
     }
@@ -569,15 +598,24 @@ export function PDFReadingView({
         return [
           {
             blockId: block.id,
-            sentenceIndexes:
-              matches.length === 1 ? matches : t.sentences.map((_, i) => i),
+            sentenceIndexes: matches.length === 1 ? matches : [],
           },
         ];
       });
     const map = async () => {
-      const links =
-        (await engine?.matchSentences?.(location, translations)) ?? fallback;
+      const links = (
+        (await engine?.matchSentences?.(location, translations)) ?? fallback
+      ).filter((l) => l.sentenceIndexes.length);
       if (selection.current !== value || !links.length) return;
+      const enriched = {
+        ...value,
+        location: {
+          ...location,
+          sentenceLink: sentenceLink(links, translations, "source"),
+        },
+      };
+      selection.current = enriched;
+      events.selection(enriched);
       setLinked(
         Object.fromEntries(links.map((l) => [l.blockId, l.sentenceIndexes])),
       );
@@ -600,8 +638,13 @@ export function PDFReadingView({
       translations,
     );
     if (!value) return;
-    selection.current = value.selection;
-    events.selection(value.selection);
+    const captured =
+      theme.linkTranslationAnnotations === false
+        ? value.selection
+        : linkTranslatedSelection(value.selection, translations);
+    selection.current = captured;
+    events.selection(captured);
+    if (theme.linkTranslationAnnotations === false) return;
     setLinked(
       Object.fromEntries(
         value.links.map((l) => [l.blockId, l.sentenceIndexes]),
@@ -883,6 +926,19 @@ export function PDFReadingView({
                       a.location.type === "pdf"
                         ? a.location.translation
                         : undefined;
+                    const pair =
+                      a.location.type === "pdf" &&
+                      theme.linkTranslationAnnotations !== false
+                        ? a.location.sentenceLink
+                        : undefined;
+                    if (pair?.origin === "source")
+                      return pair.parts
+                        .filter(
+                          (p) =>
+                            p.blockId === block.id &&
+                            p.sourceHash === translated?.sourceHash,
+                        )
+                        .map((p) => p.sentenceIndex);
                     return mark
                       ? (mark.ranges ?? [mark])
                           .filter(

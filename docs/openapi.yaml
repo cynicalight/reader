@@ -2450,6 +2450,47 @@
                                 "required": ["x", "y", "width", "height"],
                               },
                           },
+                        "sentenceLink":
+                          {
+                            "type": "object",
+                            "required": ["origin", "parts"],
+                            "properties":
+                              {
+                                "origin":
+                                  {
+                                    "type": "string",
+                                    "enum": ["source", "translation"],
+                                  },
+                                "parts":
+                                  {
+                                    "type": "array",
+                                    "items":
+                                      {
+                                        "type": "object",
+                                        "required":
+                                          [
+                                            "blockId",
+                                            "sourceHash",
+                                            "sentenceIndex",
+                                            "source",
+                                            "target",
+                                          ],
+                                        "properties":
+                                          {
+                                            "blockId": { "type": "string" },
+                                            "sourceHash": { "type": "string" },
+                                            "sentenceIndex":
+                                              {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                              },
+                                            "source": { "type": "string" },
+                                            "target": { "type": "string" },
+                                          },
+                                      },
+                                  },
+                              },
+                          },
                         "translation":
                           {
                             "type": "object",
