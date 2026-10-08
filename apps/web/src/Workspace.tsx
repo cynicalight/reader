@@ -1208,9 +1208,6 @@ export function Workspace({
 
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
-                <Badge variant="secondary">
-                  已选 {selection.text.length} 字
-                </Badge>
                 <ColorSwatches
                   action="高亮"
                   onPick={(color) => {
