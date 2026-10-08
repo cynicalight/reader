@@ -6,7 +6,9 @@ import {
   useEffect,
   useMemo,
   useState,
+  useContext,
   type ReactNode,
+  type ComponentProps,
 } from "react";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -15,31 +17,42 @@ import remend from "remend";
 import { marked } from "marked";
 import { Button } from "@reader/ui/components/button";
 import { copyText } from "./clipboard";
+import { Copy } from "lucide-react";
+import {
+  ReadingLinkNavigation,
+  openExternalLink,
+  remarkReadingCitations,
+} from "../reading-links";
 import "./markdown.css";
 
 const Code = lazy(() => import("./CodeBlock"));
 const MathFormula = lazy(() => import("./MathFormula"));
 const plugins = [remarkGfm, remarkMath];
 export const safeMarkdownURL = (url: string) =>
-  /^(https?:\/\/|mailto:|#)/i.test(url) ? url : "";
-function textContent(node: ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textContent).join("");
-  if (node && typeof node === "object" && "props" in node)
-    return textContent((node.props as { children?: ReactNode }).children);
-  return "";
-}
-const components: Components = {
-  img: ({ alt }) => (
-    <span className="markdown-image">[图片：{alt || "未加载"}]</span>
-  ),
-  a: ({ href, children }) =>
-    href?.startsWith("#") ? (
+  /^(https?:\/\/|mailto:|#)/i.test(url)
+    ? url.replace(/(?:[。，；！？]|%E3%80%82|%EF%BC%8C)+$/gi, "")
+    : "";
+function MarkdownLink({
+  href,
+  children,
+}: {
+  href?: string;
+  children?: ReactNode;
+}) {
+  const navigate = useContext(ReadingLinkNavigation);
+  if (href?.startsWith("#"))
+    return (
       <a
         href={href}
         onClick={(event) => {
           event.preventDefault();
-          // Resolve footnotes inside this message only; never navigate the reader.
+          if (href.startsWith("#reader-citation?")) {
+            const params = new URLSearchParams(
+              href.slice(href.indexOf("?") + 1),
+            );
+            navigate?.(params.get("block") ?? "", params.get("label") ?? "");
+            return;
+          }
           const root = event.currentTarget.closest(".message-markdown");
           const target = Array.from(root?.querySelectorAll("[id]") || []).find(
             (element) => element.id === href.slice(1),
@@ -53,22 +66,47 @@ const components: Components = {
       >
         {children}
       </a>
-    ) : href ? (
-      <span className="markdown-link">
+    );
+  if (!href) return <span>{children}</span>;
+  return (
+    <span className="markdown-link">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (/^https?:\/\//i.test(href)) {
+            event.preventDefault();
+            openExternalLink(href);
+          }
+        }}
+      >
         {children}
-        <Button
-          variant="ghost"
-          size="sm"
-          title={href}
-          aria-label={`复制链接 ${href}`}
-          onClick={() => void copyText(href)}
-        >
-          复制链接
-        </Button>
-      </span>
-    ) : (
-      <span>{children}</span>
-    ),
+      </a>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        title="复制链接"
+        aria-label={`复制链接 ${href}`}
+        onClick={() => void copyText(href)}
+      >
+        <Copy className="size-3" />
+      </Button>
+    </span>
+  );
+}
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join("");
+  if (node && typeof node === "object" && "props" in node)
+    return textContent((node.props as { children?: ReactNode }).children);
+  return "";
+}
+const components: Components = {
+  img: ({ alt }) => (
+    <span className="markdown-image">[图片：{alt || "未加载"}]</span>
+  ),
+  a: MarkdownLink,
   pre: ({ children }) => <div className="markdown-pre">{children}</div>,
   code: ({ className, children, node }) => {
     const value = textContent(children);
@@ -132,17 +170,40 @@ const markdownOptions = {
   skipHtml: true,
   urlTransform: safeMarkdownURL,
 };
-const StaticBlock = memo(function StaticBlock({ text }: { text: string }) {
-  return <CachedMarkdown {...markdownOptions}>{text}</CachedMarkdown>;
+const StaticBlock = memo(function StaticBlock({
+  text,
+  citationBlockId,
+}: {
+  text: string;
+  citationBlockId?: string;
+}) {
+  const options = useMemo<
+    Pick<ComponentProps<typeof CachedMarkdown>, "remarkPlugins">
+  >(
+    () => ({
+      remarkPlugins: [
+        ...plugins,
+        [remarkReadingCitations, { blockId: citationBlockId }],
+      ],
+    }),
+    [citationBlockId],
+  );
+  return (
+    <CachedMarkdown {...markdownOptions} {...options}>
+      {text}
+    </CachedMarkdown>
+  );
 });
 function StaticMarkdown({
   content,
   generating,
   global,
+  citationBlockId,
 }: {
   content: string;
   generating: boolean;
   global: boolean;
+  citationBlockId?: string;
 }) {
   const blocks = useMemo(() => {
     const text = generating ? remend(content) : content;
@@ -164,7 +225,11 @@ function StaticMarkdown({
   return (
     <>
       {blocks.map((text, index) => (
-        <StaticBlock key={index} text={text} />
+        <StaticBlock
+          key={index}
+          text={text}
+          citationBlockId={citationBlockId}
+        />
       ))}
     </>
   );
@@ -174,11 +239,13 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   generating = false,
   reducedMotion = false,
   animated = true,
+  citationBlockId,
 }: {
   content: string;
   generating?: boolean;
   reducedMotion?: boolean;
   animated?: boolean;
+  citationBlockId?: string;
 }) {
   const reduced = useMotionPreference();
   const [backgrounded, setBackgrounded] = useState(false);
@@ -217,6 +284,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
           content={content}
           generating={generating}
           global={globalDefinitions}
+          citationBlockId={citationBlockId}
         />
       )}
     </div>

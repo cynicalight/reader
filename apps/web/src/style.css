@@ -677,6 +677,19 @@ kbd {
   width: 0;
   height: 0;
 }
+.reader-source-link-copy {
+  position: absolute;
+  right: -18px;
+  top: 0;
+  pointer-events: auto;
+  z-index: 2;
+}
+.reader-source-link-copy button {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--muted-foreground);
+}
 .pdfViewer .page {
   margin: 20px auto !important;
   border: 0 !important;

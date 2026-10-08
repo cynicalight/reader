@@ -313,6 +313,10 @@ export interface ReaderAdapter {
   hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
+  resolveCitation?(
+    blockId: string,
+    label: string,
+  ): Promise<PDFLocation | undefined>;
   focusSentences?(
     blockId: string,
     sources: string[],

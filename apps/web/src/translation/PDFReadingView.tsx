@@ -38,6 +38,7 @@ import { translatedSelection as captureTranslationSelection } from "./selection"
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { translationFont } from "../appearance";
 import { selectSentence } from "../readers/sentence-selection";
+import { numberedReference } from "../readers/pdf-citations";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -286,16 +287,51 @@ export function PDFReadingView({
   };
   const focusTranslation = (block: PDFBlock) =>
     focusBlock(block, "translation");
+  const locationBlock = (location: DocumentLocation) => {
+    if (location.type !== "pdf") return;
+    const readable = state.current.blocks.filter(
+      (b) => !isPDFPageDecoration(b),
+    );
+    return (
+      readable.find((b) => b.id === location.translation?.blockId) ??
+      readable
+        .filter((b) => b.page === location.page)
+        .sort((a, b) => {
+          const distance = (block: PDFBlock) =>
+            Math.max(
+              block.bounds.y - (location.y ?? 0),
+              (location.y ?? 0) - block.bounds.y - block.bounds.height,
+              0,
+            ) +
+            Math.max(
+              block.bounds.x - (location.x ?? 0),
+              (location.x ?? 0) - block.bounds.x - block.bounds.width,
+              0,
+            ) *
+              2;
+          return distance(a) - distance(b);
+        })[0]
+    );
+  };
   const go = async (location: DocumentLocation) => {
     input(mode === "translation" ? "translation" : "source");
     await engine?.goTo(location);
     if (location.type !== "pdf") return;
-    const block =
-      state.current.blocks.find(
-        (b) => b.id === location.translation?.blockId,
-      ) ?? state.current.blocks.find((b) => b.page === location.page);
+    const block = locationBlock(location);
     if (block) {
-      const anchor = { blockId: block.id, fraction: 0 };
+      const anchor = {
+        blockId: block.id,
+        fraction:
+          location.y === undefined
+            ? 0
+            : Math.max(
+                0,
+                Math.min(
+                  1,
+                  (location.y - block.bounds.y) / (block.bounds.height || 1),
+                ),
+              ),
+      };
       recordReading(anchor);
       followTranslation(anchor, location.translation?.sentenceIndexes[0]);
       state.current.events.location(
@@ -308,6 +344,18 @@ export function PDFReadingView({
   const facade = useRef<ReaderAdapter | undefined>(undefined);
   const actions = useRef({ go });
   actions.current = { go };
+  const visitCitation = async (blockId: string, label: string) => {
+    try {
+      const target =
+        (await engine?.resolveCitation?.(blockId, label)) ??
+        numberedReference(blocks, label);
+      if (!target) throw new Error(`未找到参考文献 [${label}] 的跳转位置`);
+      if (facade.current) events.internalLink?.(facade.current.getLocation());
+      await go(target);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const ready = (adapter: ReaderAdapter, toc: TOCItem[]) => {
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
@@ -342,6 +390,30 @@ export function PDFReadingView({
                     (reading.current?.fraction ?? 0) * block.bounds.height,
                 }
               : target.getLocation();
+          };
+        if (key === "isNear" && state.current.mode === "translation")
+          return (location: DocumentLocation) => {
+            const block = locationBlock(location),
+              host = pane.current;
+            const node = block && targetNode(block.id);
+            if (!block || !host || !node || location.type !== "pdf")
+              return false;
+            const rect = node.getBoundingClientRect(),
+              view = host.getBoundingClientRect();
+            const fraction = Math.max(
+              0,
+              Math.min(
+                1,
+                ((location.y ?? block.bounds.y) - block.bounds.y) /
+                  (block.bounds.height || 1),
+              ),
+            );
+            return (
+              Math.abs(
+                rect.top + rect.height * fraction - view.top - view.height / 2,
+              ) <
+              view.height / 4
+            );
           };
         if (key === "clearSelection")
           return () => {
@@ -845,6 +917,9 @@ export function PDFReadingView({
                   >
                     <TranslationText
                       block={block}
+                      onCitation={(blockId, label) =>
+                        void visitCitation(blockId, label)
+                      }
                       formulaNumber={equationNumbers.byFormula.get(block.id)}
                       translation={translated}
                       documentId={doc.id}
@@ -883,6 +958,9 @@ export function PDFReadingView({
             <>
               <TranslationText
                 block={popup.block}
+                onCitation={(blockId, label) =>
+                  void visitCitation(blockId, label)
+                }
                 formulaNumber={equationNumbers.byFormula.get(popup.block.id)}
                 translation={activePopup}
                 documentId={doc.id}

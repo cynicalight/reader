@@ -6,6 +6,7 @@ import type { DocumentLocation, ReaderAdapter } from "@reader/core";
 export class ReferenceNavigation {
   origin?: DocumentLocation;
   busy = false;
+  private departing = false;
   constructor(
     private reader: Pick<ReaderAdapter, "getLocation" | "goTo" | "isNear">,
   ) {}
@@ -23,12 +24,21 @@ export class ReferenceNavigation {
   }
   /** Record where a jump started outside visit(), such as a PDF link. */
   remember(origin: DocumentLocation) {
-    if (!this.busy && !this.origin) this.origin = structuredClone(origin);
+    if (!this.busy && !this.origin) {
+      this.origin = structuredClone(origin);
+      this.departing = true;
+    }
   }
   /** Forget the return point once it is on screen again; true if forgotten. */
   settle() {
-    if (this.busy || !this.origin || !this.reader.isNear?.(this.origin))
+    if (this.busy || !this.origin) return false;
+    const near = this.reader.isNear?.(this.origin);
+    // PDF.js may emit pagechanging before its viewport has left the origin.
+    if (this.departing) {
+      if (!near) this.departing = false;
       return false;
+    }
+    if (!near) return false;
     this.origin = undefined;
     return true;
   }
@@ -38,6 +48,7 @@ export class ReferenceNavigation {
     try {
       await this.reader.goTo(this.origin);
       this.origin = undefined;
+      this.departing = false;
     } finally {
       this.busy = false;
     }

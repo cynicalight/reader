@@ -14,6 +14,18 @@ function render(content: string, generating = false) {
   );
 }
 describe("Markdown received source vs display", () => {
+  it("renders external links as navigable anchors with an icon-only copy action", () => {
+    const dom = new JSDOM(render("[项目](https://example.com)"));
+    const link = dom.window.document.querySelector<HTMLAnchorElement>("a");
+    expect(link?.href).toBe("https://example.com/");
+    expect(link?.target).toBe("_blank");
+    const copy = dom.window.document.querySelector(
+      '[aria-label="复制链接 https://example.com"]',
+    );
+    expect(copy?.textContent).toBe("");
+    expect(copy?.querySelector("svg")).not.toBeNull();
+    dom.window.close();
+  });
   it.each(["character", "word", "random", "whole"] as SplitMode[])(
     "final content is identical for %s fragments",
     (mode) => {

@@ -28,6 +28,8 @@ import type {
 import { publicationURL } from "@reader/api";
 import { zoomCommand } from "@reader/core";
 import { selectSentence } from "./sentence-selection";
+import { installPDFExternalLinks } from "./pdf-external-links";
+import { resolvePDFCitation } from "./pdf-citations";
 pdfjs.GlobalWorkerOptions.workerSrc = workerURL;
 export class PDFReaderAdapter implements ReaderAdapter {
   private pdf?: pdfjs.PDFDocumentProxy;
@@ -39,6 +41,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private selection: ReaderSelection | null = null;
   private annotationLayer: PDFAnnotationLayer;
   private linkPreview: PDFLinkPreview;
+  private removeExternalLinks: () => void;
   private texts = new Map<number, string>();
   private resize: ResizeObserver;
   private resizeTimer?: ReturnType<typeof setTimeout>;
@@ -57,6 +60,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     private events: ReaderEvents,
   ) {
     container.classList.add("pdf-container");
+    this.removeExternalLinks = installPDFExternalLinks(container);
     this.annotationLayer = new PDFAnnotationLayer(container, (target) =>
       this.events.annotation?.(target),
     );
@@ -504,6 +508,10 @@ export class PDFReaderAdapter implements ReaderAdapter {
   followBlock(anchor: import("@reader/core").PDFReadingAnchor) {
     return this.navigation.follow(anchor);
   }
+  async resolveCitation(blockId: string, label: string) {
+    const block = this.blockData.find((b) => b.id === blockId);
+    if (this.pdf && block) return resolvePDFCitation(this.pdf, block, label);
+  }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.navigation.focusSentences(blockId, sources, scroll);
   }
@@ -571,6 +579,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blocks.destroy();
     this.annotationLayer.destroy();
     this.linkPreview.destroy();
+    this.removeExternalLinks();
     this.disposed = true;
     this.resize.disconnect();
     clearTimeout(this.resizeTimer);

@@ -62,3 +62,20 @@ it("forgets return points that are back on screen", async () => {
   await navigation.visit({ type: "pdf", page: 2, y: 0.4 });
   expect(navigation.origin).toBeUndefined();
 });
+
+it("keeps the return point during location events before the link has moved the viewport", () => {
+  let near = true;
+  const origin: DocumentLocation = { type: "pdf", page: 2, y: 0.3 };
+  const navigation = new ReferenceNavigation({
+    getLocation: () => origin,
+    goTo: vi.fn(),
+    isNear: () => near,
+  });
+  navigation.remember(origin);
+  expect(navigation.settle()).toBe(false);
+  expect(navigation.origin).toEqual(origin);
+  near = false;
+  expect(navigation.settle()).toBe(false);
+  near = true;
+  expect(navigation.settle()).toBe(true);
+});

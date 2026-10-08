@@ -303,6 +303,48 @@ it("chooses the source viewport's middle block before resizing, even with a stal
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "parallel");
 });
 
+it("navigates to the matching bibliography block and restores the translated viewport fraction", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "p9-first",
+      page: 9,
+      label: "text",
+      text: "Before references",
+      bounds: { x: 0.1, y: 0.1, width: 0.3, height: 0.1 },
+    },
+    {
+      id: "p9-ref",
+      page: 9,
+      label: "reference_content",
+      text: "[6] Reference",
+      bounds: { x: 0.1, y: 0.6, width: 0.3, height: 0.2 },
+    },
+  ]);
+  await click("仅译文");
+  const { pane } = translationGeometry();
+  const reference = host.querySelector<HTMLElement>(
+    '[data-translation-block="p9-ref"]',
+  )!;
+  reference.getBoundingClientRect = () =>
+    new DOMRect(40, 1200 - pane.scrollTop, 520, 200);
+  pane.scrollTop = 400;
+  await act(async () => {
+    pane.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+    pane.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await new Promise(requestAnimationFrame);
+  });
+  const origin = fixture.ready!.getLocation();
+  expect(origin).toEqual({ type: "pdf", page: 1, x: 0.1, y: 0.35 });
+  await act(async () =>
+    fixture.ready!.goTo({ type: "pdf", page: 9, x: 0.1, y: 0.7 }),
+  );
+  expect(pane.scrollTop).toBeCloseTo(1000);
+  expect(fixture.ready!.isNear?.(origin)).toBe(false);
+  await act(async () => fixture.ready!.goTo(origin));
+  expect(pane.scrollTop).toBeCloseTo(400);
+  expect(fixture.ready!.isNear?.(origin)).toBe(true);
+});
+
 it("renders an incoming paragraph while the subscription remains open", async () => {
   await click("原文译文");
   const block = fixture.translations[0];

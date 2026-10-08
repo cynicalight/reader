@@ -86,13 +86,20 @@
   max-width: 100%;
 }
 .markdown-link {
+  display: inline;
+}
+.markdown-link a {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .markdown-link button {
-  font-size: 10px;
-  padding: 0 4px;
-  height: auto;
+  display: inline-flex;
+  vertical-align: middle;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 3px;
+  padding: 0;
+  color: var(--muted-foreground);
 }
 .dark .markdown-code span[style] {
   color: var(--shiki-dark) !important;
