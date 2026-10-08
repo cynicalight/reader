@@ -92,14 +92,17 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.markdown-link button {
-  display: inline-flex;
-  vertical-align: middle;
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-left: 3px;
-  padding: 0;
-  color: var(--muted-foreground);
+.message-markdown a[href^="#reader-citation?"] {
+  color: #2563eb;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dark .message-markdown a[href^="#reader-citation?"] {
+  color: #60a5fa;
+}
+.message-markdown a[href^="#reader-citation?"]:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .dark .markdown-code span[style] {
   color: var(--shiki-dark) !important;
@@ -124,4 +127,14 @@
 .chat-scroll [data-slot="scroll-area-viewport"] > div {
   min-width: 0 !important;
   display: block !important;
+}
+
+.markdown-link button {
+  display: inline-flex;
+  vertical-align: middle;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 3px;
+  padding: 0;
+  color: var(--muted-foreground);
 }

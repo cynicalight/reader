@@ -5,7 +5,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MessageMarkdown } from "./chat/MessageMarkdown";
 import { ReadingLinkNavigation } from "./reading-links";
 import { installPDFExternalLinks } from "./readers/pdf-external-links";
-import { copyText } from "./chat/clipboard";
 vi.mock("./chat/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 const openExternal = vi.fn(async () => {});
 let host: HTMLDivElement;
@@ -32,7 +31,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-it("opens translated links in the system browser, copies independently, and routes citations without touching inline code", async () => {
+it("opens translated links in the system browser, has no copy icons, and routes citations without touching inline code", async () => {
   const navigate = vi.fn();
   const root = createRoot(host);
   try {
@@ -54,13 +53,7 @@ it("opens translated links in the system browser, copies independently, and rout
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(
       "https://example.com/",
     );
-    const copy = host.querySelector<HTMLButtonElement>(
-      '[aria-label="复制链接 https://example.com/"]',
-    )!;
-    expect(copy.textContent).toBe("");
-    copy.click();
-    expect(copyText).toHaveBeenCalledExactlyOnceWith("https://example.com/");
-    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(host.querySelector("button")).toBeNull();
     const citations = host.querySelectorAll<HTMLAnchorElement>(
       'a[href^="#reader-citation?"]',
     );
@@ -72,9 +65,9 @@ it("opens translated links in the system browser, copies independently, and rout
     await act(async () => root.unmount());
   }
 });
-it("gives original PDF links the same open and icon-only copy behavior and cleans up recycled annotation layers", async () => {
+it("preserves current PDF.js internal links and omits copy icons", async () => {
   host.innerHTML =
-    '<div class="annotationLayer"><section><a href="https://example.com/">项目</a></section><section><a class="internalLink" href="http://127.0.0.1/#cite.six">[6]</a></section></div>';
+    '<div class="annotationLayer"><section><a href="https://example.com/">项目</a></section><section data-internal-link><a href="http://127.0.0.1/#cite.six">[6]</a></section></div>';
   let cleanup: (() => void) | undefined;
   try {
     await act(async () => {
@@ -84,12 +77,10 @@ it("gives original PDF links the same open and icon-only copy behavior and clean
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(
       "https://example.com/",
     );
-    const copy = host.querySelector<HTMLButtonElement>("button")!;
-    expect(copy.textContent).toBe("");
-    await act(async () => copy.click());
-    expect(copyText).toHaveBeenCalledExactlyOnceWith("https://example.com/");
-    expect(openExternal).toHaveBeenCalledTimes(1);
-    const internal = host.querySelector<HTMLAnchorElement>("a.internalLink")!;
+    expect(host.querySelector("button")).toBeNull();
+    const internal = host.querySelector<HTMLAnchorElement>(
+      "[data-internal-link] a",
+    )!;
     const nativeClick = vi.fn((event: MouseEvent) => {
       expect(event.defaultPrevented).toBe(false);
       event.preventDefault();
@@ -98,7 +89,7 @@ it("gives original PDF links the same open and icon-only copy behavior and clean
     internal.click();
     expect(nativeClick).toHaveBeenCalledOnce();
     expect(openExternal).toHaveBeenCalledTimes(1);
-    expect(host.querySelectorAll("button")).toHaveLength(1);
+    expect(host.querySelectorAll("button")).toHaveLength(0);
     await act(async () => host.querySelector("a")!.remove());
     expect(host.querySelector("button")).toBeNull();
   } finally {

@@ -38,6 +38,7 @@ import { translatedSelection as captureTranslationSelection } from "./selection"
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { translationFont } from "../appearance";
 import { selectSentence } from "../readers/sentence-selection";
+import { installCitationHover } from "../readers/citation-hover";
 import { numberedReference } from "../readers/pdf-citations";
 import "./translation.css";
 
@@ -344,6 +345,19 @@ export function PDFReadingView({
   const facade = useRef<ReaderAdapter | undefined>(undefined);
   const actions = useRef({ go });
   actions.current = { go };
+  useEffect(() => {
+    if (!root.current || !engine) return;
+    return installCitationHover(
+      root.current,
+      async (blockId, label) =>
+        (await engine.resolveCitation?.(blockId, label)) ??
+        numberedReference(blocks, label),
+      async (location, anchor) => {
+        await engine.previewCitation?.(location, anchor);
+      },
+      () => engine.hideCitationPreview?.(),
+    );
+  }, [engine, blocks, mode]);
   const visitCitation = async (blockId: string, label: string) => {
     try {
       const target =

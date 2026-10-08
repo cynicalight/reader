@@ -313,6 +313,11 @@ export interface ReaderAdapter {
   hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
+  previewCitation?(
+    location: PDFLocation,
+    anchor: HTMLAnchorElement,
+  ): Promise<void>;
+  hideCitationPreview?(): void;
   resolveCitation?(
     blockId: string,
     label: string,

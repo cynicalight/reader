@@ -1,5 +1,5 @@
 import type * as pdfjs from "pdfjs-dist";
-import type { LinkPreview } from "@reader/core";
+import type { LinkPreview, PDFLocation } from "@reader/core";
 
 /** PDF.js writes internal targets as `#<escaped name or JSON array>` or `#page=N`. */
 export function parseDestinationHash(hash: string): {
@@ -59,23 +59,27 @@ export class PDFLinkPreview {
     private follow: () => void,
   ) {
     container.addEventListener("pointerover", this.over);
+    container.addEventListener("focusin", this.over);
+    container.addEventListener("focusout", this.out);
     container.addEventListener("pointerout", this.out);
     container.addEventListener("click", this.click, true);
     container.addEventListener("scroll", this.hide, { passive: true });
   }
   private link(target: EventTarget | null) {
     return target instanceof Element
-      ? target.closest<HTMLAnchorElement>(".annotationLayer a.internalLink")
+      ? target.closest<HTMLAnchorElement>(
+          ".annotationLayer a.internalLink, .annotationLayer [data-internal-link] a",
+        )
       : null;
   }
-  private over = (event: PointerEvent) => {
+  private over = (event: MouseEvent | FocusEvent) => {
     const link = this.link(event.target);
     if (!link || link === this.hovered) return;
+    this.hide();
     this.hovered = link;
-    clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.preview(link), HOVER_DELAY);
   };
-  private out = (event: PointerEvent) => {
+  private out = (event: MouseEvent | FocusEvent) => {
     const link = this.link(event.target);
     if (!link || link.contains(event.relatedTarget as Node | null)) return;
     this.hide();
@@ -89,10 +93,8 @@ export class PDFLinkPreview {
   hide = () => {
     clearTimeout(this.timer);
     this.request++;
-    if (this.hovered) {
-      this.hovered = undefined;
-      this.show(null);
-    }
+    this.hovered = undefined;
+    this.show(null);
   };
   private async target(link: HTMLAnchorElement) {
     const pdf = this.pdf();
@@ -145,56 +147,84 @@ export class PDFLinkPreview {
     try {
       const target = await this.target(link);
       if (!target || request !== this.request) return;
-      const pdf = this.pdf()!;
-      const proxy = await pdf.getPage(target.pageIndex + 1);
-      const base = proxy.getViewport({ scale: 1 });
-      const canvas = await this.render(target.pageIndex);
-      if (request !== this.request || !link.isConnected) return;
-      const ratio = canvas.width / base.width;
-      const top =
-        target.top === null
-          ? 0
-          : Math.max(0, base.convertToViewportPoint(0, target.top)[1] - 10);
-      // A target in the right half starts a right column: show only that column.
-      const right = target.left !== null && target.left > base.width / 2 - 10;
-      const left = right ? base.width / 2 : 0;
-      const width = right ? base.width / 2 : base.width;
-      const height = Math.min(base.height - top, base.height * 0.3);
-      const crop = document.createElement("canvas");
-      crop.width = Math.round(width * ratio);
-      crop.height = Math.round(height * ratio);
-      crop
-        .getContext("2d")!
-        .drawImage(
-          canvas,
-          left * ratio,
-          top * ratio,
-          crop.width,
-          crop.height,
-          0,
-          0,
-          crop.width,
-          crop.height,
-        );
-      const rect = link.getBoundingClientRect();
-      this.show({
-        anchor: {
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-        },
-        page: target.pageIndex + 1,
-        image: crop.toDataURL("image/png"),
-        ratio: crop.width / crop.height,
-      });
+      await this.showTarget(target, link, request);
     } catch {
       /* a broken destination simply has no preview */
     }
   }
+  async previewLocation(location: PDFLocation, link: HTMLAnchorElement) {
+    const request = ++this.request;
+    try {
+      const page = await this.pdf()?.getPage(location.page);
+      if (!page || request !== this.request) return;
+      const view = page.getViewport({ scale: 1 });
+      const [left, top] = view.convertToPdfPoint(
+        (location.x ?? 0) * view.width,
+        (location.y ?? 0) * view.height,
+      );
+      await this.showTarget(
+        { pageIndex: location.page - 1, left, top },
+        link,
+        request,
+      );
+    } catch {
+      /* a broken destination simply has no preview */
+    }
+  }
+  private async showTarget(
+    target: { pageIndex: number; left: number | null; top: number | null },
+    link: HTMLAnchorElement,
+    request: number,
+  ) {
+    const pdf = this.pdf()!;
+    const proxy = await pdf.getPage(target.pageIndex + 1);
+    const base = proxy.getViewport({ scale: 1 });
+    const canvas = await this.render(target.pageIndex);
+    if (request !== this.request || !link.isConnected) return;
+    const ratio = canvas.width / base.width;
+    const top =
+      target.top === null
+        ? 0
+        : Math.max(0, base.convertToViewportPoint(0, target.top)[1] - 10);
+    // A target in the right half starts a right column: show only that column.
+    const right = target.left !== null && target.left > base.width / 2 - 10;
+    const left = right ? base.width / 2 : 0;
+    const width = right ? base.width / 2 : base.width;
+    const height = Math.min(base.height - top, base.height * 0.3);
+    const crop = document.createElement("canvas");
+    crop.width = Math.round(width * ratio);
+    crop.height = Math.round(height * ratio);
+    crop
+      .getContext("2d")!
+      .drawImage(
+        canvas,
+        left * ratio,
+        top * ratio,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        crop.width,
+        crop.height,
+      );
+    const rect = link.getBoundingClientRect();
+    this.show({
+      anchor: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      page: target.pageIndex + 1,
+      image: crop.toDataURL("image/png"),
+      ratio: crop.width / crop.height,
+    });
+  }
   destroy() {
     this.hide();
     this.container.removeEventListener("pointerover", this.over);
+    this.container.removeEventListener("focusin", this.over);
+    this.container.removeEventListener("focusout", this.out);
     this.container.removeEventListener("pointerout", this.out);
     this.container.removeEventListener("click", this.click, true);
     this.container.removeEventListener("scroll", this.hide);

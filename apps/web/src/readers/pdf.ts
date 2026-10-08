@@ -508,6 +508,15 @@ export class PDFReaderAdapter implements ReaderAdapter {
   followBlock(anchor: import("@reader/core").PDFReadingAnchor) {
     return this.navigation.follow(anchor);
   }
+  previewCitation(
+    location: import("@reader/core").PDFLocation,
+    anchor: HTMLAnchorElement,
+  ) {
+    return this.linkPreview.previewLocation(location, anchor);
+  }
+  hideCitationPreview() {
+    this.linkPreview.hide();
+  }
   async resolveCitation(blockId: string, label: string) {
     const block = this.blockData.find((b) => b.id === blockId);
     if (this.pdf && block)

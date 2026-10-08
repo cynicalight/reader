@@ -1,3 +1,6 @@
+import { Button } from "@reader/ui/components/button";
+import { copyText } from "./clipboard";
+import { Copy } from "lucide-react";
 import { CachedMarkdown, Streamdown } from "@lobehub/streamdown";
 import {
   memo,
@@ -15,9 +18,6 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remend from "remend";
 import { marked } from "marked";
-import { Button } from "@reader/ui/components/button";
-import { copyText } from "./clipboard";
-import { Copy } from "lucide-react";
 import {
   ReadingLinkNavigation,
   openExternalLink,
@@ -83,15 +83,17 @@ function MarkdownLink({
       >
         {children}
       </a>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        title="复制链接"
-        aria-label={`复制链接 ${href}`}
-        onClick={() => void copyText(href)}
-      >
-        <Copy className="size-3" />
-      </Button>
+      {!navigate && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          title="复制链接"
+          aria-label={`复制链接 ${href}`}
+          onClick={() => void copyText(href)}
+        >
+          <Copy className="size-3" />
+        </Button>
+      )}
     </span>
   );
 }
