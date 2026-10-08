@@ -83,6 +83,7 @@ export function PDFReadingView({
     );
   };
   const previousMode = useRef<Mode>("source");
+  const enteringParallel = useRef<string | undefined>(undefined);
   const explicitFocus = useRef({
     operation: 0,
     moving: false,
@@ -372,6 +373,19 @@ export function PDFReadingView({
     window.getSelection()?.removeAllRanges();
     setLinked(undefined);
     void engine.focusSentences?.("", []);
+    if (previous !== mode && mode === "parallel") {
+      const block = blocks.find(
+        (b) => b.id === (enteringParallel.current ?? reading.current?.blockId),
+      );
+      enteringParallel.current = undefined;
+      if (block) {
+        focusBlock(
+          block,
+          previous === "translation" ? "translation" : "source",
+        );
+        return () => engine.hoverBlock?.(null);
+      }
+    }
     const restore = async () => {
       if (previous !== mode && mode !== "translation" && reading.current)
         await engine.followBlock?.(reading.current);
@@ -545,6 +559,56 @@ export function PDFReadingView({
     });
   };
   const changeMode = (value: Mode) => {
+    if (value === "parallel" && mode !== "parallel") {
+      // Pick from the current viewport before the panels change width.
+      const host =
+        mode === "translation"
+          ? pane.current
+          : root.current?.querySelector<HTMLElement>(".pdf-container");
+      let nearest: string | undefined;
+      let distance = Infinity;
+      if (host) {
+        const view = host.getBoundingClientRect();
+        const x = view.left + view.width / 2,
+          y = view.top + view.height / 2;
+        for (const block of visibleBlocks) {
+          let rect: DOMRect | undefined;
+          if (mode === "translation")
+            rect = targetNode(block.id)?.getBoundingClientRect();
+          else {
+            const page = host
+              .querySelector<HTMLElement>(
+                `.page[data-page-number="${block.page}"]`,
+              )
+              ?.getBoundingClientRect();
+            if (page)
+              rect = new DOMRect(
+                page.left + block.bounds.x * page.width,
+                page.top + block.bounds.y * page.height,
+                block.bounds.width * page.width,
+                block.bounds.height * page.height,
+              );
+          }
+          if (
+            !rect?.height ||
+            !rect.width ||
+            rect.bottom <= view.top ||
+            rect.top >= view.bottom ||
+            rect.right <= view.left ||
+            rect.left >= view.right
+          )
+            continue;
+          const d =
+            Math.max(rect.left - x, x - rect.right, 0) * 2 +
+            Math.max(rect.top - y, y - rect.bottom, 0);
+          if (d < distance) {
+            distance = d;
+            nearest = block.id;
+          }
+        }
+      }
+      enteringParallel.current = nearest ?? reading.current?.blockId;
+    }
     input(value === "translation" ? "translation" : "source");
     setPopup(undefined);
     setMode(value);

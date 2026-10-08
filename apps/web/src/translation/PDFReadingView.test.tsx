@@ -241,7 +241,8 @@ it("keeps the translated selection as the quote and anchors its counterpart to o
   document.dispatchEvent(new Event("selectionchange"));
   expect(highlights.has("reader-translation-selection")).toBe(false);
 });
-it("restores the translated reading position without changing zoom on mode change", async () => {
+it("focuses the visible middle translation once when entering parallel mode", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
   await click("仅译文");
   const pane = host.querySelector<HTMLElement>(".translation-document")!;
   const block = pane.querySelector<HTMLElement>("[data-translation-block]")!;
@@ -254,11 +255,52 @@ it("restores the translated reading position without changing zoom on mode chang
   });
   expect(adapter.followBlock).not.toHaveBeenCalled();
   await click("原文译文");
-  expect(adapter.followBlock).toHaveBeenLastCalledWith({
-    blockId: "p1-b1",
-    fraction: 0.55,
-  });
-  expect(adapter.focusBlock).not.toHaveBeenCalled();
+  expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
+    "p1-b1",
+    "parallel",
+  );
+  expect(adapter.followBlock).not.toHaveBeenCalled();
+  await renderView({ ...defaultTheme, translationFontSize: 1.2 });
+  expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
+  await click("仅译文");
+  await click("原文译文");
+  expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
+});
+
+it("chooses the source viewport's middle block before resizing, even with a stale reading anchor", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  await renderView(defaultTheme, [
+    {
+      id: "p1-b2",
+      page: 1,
+      label: "text",
+      text: "Middle block.",
+      bounds: { x: 0.1, y: 0.55, width: 0.3, height: 0.1 },
+    },
+  ]);
+  await act(async () =>
+    fixture.events!.readingAnchor?.({ blockId: "p1-b1", fraction: 0 }),
+  );
+  const source = document.createElement("div");
+  source.className = "pdf-container";
+  source.getBoundingClientRect = () => new DOMRect(0, 0, 600, 600);
+  const page = document.createElement("div");
+  page.className = "page";
+  page.dataset.pageNumber = "1";
+  page.getBoundingClientRect = () => new DOMRect(0, -300, 1000, 1000);
+  source.append(page);
+  host.querySelector(".translation-source")!.append(source);
+  await click("原文译文");
+  expect(adapter.focusBlock).toHaveBeenCalledExactlyOnceWith(
+    "p1-b2",
+    "parallel",
+  );
+  await click("交换原文和译文");
+  expect(adapter.focusBlock).toHaveBeenCalledTimes(1);
+  await click("仅原文");
+  await click("原文译文");
+  expect(adapter.focusBlock).toHaveBeenCalledTimes(2);
+  expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "parallel");
 });
 
 it("renders an incoming paragraph while the subscription remains open", async () => {
@@ -326,7 +368,7 @@ it("provides a resizable divider with the swap action outside the toolbar", asyn
   expect(adapter.destroy).not.toHaveBeenCalled();
 });
 
-it("has no single-column mode and only zooms on an explicit block focus", async () => {
+it("supports explicit block focus in source and parallel modes without a single-column mode", async () => {
   expect(host.textContent).not.toContain("单栏模式");
   expect(host.textContent).not.toContain("普通模式");
   expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
