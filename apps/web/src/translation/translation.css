@@ -174,8 +174,8 @@
   background: transparent;
 }
 .pdf-reading[data-theme="sepia"] .pdf-page-navigation {
-  background: #f5efdf;
-  color: #3e3528;
+  background: #f7f6f2;
+  color: #1f1e1d;
 }
 
 .textLayer ::highlight(reader-linked-sentences) {
@@ -201,8 +201,8 @@
   }
 }
 .pdf-reading[data-theme="sepia"] .translation-document {
-  background: #f5efdf;
-  color: #3e3528;
+  background: #f7f6f2;
+  color: #1f1e1d;
 }
 ::highlight(reader-translation-marks) {
   background: #e6b94c66;
@@ -243,10 +243,6 @@
   to {
     opacity: 0;
   }
-}
-.translation-document [data-focused],
-.translation-document [data-hovered] {
-  transition-duration: 0s;
 }
 @media (prefers-reduced-motion: reduce) {
   .translation-document section {
@@ -294,4 +290,21 @@
   gap: 0.5rem;
   font-size: 0.8em;
   color: var(--muted-foreground);
+}
+
+.reader-block-hover:not(.reader-block-focus) {
+  animation: block-hover-in 160ms ease-out;
+}
+@keyframes block-hover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-block-hover:not(.reader-block-focus) {
+    animation: none;
+  }
 }

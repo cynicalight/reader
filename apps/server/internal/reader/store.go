@@ -11,21 +11,32 @@ import (
 )
 
 type Document struct {
-	Category             string          `json:"category"`
-	CategorySource       string          `json:"categorySource"`
-	ClassificationStatus string          `json:"classificationStatus"`
-	ClassificationError  string          `json:"classificationError"`
-	Tags                 []string        `json:"tags"`
-	ID                   string          `json:"id"`
-	Type                 string          `json:"type"`
-	Title                string          `json:"title"`
-	Author               string          `json:"author"`
-	Size                 int64           `json:"size"`
-	CreatedAt            string          `json:"createdAt"`
-	LastOpenedAt         string          `json:"lastOpenedAt"`
-	Favorite             bool            `json:"favorite"`
-	Progress             json.RawMessage `json:"progress,omitempty"`
-	Percentage           float64         `json:"percentage"`
+	Category             string   `json:"category"`
+	CategorySource       string   `json:"categorySource"`
+	ClassificationStatus string   `json:"classificationStatus"`
+	ClassificationError  string   `json:"classificationError"`
+	Tags                 []string `json:"tags"`
+	// Folders are the paper library's categories; "a/b" is nested in "a".
+	Folders           []string      `json:"folders"`
+	Library           string        `json:"library"`
+	DeletedAt         string        `json:"deletedAt,omitempty"`
+	Metadata          PaperMetadata `json:"metadata"`
+	ReadingStatus     string        `json:"readingStatus"`
+	NoteCount         int           `json:"noteCount"`
+	HighlightCount    int           `json:"highlightCount"`
+	OpenQuestionCount int           `json:"openQuestionCount"`
+	// Related lists documents the user linked to this one, in both directions.
+	Related      []string        `json:"related"`
+	ID           string          `json:"id"`
+	Type         string          `json:"type"`
+	Title        string          `json:"title"`
+	Author       string          `json:"author"`
+	Size         int64           `json:"size"`
+	CreatedAt    string          `json:"createdAt"`
+	LastOpenedAt string          `json:"lastOpenedAt"`
+	Favorite     bool            `json:"favorite"`
+	Progress     json.RawMessage `json:"progress,omitempty"`
+	Percentage   float64         `json:"percentage"`
 }
 type Annotation struct {
 	ID         string          `json:"id"`
@@ -36,6 +47,11 @@ type Annotation struct {
 	Note       string          `json:"note"`
 	Color      string          `json:"color"`
 	CreatedAt  string          `json:"createdAt"`
+	// AnswerID links a question to the chat message that answers it.
+	AnswerID string `json:"answerId,omitempty"`
+	Resolved bool   `json:"resolved,omitempty"`
+	// Tags are the reader's own labels for filtering annotations.
+	Tags []string `json:"tags,omitempty"`
 }
 type Message struct {
 	Attachments []ImageAttachment `json:"attachments,omitempty"`
@@ -76,6 +92,9 @@ func OpenStore(root string) (*Store, error) {
  CREATE TABLE IF NOT EXISTS processing_intervals(id TEXT PRIMARY KEY,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,stage TEXT NOT NULL,started_at TEXT NOT NULL,finished_at TEXT);
  CREATE TABLE IF NOT EXISTS tag_boards(id TEXT PRIMARY KEY,name TEXT NOT NULL,tags TEXT NOT NULL,match TEXT NOT NULL CHECK(match IN ('all','any')));
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS document_notes(document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,body TEXT NOT NULL,updated_at TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS document_relations(a TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,b TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,created_at TEXT NOT NULL,PRIMARY KEY(a,b),CHECK(a<b));
+ CREATE INDEX IF NOT EXISTS document_relations_b ON document_relations(b);
  CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(document_id UNINDEXED,href UNINDEXED,content,tokenize='unicode61');`)
 	if err != nil {
 		db.Close()
@@ -93,25 +112,45 @@ func OpenStore(root string) (*Store, error) {
 	return store, nil
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
+
+const documentColumns = `id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags,folders,library,deleted_at,metadata,reading_status,` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='note'),` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind') IN ('highlight','underline')),` +
+	`(SELECT count(*) FROM annotations a WHERE a.document_id=documents.id AND json_extract(a.body,'$.kind')='question' AND COALESCE(json_extract(a.body,'$.answerId'),'')='' AND NOT COALESCE(json_extract(a.body,'$.resolved'),0)),` +
+	`(SELECT json_group_array(CASE WHEN r.a=documents.id THEN r.b ELSE r.a END) FROM document_relations r WHERE r.a=documents.id OR r.b=documents.id)`
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanDocument(row rowScanner) (Document, error) {
+	var d Document
+	var progress, tags, folders, metadata, related string
+	err := row.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags, &folders, &d.Library, &d.DeletedAt, &metadata, &d.ReadingStatus, &d.NoteCount, &d.HighlightCount, &d.OpenQuestionCount, &related)
+	if err == nil {
+		err = json.Unmarshal([]byte(tags), &d.Tags)
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(folders), &d.Folders)
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(related), &d.Related)
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(metadata), &d.Metadata)
+	}
+	if progress != "" {
+		d.Progress = json.RawMessage(progress)
+	}
+	return d, err
+}
 func (s *Store) Documents() ([]Document, error) {
-	rows, err := s.DB.Query(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents ORDER BY last_opened_at DESC,created_at DESC`)
+	rows, err := s.DB.Query(`SELECT ` + documentColumns + ` FROM documents WHERE deleted_at='' ORDER BY last_opened_at DESC,created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	docs := []Document{}
 	for rows.Next() {
-		var d Document
-		var progress, tags string
-		if err = rows.Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags); err != nil {
-			return nil, err
-		}
-		if err == nil {
-			err = json.Unmarshal([]byte(tags), &d.Tags)
-		}
-		if progress != "" {
-			d.Progress = json.RawMessage(progress)
-		}
+		d, err := scanDocument(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -120,16 +159,7 @@ func (s *Store) Documents() ([]Document, error) {
 	return docs, rows.Err()
 }
 func (s *Store) Document(id string) (Document, error) {
-	var d Document
-	var progress, tags string
-	err := s.DB.QueryRow(`SELECT id,type,title,author,size,created_at,last_opened_at,favorite,COALESCE(progress,''),percentage,category,category_source,classification_status,classification_error,tags FROM documents WHERE id=?`, id).Scan(&d.ID, &d.Type, &d.Title, &d.Author, &d.Size, &d.CreatedAt, &d.LastOpenedAt, &d.Favorite, &progress, &d.Percentage, &d.Category, &d.CategorySource, &d.ClassificationStatus, &d.ClassificationError, &tags)
-	if err == nil {
-		err = json.Unmarshal([]byte(tags), &d.Tags)
-	}
-	if progress != "" {
-		d.Progress = json.RawMessage(progress)
-	}
-	return d, err
+	return scanDocument(s.DB.QueryRow(`SELECT `+documentColumns+` FROM documents WHERE id=?`, id))
 }
 func (s *Store) File(d Document) string {
 	dir := "books"

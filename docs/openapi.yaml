@@ -44,6 +44,18 @@
             {
               "responses":
                 {
+                  "200":
+                    {
+                      "description": "The identical file already exists, in either library",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
                   "201":
                     {
                       "description": "Success",
@@ -83,6 +95,11 @@
                                 {
                                   "file":
                                     { "type": "string", "format": "binary" },
+                                  "library":
+                                    {
+                                      "enum": ["books", "papers"],
+                                      "description": "Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.",
+                                    },
                                 },
                               "required": ["file"],
                             },
@@ -156,6 +173,17 @@
                                           "maxLength": 40,
                                         },
                                     },
+                                  "folders":
+                                    {
+                                      "type": "array",
+                                      "maxItems": 30,
+                                      "items":
+                                        {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 40,
+                                        },
+                                    },
                                   "favorite": { "type": "boolean" },
                                   "progress":
                                     {
@@ -170,6 +198,70 @@
                                     },
                                   "author":
                                     { "type": "string", "maxLength": 200 },
+                                  "library": { "enum": ["books", "papers"] },
+                                  "metadata":
+                                    {
+                                      "type": "object",
+                                      "description": "Fields to replace; each becomes a manual value. Empty strings clear a field.",
+                                      "properties":
+                                        {
+                                          "itemType":
+                                            {
+                                              "enum":
+                                                [
+                                                  "journal",
+                                                  "conference",
+                                                  "preprint",
+                                                  "thesis",
+                                                  "book",
+                                                  "chapter",
+                                                  "report",
+                                                  "other",
+                                                ],
+                                            },
+                                          "translatedTitle":
+                                            { "type": "string" },
+                                          "shortTitle": { "type": "string" },
+                                          "creators":
+                                            {
+                                              "type": "array",
+                                              "maxItems": 200,
+                                              "items":
+                                                {
+                                                  "$ref": "#/components/schemas/Creator",
+                                                },
+                                            },
+                                          "affiliation": { "type": "string" },
+                                          "date":
+                                            {
+                                              "type": "string",
+                                              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+                                            },
+                                          "venue": { "type": "string" },
+                                          "volume": { "type": "string" },
+                                          "issue": { "type": "string" },
+                                          "pages": { "type": "string" },
+                                          "publisher": { "type": "string" },
+                                          "doi": { "type": "string" },
+                                          "arxiv": { "type": "string" },
+                                          "isbn": { "type": "string" },
+                                          "url": { "type": "string" },
+                                          "abstract":
+                                            {
+                                              "type": "string",
+                                              "maxLength": 20000,
+                                            },
+                                          "language": { "type": "string" },
+                                          "remark":
+                                            {
+                                              "type": "string",
+                                              "maxLength": 20000,
+                                            },
+                                        },
+                                      "additionalProperties": false,
+                                    },
+                                  "readingStatus":
+                                    { "enum": ["unread", "reading", "done"] },
                                 },
                               "required": [],
                             },
@@ -179,7 +271,7 @@
             },
           "delete":
             {
-              "summary": "Delete a document and its library-owned data after stopping background tasks",
+              "summary": "Permanently delete a document and its library-owned data after stopping background tasks",
               "parameters":
                 [
                   {
@@ -407,8 +499,30 @@
                           "schema":
                             {
                               "type": "object",
-                              "required": ["note"],
-                              "properties": { "note": { "type": "string" } },
+                              "required": [],
+                              "properties":
+                                {
+                                  "note": { "type": "string" },
+                                  "answerId":
+                                    {
+                                      "type": "string",
+                                      "description": "Message ID of this document; empty clears",
+                                    },
+                                  "resolved": { "type": "boolean" },
+                                  "color":
+                                    {
+                                      "type": "string",
+                                      "pattern": "^#[0-9a-fA-F]{6}$",
+                                    },
+                                  "tags":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                      "maxItems": 10,
+                                      "description": "Replaces the tags; trimmed and de-duplicated without regard to case",
+                                    },
+                                },
+                              "description": "At least one of note, answerId, resolved, color or tags",
                             },
                         },
                     },
@@ -1589,6 +1703,822 @@
                 },
             },
         },
+      "/api/preferences/{key}":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "key",
+                    "required": true,
+                    "schema": { "enum": ["library"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved preferences, or an empty object",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "additionalProperties": true,
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "key",
+                    "required": true,
+                    "schema": { "enum": ["library"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            { "type": "object", "additionalProperties": true },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "additionalProperties": true,
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/related/{other}":
+        {
+          "parameters":
+            [
+              {
+                "in": "path",
+                "name": "id",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+              {
+                "in": "path",
+                "name": "other",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "put":
+            {
+              "summary": "Link two documents as related (both directions, idempotent, at most 100 per document)",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The document at id",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Remove the link between two documents",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The document at id",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/merge":
+        {
+          "post":
+            {
+              "summary": "Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                      "minItems": 1,
+                                      "maxItems": 20,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Merged",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "document":
+                                        {
+                                          "$ref": "#/components/schemas/Document",
+                                        },
+                                      "trashed":
+                                        {
+                                          "type": "array",
+                                          "items": { "type": "string" },
+                                        },
+                                    },
+                                  "required": ["document", "trashed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/trash":
+        {
+          "post":
+            {
+              "summary": "Move to the trash, keeping files and records; idempotent",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Trashed",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/restore":
+        {
+          "post":
+            {
+              "summary": "Restore from the trash; idempotent",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Restored",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/trash":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "query",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Trashed documents, newest first",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    { "$ref": "#/components/schemas/Document" },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Permanently delete every trashed document in a library",
+              "parameters":
+                [
+                  {
+                    "in": "query",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Emptied",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "removed": { "type": "number" } },
+                                  "required": ["removed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/libraries/{library}/folders":
+        {
+          "post":
+            {
+              "summary": "Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from": { "type": "string", "minLength": 1 },
+                                  "to":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 40,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Changed documents",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "changed": { "type": "number" } },
+                                  "required": ["changed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/libraries/{library}/tags":
+        {
+          "post":
+            {
+              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "library",
+                    "required": true,
+                    "schema": { "enum": ["books", "papers"] },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "from": { "type": "string", "minLength": 1 },
+                                  "to":
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 40,
+                                    },
+                                },
+                              "required": ["from"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Changed documents",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "changed": { "type": "number" } },
+                                  "required": ["changed"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/resolve":
+        {
+          "post":
+            {
+              "summary": "Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags",
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties": { "ref": { "type": "string" } },
+                              "required": ["ref"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The same file already exists",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "201":
+                    {
+                      "description": "Imported",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/metadata/lookup":
+        {
+          "post":
+            {
+              "summary": "Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Updated",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/note":
+        {
+          "get":
+            {
+              "summary": "The document's free-form paper note",
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Note (empty when unset)",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "body":
+                                        {
+                                          "type": "string",
+                                          "maxLength": 100000,
+                                        },
+                                      "updatedAt": { "type": "string" },
+                                    },
+                                  "required": ["body"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "put":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "body":
+                                    { "type": "string", "maxLength": 100000 },
+                                },
+                              "required": ["body"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    {
+                                      "body":
+                                        {
+                                          "type": "string",
+                                          "maxLength": 100000,
+                                        },
+                                      "updatedAt": { "type": "string" },
+                                    },
+                                  "required": ["body"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
     },
   "components":
     {
@@ -1622,6 +2552,47 @@
                                     "height": { "type": "number" },
                                   },
                                 "required": ["x", "y", "width", "height"],
+                              },
+                          },
+                        "sentenceLink":
+                          {
+                            "type": "object",
+                            "required": ["origin", "parts"],
+                            "properties":
+                              {
+                                "origin":
+                                  {
+                                    "type": "string",
+                                    "enum": ["source", "translation"],
+                                  },
+                                "parts":
+                                  {
+                                    "type": "array",
+                                    "items":
+                                      {
+                                        "type": "object",
+                                        "required":
+                                          [
+                                            "blockId",
+                                            "sourceHash",
+                                            "sentenceIndex",
+                                            "source",
+                                            "target",
+                                          ],
+                                        "properties":
+                                          {
+                                            "blockId": { "type": "string" },
+                                            "sourceHash": { "type": "string" },
+                                            "sentenceIndex":
+                                              {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                              },
+                                            "source": { "type": "string" },
+                                            "target": { "type": "string" },
+                                          },
+                                      },
+                                  },
                               },
                           },
                         "translation":
@@ -1727,6 +2698,14 @@
                       "items":
                         { "type": "string", "minLength": 1, "maxLength": 40 },
                     },
+                  "folders":
+                    {
+                      "type": "array",
+                      "maxItems": 30,
+                      "items":
+                        { "type": "string", "minLength": 1, "maxLength": 40 },
+                      "description": "Paper-library categories; a/b is nested in a",
+                    },
                   "id": { "type": "string" },
                   "type": { "enum": ["pdf", "epub"] },
                   "title": { "type": "string" },
@@ -1738,6 +2717,31 @@
                   "percentage": { "type": "number" },
                   "progress":
                     { "$ref": "#/components/schemas/DocumentLocation" },
+                  "library": { "enum": ["books", "papers"] },
+                  "deletedAt":
+                    {
+                      "type": "string",
+                      "description": "Set while the document is in the trash",
+                    },
+                  "metadata": { "$ref": "#/components/schemas/PaperMetadata" },
+                  "readingStatus": { "enum": ["unread", "reading", "done"] },
+                  "noteCount": { "type": "number" },
+                  "highlightCount":
+                    {
+                      "type": "number",
+                      "description": "Highlights and underlines",
+                    },
+                  "openQuestionCount":
+                    {
+                      "type": "number",
+                      "description": "Questions without an answer that are not resolved",
+                    },
+                  "related":
+                    {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Documents linked as related, in both directions; may include trashed ones",
+                    },
                 },
               "required":
                 [
@@ -1746,6 +2750,7 @@
                   "classificationStatus",
                   "classificationError",
                   "tags",
+                  "folders",
                   "id",
                   "type",
                   "title",
@@ -1755,6 +2760,13 @@
                   "lastOpenedAt",
                   "favorite",
                   "percentage",
+                  "library",
+                  "metadata",
+                  "readingStatus",
+                  "noteCount",
+                  "highlightCount",
+                  "openQuestionCount",
+                  "related",
                 ],
             },
           "Annotation":
@@ -1765,13 +2777,33 @@
                   "id": { "type": "string" },
                   "documentId": { "type": "string" },
                   "kind":
-                    { "enum": ["highlight", "underline", "note", "bookmark"] },
+                    {
+                      "enum":
+                        [
+                          "highlight",
+                          "underline",
+                          "note",
+                          "question",
+                          "bookmark",
+                        ],
+                    },
                   "location":
                     { "$ref": "#/components/schemas/DocumentLocation" },
                   "quote": { "type": "string" },
                   "note": { "type": "string" },
                   "color": { "type": "string" },
                   "createdAt": { "type": "string" },
+                  "answerId":
+                    {
+                      "type": "string",
+                      "description": "Chat message that answers a question",
+                    },
+                  "resolved":
+                    {
+                      "type": "boolean",
+                      "description": "A question closed without an answer",
+                    },
+                  "tags": { "type": "array", "items": { "type": "string" } },
                 },
               "required":
                 [
@@ -2388,6 +3420,81 @@
                   "partialCalls",
                   "elapsedMs",
                 ],
+            },
+          "Creator":
+            {
+              "type": "object",
+              "description": "CSL-style name: given/family for split names, name for a single literal name",
+              "properties":
+                {
+                  "given": { "type": "string" },
+                  "family": { "type": "string" },
+                  "name": { "type": "string" },
+                },
+            },
+          "PaperMetadata":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "itemType":
+                    {
+                      "enum":
+                        [
+                          "journal",
+                          "conference",
+                          "preprint",
+                          "thesis",
+                          "book",
+                          "chapter",
+                          "report",
+                          "other",
+                        ],
+                    },
+                  "translatedTitle": { "type": "string" },
+                  "shortTitle": { "type": "string" },
+                  "creators":
+                    {
+                      "type": "array",
+                      "maxItems": 200,
+                      "items": { "$ref": "#/components/schemas/Creator" },
+                    },
+                  "affiliation": { "type": "string" },
+                  "date":
+                    {
+                      "type": "string",
+                      "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+                    },
+                  "venue": { "type": "string" },
+                  "volume": { "type": "string" },
+                  "issue": { "type": "string" },
+                  "pages": { "type": "string" },
+                  "publisher": { "type": "string" },
+                  "doi": { "type": "string" },
+                  "arxiv": { "type": "string" },
+                  "isbn": { "type": "string" },
+                  "url": { "type": "string" },
+                  "abstract": { "type": "string", "maxLength": 20000 },
+                  "language": { "type": "string" },
+                  "remark":
+                    {
+                      "type": "string",
+                      "description": "The reader's own note on the item; never looked up",
+                    },
+                  "sources":
+                    {
+                      "type": "object",
+                      "description": "Origin per field; lookups never replace manual values",
+                      "additionalProperties":
+                        { "enum": ["file", "lookup", "manual"] },
+                    },
+                  "lookedUpAt": { "type": "string" },
+                  "lookup":
+                    {
+                      "enum": ["pending", "done", "notFound", "failed"],
+                      "description": "Automatic lookup state for papers imported from files",
+                    },
+                },
             },
         },
     },

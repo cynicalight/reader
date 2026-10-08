@@ -134,9 +134,6 @@ func TestImportWithAutoTranslationDisabledDoesNotStartBackgroundAI(t *testing.T)
 	if e != nil || p.Enabled || p.Status != "paused" {
 		t.Fatalf("import processing: %+v %v", p, e)
 	}
-	if d.ClassificationStatus != "idle" {
-		t.Fatal("import queued AI classification")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	stop := s.StartProcessing(ctx)
 	defer func() { cancel(); stop() }()
@@ -198,9 +195,6 @@ func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
 		if original.Enabled || original.Status != "paused" {
 			t.Fatal("changing preference enabled an existing document")
 		}
-		if next.ClassificationStatus != "idle" {
-			t.Fatal("translation preference queued classification")
-		}
 	}
 	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":"true"}`)); w.Code != 400 {
 		t.Fatal("non-boolean preference accepted")
@@ -243,28 +237,6 @@ func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
 			if err != nil || !p.Enabled || p.Status != "queued" {
 				t.Fatalf("default did not queue translation: %+v %v", p, err)
 			}
-			if d.ClassificationStatus != "idle" {
-				t.Fatal("translation enabled classification")
-			}
 		})
-	}
-}
-
-func TestPDFTranslationControlsPreserveEPUBImportClassification(t *testing.T) {
-	s := testServer(t)
-	w := upload(t, s, "the-art-of-reading.epub", sample(t, "the-art-of-reading.epub"))
-	if w.Code != 201 {
-		t.Fatal(w.Body.String())
-	}
-	var epub Document
-	if err := json.Unmarshal(w.Body.Bytes(), &epub); err != nil {
-		t.Fatal(err)
-	}
-	if epub.ClassificationStatus != "pending" {
-		t.Fatal("PDF controls changed EPUB import classification")
-	}
-	pdf := organizationDoc(t, s)
-	if pdf.ClassificationStatus != "idle" {
-		t.Fatal("PDF import queued automatic classification")
 	}
 }

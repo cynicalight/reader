@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AnnotationQuote } from "./AnnotationQuote";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ChartColumn,
   ArrowLeft,
@@ -13,22 +21,19 @@ import {
   BookmarkPlus,
   Sparkles,
   Settings2,
-  Highlighter,
   Underline,
-  Languages,
   MessageSquare,
   X,
   StickyNote,
   Send,
   Square,
-  Trash2,
-  Download,
   Quote,
   Type,
   Sun,
   Moon,
   AlignJustify,
   Check,
+  CircleHelp,
 } from "lucide-react";
 import { api, blockImageURL } from "@reader/api";
 import {
@@ -47,6 +52,8 @@ import {
   type PDFBlock,
   type PDFBlockAction,
   type ImageAttachment,
+  type LinkPreview,
+  readerLink,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Badge } from "@reader/ui/components/badge";
@@ -94,12 +101,22 @@ import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
-import { activeAnnotation, applySavedAnnotation } from "./annotations";
+import {
+  activeAnnotation,
+  annotationContext,
+  applySavedAnnotation,
+  highlightPalette,
+} from "./annotations";
+import { ColorSwatches } from "./ColorSwatches";
 import { copyText } from "./chat/clipboard";
 import { ReaderView } from "./ReaderView";
+import { NotesPanel } from "./NotesPanel";
+import { ExportNotesDialog } from "./ExportNotesDialog";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
+import { stepTranslationSize } from "./appearance";
+import { TranslationFontControls } from "./TranslationFontControls";
 function IconButton({
   label,
   children,
@@ -199,6 +216,9 @@ export function Workspace({
   onSettings: () => void;
 }) {
   const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
+  const translationSize = theme.translationFontSize ?? 1;
+  const linkTarget = useReaderStore((s) => s.linkTarget);
+  const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
   const [pdfToolbar, setPDFToolbar] = useState<HTMLDivElement | null>(null);
@@ -211,6 +231,9 @@ export function Workspace({
     [adapter],
   );
   const [returnLocation, setReturnLocation] = useState<DocumentLocation>();
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const navigationRef = useRef(referenceNavigation);
+  navigationRef.current = referenceNavigation;
   const [referenceBusy, setReferenceBusy] = useState(false);
   const visitReference = async (target: DocumentLocation) => {
     if (!referenceNavigation || referenceNavigation.busy) return;
@@ -293,6 +316,29 @@ export function Workspace({
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteKind, setNoteKind] = useState<"note" | "question">("note");
+  const palette = highlightPalette(useReaderStore((s) => s.theme));
+  const [savedColor, setMarkColor] = useState<string>(() => {
+    try {
+      return localStorage.getItem("reader.mark-color") || "";
+    } catch {
+      return "";
+    }
+  });
+  // The last color used, while it is still in the palette.
+  const markColor = palette.some((c) => c.value === savedColor)
+    ? savedColor
+    : palette[0].value;
+  const chooseColor = (color: string) => {
+    setMarkColor(color);
+    try {
+      localStorage.setItem("reader.mark-color", color);
+    } catch {
+      /* the color only lasts for this session */
+    }
+  };
+  const [answering, setAnswering] = useState<Set<string>>(new Set());
+  const [exportingNotes, setExportingNotes] = useState(false);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(
     null,
   );
@@ -321,6 +367,7 @@ export function Workspace({
     };
   }, [setAIConfig]);
   const session = useMemo(() => new ChatSession(doc.id), [doc.id]);
+  const chat = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const sendSerial = useRef(0);
   const [sending, setSending] = useState(false);
   const [pageInput, setPageInput] = useState("");
@@ -337,6 +384,7 @@ export function Workspace({
       .then((a) => {
         if (alive) {
           setAnnotations(a);
+          setAnnotationsLoaded(true);
         }
       })
       .catch((e) => toast.error(e.message));
@@ -364,25 +412,51 @@ export function Workspace({
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
+  useEffect(() => {
+    // Follow a reader:// link once the reader and annotations are ready.
+    if (linkTarget?.id !== doc.id || !adapter || !annotationsLoaded) return;
+    useReaderStore.getState().setLinkTarget(null);
+    if (linkTarget.annotation) {
+      const target = annotations.find((a) => a.id === linkTarget.annotation);
+      if (target) {
+        void adapter.goTo(target.location).catch((e) => toast.error(e.message));
+        setRight(true);
+        setRightTab("notes");
+      } else toast.info("这条批注已不存在，已打开文档");
+    } else if (linkTarget.page && doc.type === "pdf")
+      void adapter
+        .goTo({ type: "pdf", page: linkTarget.page })
+        .catch((e) => toast.error(e.message));
+  }, [linkTarget, adapter, annotationsLoaded, annotations, doc.id, doc.type]);
   const saveLocation = (next: DocumentLocation, percent: number) => {
     setLocation(next);
+    if (navigationRef.current?.settle()) setReturnLocation(undefined);
     if (next.type === "pdf") setPageInput(String(next.page));
     scheduleProgress(doc.id, { progress: next, percentage: percent }, (e) =>
       toast.error(e.message),
     );
   };
-  const annotate = async (kind: Annotation["kind"], noteText = "") => {
-    const source = kind === "note" ? noteSelection : selection;
+  const annotate = async (
+    kind: Annotation["kind"],
+    noteText = "",
+    color = markColor,
+  ) => {
+    const written = kind === "note" || kind === "question";
+    const source = written ? noteSelection : selection;
     const target = kind === "bookmark" ? location : source?.location;
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
-    setNoteSaving(kind === "note");
+    setNoteSaving(written);
     // Start clipboard access inside the user's click, before network awaits.
     const copying =
       kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
+      const prepared =
+        source && kind !== "bookmark" && !editingAnnotation
+          ? ((await adapter?.prepareAnnotation?.(source)) ?? source)
+          : source;
       const a =
-        kind === "note" && editingAnnotation
+        written && editingAnnotation
           ? await api.updateAnnotationNote(
               doc.id,
               editingAnnotation.id,
@@ -390,10 +464,11 @@ export function Workspace({
             )
           : await api.annotate(doc.id, {
               kind,
-              location: target,
+              location:
+                kind === "bookmark" ? target : (prepared?.location ?? target),
               quote: kind === "bookmark" ? "" : source?.text || "",
               note: noteText,
-              color: "#e6b94c",
+              color,
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
       adapter?.clearSelection();
@@ -410,6 +485,7 @@ export function Workspace({
       setNoteSelection(null);
       setEditingAnnotation(null);
       setNote("");
+      return a;
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -435,6 +511,7 @@ export function Workspace({
     lastCopiedSelection.current = key;
   };
   const editAnnotationNote = (annotation: Annotation) => {
+    setNoteKind(annotation.kind === "question" ? "question" : "note");
     setEditingAnnotation(annotation);
     setNoteSelection({ text: annotation.quote, location: annotation.location });
     setNote(annotation.note);
@@ -456,6 +533,76 @@ export function Workspace({
     setRightTab("ai");
     adapter?.clearSelection();
     requestAnimationFrame(() => composeInput.current?.focus());
+  };
+  const saveAnnotationText = async (
+    annotation: Annotation,
+    patch: { note: string; tags: string[] },
+  ) => {
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, patch);
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+      return true;
+    } catch (e) {
+      toast.error((e as Error).message);
+      return false;
+    }
+  };
+  const recolor = async (annotation: Annotation, color: string) => {
+    chooseColor(color);
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        color,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const resolveQuestion = async (annotation: Annotation, resolved: boolean) => {
+    try {
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        resolved,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  /** Ask the AI and keep its saved answer linked to the question. */
+  const answerQuestion = async (annotation: Annotation) => {
+    if (answering.has(annotation.id)) return;
+    setAnswering((ids) => new Set(ids).add(annotation.id));
+    try {
+      const answerId = await send(
+        `请回答我在阅读时提出的问题：${annotation.note}\n回答时区分原文依据与你的推断。`,
+        annotation.quote
+          ? [{ text: annotation.quote, location: annotation.location }]
+          : [],
+        !annotation.quote,
+      );
+      if (!answerId) return;
+      const saved = await api.updateAnnotation(doc.id, annotation.id, {
+        answerId,
+      });
+      setAnnotations((items) => applySavedAnnotation(items, saved));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAnswering((ids) => {
+        const next = new Set(ids);
+        next.delete(annotation.id);
+        return next;
+      });
+    }
+  };
+  const showAnswer = (messageId: string) => {
+    setRight(true);
+    setRightTab("ai");
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)
+        ?.scrollIntoView({ block: "start" }),
+    );
   };
   const search = async () => {
     if (!adapter) return;
@@ -526,15 +673,23 @@ export function Workspace({
           : [];
       }
       if (controller.signal.aborted) return;
+      // The reader's marks go last so they never displace the passage itself.
+      const marks = annotationContext(annotations, 4000, palette);
+      const passage = context.slice(
+        0,
+        marks ? 21000 - marks.length - 2 : 21000,
+      );
+      context = marks ? `${passage}\n\n${marks}` : passage;
       if (!directImage) setPrompt("");
       await session.send({
         provider,
         prompt: question,
-        context: context.slice(0, 21000),
+        context,
         references,
         attachments,
       });
       if (serial !== sendSerial.current) return;
+      const answer = session.getSnapshot().pending;
       if (
         !directImage &&
         ["saved", "syncing"].includes(
@@ -548,6 +703,7 @@ export function Workspace({
           ),
         );
       }
+      return answer?.phase === "saved" ? answer.savedId : undefined;
     } catch (e) {
       if (serial === sendSerial.current && (e as Error).name !== "AbortError")
         toast.error((e as Error).message);
@@ -646,24 +802,6 @@ export function Workspace({
       ))}
     </div>
   );
-  const exportNotes = () => {
-    const text =
-      `# ${doc.title}\n\n` +
-      annotations
-        .map(
-          (a) =>
-            `## ${a.kind} · ${locationLabel(a.location)}\n\n${a.quote ? "> " + a.quote.replaceAll("\n", "\n> ") + "\n\n" : ""}${a.note}\n`,
-        )
-        .join("\n");
-    const url = URL.createObjectURL(
-      new Blob([text], { type: "text/markdown" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${doc.title.replace(/[/\\:]/g, "-")}-notes.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
   const pageNavigation = (
     <div className="page-navigation">
       <IconButton
@@ -714,8 +852,15 @@ export function Workspace({
           >
             <ArrowLeft />
           </IconButton>
+          <IconButton
+            label="目录与搜索"
+            active={left}
+            expanded={left}
+            onClick={() => setLeft(!left)}
+          >
+            <PanelLeft />
+          </IconButton>
           <span className="toolbar-divider" />
-          <BookOpen className="size-4 text-muted-foreground" />
           <span className="reader-title" title={doc.title}>
             {doc.title}
           </span>
@@ -736,14 +881,6 @@ export function Workspace({
           {doc.type === "pdf" && <div ref={setPDFToolbar} />}
           {doc.type !== "pdf" && pageNavigation}
           <span className="toolbar-divider" />
-          <IconButton
-            label="目录与搜索"
-            active={left}
-            expanded={left}
-            onClick={() => setLeft(!left)}
-          >
-            <PanelLeft />
-          </IconButton>
           <IconButton
             label="添加书签"
             onClick={() => void annotate("bookmark")}
@@ -767,12 +904,7 @@ export function Workspace({
                       key={mode}
                       size="sm"
                       variant={theme.mode === mode ? "default" : "outline"}
-                      onClick={() =>
-                        setTheme({
-                          mode,
-                          appearance: mode === "sepia" ? "light" : mode,
-                        })
-                      }
+                      onClick={() => setTheme({ mode, appearance: mode })}
                     >
                       {["浅色", "纸张", "深色"][i]}
                     </Button>
@@ -864,24 +996,64 @@ export function Workspace({
                     </div>
                   </>
                 ) : (
-                  <div className="flex gap-2">
-                    {(["width", 1, 1.25, 1.5] as const).map((zoom) => (
+                  <>
+                    <div className="flex gap-2">
+                      {(["width", 1, 1.25, 1.5] as const).map((zoom) => (
+                        <Button
+                          key={zoom}
+                          size="sm"
+                          variant={theme.zoom === zoom ? "default" : "outline"}
+                          onClick={() => setTheme({ zoom })}
+                        >
+                          {zoom === "width" ? "适宽" : `${zoom * 100}%`}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="setting-row">
+                      <span>译文字号</span>
                       <Button
-                        key={zoom}
-                        size="sm"
-                        variant={theme.zoom === zoom ? "default" : "outline"}
-                        onClick={() => setTheme({ zoom })}
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label="减小译文字号"
+                        onClick={() =>
+                          setTheme({
+                            translationFontSize: stepTranslationSize(
+                              translationSize,
+                              -1,
+                            ),
+                          })
+                        }
                       >
-                        {zoom === "width" ? "适宽" : `${zoom * 100}%`}
+                        −
                       </Button>
-                    ))}
-                  </div>
+                      <span>{Math.round(translationSize * 100)}%</span>
+                      <Button
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label="增大译文字号"
+                        onClick={() =>
+                          setTheme({
+                            translationFontSize: stepTranslationSize(
+                              translationSize,
+                              1,
+                            ),
+                          })
+                        }
+                      >
+                        +
+                      </Button>
+                    </div>
+                    <TranslationFontControls
+                      theme={theme}
+                      setTheme={setTheme}
+                    />
+                  </>
                 )}
               </div>
             </PopoverContent>
           </Popover>
           <IconButton
-            label="AI 与笔记"
+            label="AI 与批注"
             active={right}
             expanded={right}
             onClick={() => setRight(!right)}
@@ -1016,6 +1188,11 @@ export function Workspace({
                     location: saveLocation,
                     selection: selectText,
                     annotation: selectAnnotation,
+                    linkPreview: setLinkPreview,
+                    internalLink: (origin) => {
+                      navigationRef.current?.remember(origin);
+                      setReturnLocation(navigationRef.current?.origin);
+                    },
                     blockAction,
                   }}
                 />
@@ -1030,20 +1207,20 @@ export function Workspace({
                 onDelete={(id) => void removeAnnotation(id)}
                 onNote={editAnnotationNote}
                 onAskAI={askAnnotationAI}
+                onAnswer={(annotation) => void answerQuestion(annotation)}
+                onColor={(annotation, color) => void recolor(annotation, color)}
               />
             )}
 
             {selection?.anchor && (
               <SelectionToolbar anchor={selection.anchor} pane={readingPane}>
-                <Badge variant="secondary">
-                  已选 {selection.text.length} 字
-                </Badge>
-                <IconButton
-                  label="高亮"
-                  onClick={() => void annotate("highlight")}
-                >
-                  <Highlighter />
-                </IconButton>
+                <ColorSwatches
+                  action="高亮"
+                  onPick={(color) => {
+                    chooseColor(color);
+                    void annotate("highlight", "", color);
+                  }}
+                />
                 <IconButton
                   label="下划线"
                   onClick={() => void annotate("underline")}
@@ -1051,8 +1228,9 @@ export function Workspace({
                   <Underline />
                 </IconButton>
                 <IconButton
-                  label="记笔记"
+                  label="添加批注"
                   onClick={() => {
+                    setNoteKind("note");
                     setEditingAnnotation(null);
                     setNoteSelection(selection);
                     setNote("");
@@ -1063,12 +1241,17 @@ export function Workspace({
                   <StickyNote />
                 </IconButton>
                 <IconButton
-                  label="翻译选区"
-                  onClick={() =>
-                    void send("请忠实地将这段文字翻译成简体中文。", [selection])
-                  }
+                  label="提问"
+                  onClick={() => {
+                    setNoteKind("question");
+                    setEditingAnnotation(null);
+                    setNoteSelection(selection);
+                    setNote("");
+                    setNoteOpen(true);
+                    adapter?.clearSelection();
+                  }}
                 >
-                  <Languages />
+                  <CircleHelp />
                 </IconButton>
                 <IconButton
                   label="问 AI"
@@ -1083,15 +1266,6 @@ export function Workspace({
                 </IconButton>
                 <IconButton label="引用到对话" onClick={addQuote}>
                   <Quote />
-                </IconButton>
-                <IconButton
-                  label="取消选区"
-                  onClick={() => {
-                    adapter?.clearSelection();
-                    setSelection(null);
-                  }}
-                >
-                  <X />
                 </IconButton>
               </SelectionToolbar>
             )}
@@ -1124,7 +1298,7 @@ export function Workspace({
                 </TabsTrigger>
                 <TabsTrigger value="notes">
                   <StickyNote className="size-3.5" />
-                  笔记<small>{annotations.length || ""}</small>
+                  批注<small>{annotations.length || ""}</small>
                 </TabsTrigger>
                 <Button
                   variant="ghost"
@@ -1277,61 +1451,57 @@ export function Workspace({
                 </div>
               </TabsContent>
               <TabsContent value="notes" className="notes-panel">
-                <div className="notes-heading">
-                  <span>{annotations.length} 条记录</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!annotations.length}
-                    onClick={exportNotes}
-                  >
-                    <Download />
-                    导出
-                  </Button>
-                </div>
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="notes-list">
-                    {!annotations.length && (
-                      <div className="notes-empty">
-                        <StickyNote />
-                        <p>暂无笔记</p>
-                        <small>选中文字添加高亮、下划线或笔记。</small>
-                      </div>
-                    )}
-                    {annotations.map((a) => (
-                      <article className="note-card" key={a.id}>
-                        <div>
-                          <Badge variant="outline">
-                            {annotationLabels[a.kind]}
-                          </Badge>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label="删除记录"
-                            disabled={deleting.has(a.id)}
-                            onClick={() => void removeAnnotation(a.id)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          className="note-quote"
-                          onClick={() => move(a.location)}
-                        >
-                          {a.quote || locationLabel(a.location)}
-                        </Button>
-                        {a.note && <p>{a.note}</p>}
-                      </article>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <NotesPanel
+                  document={doc}
+                  annotations={annotations}
+                  messages={chat.messages}
+                  deleting={deleting}
+                  answering={answering}
+                  onGo={(a) => move(a.location)}
+                  onDelete={(id) => void removeAnnotation(id)}
+                  onSave={saveAnnotationText}
+                  onAnswer={(a) => void answerQuestion(a)}
+                  onResolve={(a, resolved) => void resolveQuestion(a, resolved)}
+                  onShowAnswer={showAnswer}
+                  onExport={() => setExportingNotes(true)}
+                />
               </TabsContent>
             </Tabs>
           </aside>
         </ResizablePanel>
       </ResizablePanelGroup>
 
+      <Popover
+        open={!!linkPreview}
+        onOpenChange={(open) => !open && setLinkPreview(null)}
+      >
+        {linkPreview && (
+          <PopoverContent
+            anchor={{
+              getBoundingClientRect: () =>
+                DOMRect.fromRect({
+                  x: linkPreview.anchor.left,
+                  y: linkPreview.anchor.top,
+                  width: linkPreview.anchor.width,
+                  height: linkPreview.anchor.height,
+                }),
+            }}
+            side="bottom"
+            initialFocus={false}
+            finalFocus={false}
+            className="link-preview"
+          >
+            <img
+              src={linkPreview.image}
+              alt={`第 ${linkPreview.page} 页链接目标`}
+              style={{ aspectRatio: linkPreview.ratio }}
+            />
+            <span className="text-xs text-muted-foreground">
+              第 {linkPreview.page} 页 · 点击跳转
+            </span>
+          </PopoverContent>
+        )}
+      </Popover>
       {previewImage && (
         <ImagePreview
           key={previewImage.id}
@@ -1355,32 +1525,84 @@ export function Workspace({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingAnnotation?.note.trim() ? "编辑笔记" : "添加笔记"}
+              {noteKind === "question"
+                ? editingAnnotation
+                  ? "编辑问题"
+                  : "提问"
+                : editingAnnotation?.note.trim()
+                  ? "编辑批注"
+                  : "添加批注"}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              为当前选区添加笔记
+              {noteKind === "question"
+                ? "就当前选区提问"
+                : "为当前选区添加批注"}
             </DialogDescription>
           </DialogHeader>
           <blockquote className="note-preview">
-            {noteSelection?.text}
+            {noteSelection && (
+              <AnnotationQuote
+                quote={noteSelection.text}
+                location={noteSelection.location}
+              />
+            )}
           </blockquote>
           <Textarea
             autoFocus
-            placeholder="笔记内容…"
+            placeholder={
+              noteKind === "question" ? "想弄清楚什么？" : "批注内容…"
+            }
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-          <Button
-            onClick={() => void annotate("note", note)}
-            disabled={
-              noteSaving || (!note.trim() && !editingAnnotation?.note.trim())
-            }
-          >
-            <Check />
-            保存笔记
-          </Button>
+          {noteKind === "question" ? (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => void annotate("question", note)}
+                disabled={noteSaving || !note.trim()}
+              >
+                <Check />
+                保存问题
+              </Button>
+              {!editingAnnotation && (
+                <Button
+                  className="flex-1"
+                  disabled={noteSaving || !note.trim() || !provider}
+                  onClick={() =>
+                    void annotate("question", note).then((saved) => {
+                      if (saved) void answerQuestion(saved);
+                    })
+                  }
+                >
+                  <Sparkles />
+                  保存并让 AI 回答
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Button
+              onClick={() => void annotate("note", note)}
+              disabled={
+                noteSaving || (!note.trim() && !editingAnnotation?.note.trim())
+              }
+            >
+              <Check />
+              保存批注
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
+      {exportingNotes && (
+        <ExportNotesDialog
+          document={doc}
+          annotations={annotations}
+          messages={chat.messages}
+          link={(a) => readerLink({ id: doc.id, annotation: a.id })}
+          onClose={() => setExportingNotes(false)}
+        />
+      )}
       <ProcessingUsageDialog
         document={usageOpen ? doc : null}
         onClose={() => setUsageOpen(false)}

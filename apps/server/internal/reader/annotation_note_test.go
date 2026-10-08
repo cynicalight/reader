@@ -52,3 +52,44 @@ func TestEditAnnotationNote(t *testing.T) {
 		t.Fatalf("deleted annotation revived: %d", w.Code)
 	}
 }
+
+func TestTagAnnotations(t *testing.T) {
+	s := testServer(t)
+	var doc Document
+	json.Unmarshal(upload(t, s, "reading-notes.pdf", sample(t, "reading-notes.pdf")).Body.Bytes(), &doc)
+	a := pdfUnderline("tagged", []annotationRect{{0.1, 0.2, 0.2, 0.02}}, "Passage")
+	a.DocumentID = doc.ID
+	if _, err := s.Store.saveAnnotation(a); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/documents/" + doc.ID + "/annotations/" + a.ID
+	patch := func(body string) Annotation {
+		t.Helper()
+		w := request(t, s, "PATCH", path, strings.NewReader(body))
+		if w.Code != 200 {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body.String())
+		}
+		var updated Annotation
+		json.Unmarshal(w.Body.Bytes(), &updated)
+		return updated
+	}
+	if got := patch(`{"tags":[" method ","Method","proof"]}`); strings.Join(got.Tags, ",") != "method,proof" {
+		t.Fatalf("tags: %v", got.Tags)
+	}
+	// Other edits keep the tags.
+	if got := patch(`{"note":"n","color":"#5b9fe8"}`); strings.Join(got.Tags, ",") != "method,proof" || got.Note != "n" {
+		t.Fatalf("kept: %+v", got)
+	}
+	if got := patch(`{"tags":[]}`); len(got.Tags) != 0 {
+		t.Fatalf("cleared: %v", got.Tags)
+	}
+	for _, bad := range []string{`{"tags":"x"}`, `{"tags":["a","b","c","d","e","f","g","h","i","j","k"]}`, `{"tags":[""]}`} {
+		if w := request(t, s, "PATCH", path, strings.NewReader(bad)); w.Code != 400 {
+			t.Fatalf("%s: %d", bad, w.Code)
+		}
+	}
+	list := request(t, s, "GET", "/api/documents/"+doc.ID+"/annotations", nil)
+	if !strings.Contains(list.Body.String(), `"note":"n"`) {
+		t.Fatal(list.Body.String())
+	}
+}

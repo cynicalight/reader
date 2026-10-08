@@ -31,6 +31,7 @@ export function hitBlock(
 // Pointer observation leaves the PDF text and links as the event targets.
 export class PDFBlockOverlay {
   private blocks: PDFBlock[] = [];
+  private fades = new Map<HTMLElement, Animation>();
   private overlay: HTMLDivElement;
   private root: Root;
   private active?: PDFBlock;
@@ -60,7 +61,7 @@ export class PDFBlockOverlay {
       if (!this.focusId) this.focus.remove();
     });
     host.addEventListener("pointermove", this.move);
-    host.addEventListener("pointerleave", this.clear);
+    host.addEventListener("pointerleave", this.leave);
     host.addEventListener("pointerdown", this.press);
     host.addEventListener("click", this.click, true);
     host.addEventListener("pointerup", this.move);
@@ -68,18 +69,59 @@ export class PDFBlockOverlay {
   }
   setBlocks(blocks: PDFBlock[]) {
     this.blocks = blocks.filter((b) => !isPDFPageDecoration(b));
-    this.clear();
+    // Refreshing the same parsed blocks must not dismiss a stationary hover.
+    if (this.active) {
+      const updated = this.blocks.find((b) => b.id === this.active?.id);
+      if (!updated || JSON.stringify(updated) !== JSON.stringify(this.active))
+        this.clear();
+    }
     this.repaint();
   }
-  clear = () => {
+  private hide(element: HTMLElement, immediate = false) {
+    if (!element.parentElement) return;
+    if (
+      immediate ||
+      !element.animate ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      this.fades.get(element)?.cancel();
+      this.fades.delete(element);
+      element.remove();
+      return;
+    }
+    if (this.fades.has(element)) return;
+    element.inert = true;
+    const animation = element.animate(
+      [{ opacity: getComputedStyle(element).opacity }, { opacity: 0 }],
+      { duration: 160, easing: "ease-out", fill: "forwards" },
+    );
+    this.fades.set(element, animation);
+    void animation.finished
+      .then(() => {
+        if (this.fades.get(element) !== animation) return;
+        element.remove();
+        this.fades.delete(element);
+        animation.cancel();
+      })
+      .catch(() => {});
+  }
+  private show(element: HTMLElement, page: HTMLElement) {
+    this.fades.get(element)?.cancel();
+    this.fades.delete(element);
+    element.inert = false;
+    if (element.parentElement !== page) page.append(element);
+  }
+  private leave = () => this.dismiss(false);
+  clear = () => this.dismiss(true);
+  private dismiss(immediate: boolean) {
     this.pressed = undefined;
-    this.overlay.remove();
+    this.hide(this.overlay, immediate);
     if (this.hovered) {
       this.hovered = undefined;
       this.onHover(null);
     }
     this.paintReadingFocus();
-  };
+  }
   private press = (event: PointerEvent) => {
     this.pressed = undefined;
     if (
@@ -140,7 +182,7 @@ export class PDFBlockOverlay {
       ".page[data-page-number]",
     );
     if (!page || !this.host.contains(page)) {
-      this.clear();
+      this.leave();
       return;
     }
     const rect = page.getBoundingClientRect();
@@ -151,7 +193,7 @@ export class PDFBlockOverlay {
       (event.clientY - rect.top) / rect.height,
     );
     if (!block) {
-      this.clear();
+      this.leave();
       return;
     }
     if (this.active !== block) {
@@ -170,7 +212,7 @@ export class PDFBlockOverlay {
     });
     this.overlay.dataset.blockId = block.id;
     this.overlay.dataset.blockKind = block.image ? "image" : "text";
-    if (this.overlay.parentElement !== page) page.append(this.overlay);
+    this.show(this.overlay, page);
     if (this.hovered !== block.id) {
       this.hovered = block.id;
       this.onHover(block);
@@ -216,9 +258,11 @@ export class PDFBlockOverlay {
   }
   repaint() {
     this.paintReadingFocus();
-    this.linked.remove();
     const block = this.blocks.find((b) => b.id === this.linkedId);
-    if (!block) return;
+    if (!block) {
+      this.hide(this.linked);
+      return;
+    }
     const page = this.host.querySelector<HTMLElement>(
       `.page[data-page-number="${block.page}"]`,
     );
@@ -232,16 +276,18 @@ export class PDFBlockOverlay {
     });
     this.linked.dataset.blockId = block.id;
     this.linked.dataset.blockKind = block.image ? "image" : "text";
-    page.append(this.linked);
+    this.show(this.linked, page);
   }
   destroy() {
     this.focusId = null;
     this.focus.remove();
     this.clear();
-    this.linked.remove();
+    this.hide(this.linked, true);
+    this.fades.forEach((a) => a.cancel());
+    this.fades.clear();
     this.root.unmount();
     this.host.removeEventListener("pointermove", this.move);
-    this.host.removeEventListener("pointerleave", this.clear);
+    this.host.removeEventListener("pointerleave", this.leave);
     this.host.removeEventListener("pointerdown", this.press);
     this.host.removeEventListener("click", this.click, true);
     this.host.removeEventListener("pointerup", this.move);

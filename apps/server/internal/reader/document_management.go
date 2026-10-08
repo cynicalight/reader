@@ -39,8 +39,12 @@ func (s *Server) beginDocumentTask(parent context.Context, id string) (context.C
 	if s.deletingDocuments[id] {
 		return nil, nil, errors.New("document is being deleted")
 	}
-	if _, err := s.Store.Document(id); err != nil {
+	d, err := s.Store.Document(id)
+	if err != nil {
 		return nil, nil, err
+	}
+	if d.DeletedAt != "" {
+		return nil, nil, errors.New("document is in the trash")
 	}
 	if s.documentTasks == nil {
 		s.documentTasks = make(map[string]map[*documentTask]struct{})
@@ -67,23 +71,29 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 	// IDs are content hashes: serialize cleanup with reimporting the same file.
 	s.importMu.Lock()
 	defer s.importMu.Unlock()
-	id := r.PathValue("id")
+	if status, message := s.purgeDocument(r.Context(), r.PathValue("id")); message != "" {
+		fail(w, status, message)
+		return
+	}
+	w.WriteHeader(204)
+}
+
+// purgeDocument permanently removes a document and its library-owned files.
+// The caller holds importMu. It returns a status and message on failure.
+func (s *Server) purgeDocument(ctx context.Context, id string) (int, string) {
 	s.documentMu.Lock()
 	if s.deletingDocuments[id] {
 		s.documentMu.Unlock()
-		fail(w, 409, "文档正在删除")
-		return
+		return 409, "文档正在删除"
 	}
 	d, err := s.Store.Document(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		s.documentMu.Unlock()
-		w.WriteHeader(204)
-		return
+		return 204, ""
 	}
 	if err != nil {
 		s.documentMu.Unlock()
-		fail(w, 500, "无法读取文档")
-		return
+		return 500, "无法读取文档"
 	}
 	if s.deletingDocuments == nil {
 		s.deletingDocuments = make(map[string]bool)
@@ -99,16 +109,14 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 	for _, task := range tasks {
 		select {
 		case <-task.done:
-		case <-r.Context().Done():
-			fail(w, 408, "等待后台任务停止超时，请重试")
-			return
+		case <-ctx.Done():
+			return 408, "等待后台任务停止超时，请重试"
 		}
 	}
 	s.codexChat.deleteDocument(id)
 	tx, err := s.Store.DB.Begin()
 	if err != nil {
-		fail(w, 500, "无法删除文档")
-		return
+		return 500, "无法删除文档"
 	}
 	defer tx.Rollback()
 	// FTS virtual tables have no foreign-key cascade.
@@ -119,8 +127,7 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 		err = tx.Commit()
 	}
 	if err != nil {
-		fail(w, 500, "删除失败，文档已保留")
-		return
+		return 500, "删除失败，文档已保留"
 	}
 	// Only library-owned copies are removed; the imported source is untouched.
 	for _, path := range []string{s.Store.File(d), filepath.Join(s.Store.Root, "cache", id)} {
@@ -128,5 +135,5 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 			log.Printf("document %s deleted; cleanup failed: %v", id, err)
 		}
 	}
-	w.WriteHeader(204)
+	return 204, ""
 }

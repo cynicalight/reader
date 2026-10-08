@@ -1,6 +1,7 @@
 package reader
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"reader.local/server/internal/scholar"
 )
 
 type Server struct {
@@ -36,6 +39,8 @@ type Server struct {
 	blockedProcessing      map[string]bool
 	modelMu                sync.Mutex
 	modelCache             map[string]modelCatalogEntry
+	scholarMu              sync.Mutex
+	scholar                *scholar.Client
 }
 
 func NewServer(s *Store, token, web string) *Server { return &Server{Store: s, Token: token, Web: web} }
@@ -74,6 +79,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
+	mux.HandleFunc("POST /api/documents/resolve", s.resolveDocument)
+	mux.HandleFunc("GET /api/documents/{id}/note", s.documentNote)
+	mux.HandleFunc("PUT /api/documents/{id}/note", s.saveDocumentNote)
+	mux.HandleFunc("POST /api/documents/{id}/metadata/lookup", s.lookupMetadata)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/assistance", s.getAssistance)
@@ -84,6 +93,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
 	mux.HandleFunc("PATCH /api/documents/{id}", s.updateDocument)
 	mux.HandleFunc("DELETE /api/documents/{id}", s.deleteDocument)
+	mux.HandleFunc("POST /api/documents/{id}/trash", s.trashDocument)
+	mux.HandleFunc("POST /api/documents/{id}/merge", s.mergeDocuments)
+	mux.HandleFunc("PUT /api/documents/{id}/related/{other}", s.relateDocuments)
+	mux.HandleFunc("DELETE /api/documents/{id}/related/{other}", s.unrelateDocuments)
+	mux.HandleFunc("POST /api/documents/{id}/restore", s.restoreDocument)
+	mux.HandleFunc("GET /api/trash", s.trashList)
+	mux.HandleFunc("DELETE /api/trash", s.emptyTrash)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
 	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
@@ -106,6 +122,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai/models", s.agentModels)
 	mux.HandleFunc("PUT /api/ai/config", s.putAIConfig)
 	mux.HandleFunc("POST /api/ai/test/{provider}", s.testConnection)
+	mux.HandleFunc("POST /api/libraries/{library}/tags", s.changeLibraryLabels("tags"))
+	mux.HandleFunc("POST /api/libraries/{library}/folders", s.changeLibraryLabels("folders"))
+	mux.HandleFunc("GET /api/preferences/{key}", s.preferences)
+	mux.HandleFunc("PUT /api/preferences/{key}", s.savePreferences)
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {
 		var value string
 		err := s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
@@ -168,14 +188,20 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
-	s.importMu.Lock()
-	defer s.importMu.Unlock()
 	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		fail(w, 400, "文件超过 100 MB 或上传无效")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
+	library := r.FormValue("library")
+	if library == "" {
+		library = "books"
+	}
+	if !validLibrary(library) {
+		fail(w, 400, "未知书库")
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		fail(w, 400, "请选择 EPUB 或 PDF")
@@ -194,9 +220,7 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(temp.Name())
 	defer temp.Close()
-	hash := sha256.New()
-	size, err := io.Copy(io.MultiWriter(temp, hash), file)
-	if err != nil {
+	if _, err = io.Copy(temp, file); err != nil {
 		fail(w, 400, "上传未完成")
 		return
 	}
@@ -204,20 +228,76 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "保存失败")
 		return
 	}
-	docID := hex.EncodeToString(hash.Sum(nil))[:32]
-	if d, e := s.Store.Document(docID); e == nil {
-		if err = s.Store.enqueuePDF(d); err != nil {
-			fail(w, 500, "无法创建解析任务")
-			return
-		}
-		respond(w, 200, d)
+	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library)
+	if err != nil {
+		fail(w, status, err.Error())
 		return
 	}
-	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename)), Size: size, CreatedAt: now(), LastOpenedAt: now()}
-	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags = "article", "default", "idle", []string{}
+	respond(w, status, d)
+}
+
+type importError struct {
+	status  int
+	message string
+}
+
+func (e importError) Error() string { return e.message }
+
+// importFile moves a completed temporary file into the library. An identical
+// file returns the existing document, whichever library holds it.
+func (s *Server) importFile(ctx context.Context, temp, filename, library string) (Document, int, error) {
+	s.importMu.Lock()
+	defer s.importMu.Unlock()
+	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	failure := func(status int, message string) (Document, int, error) {
+		return Document{}, status, importError{status, message}
+	}
+	f, err := os.Open(temp)
+	if err != nil {
+		return failure(500, "无法验证文件")
+	}
+	hash := sha256.New()
+	size, err := io.Copy(hash, f)
+	f.Close()
+	if err != nil {
+		return failure(500, "无法验证文件")
+	}
+	docID := hex.EncodeToString(hash.Sum(nil))[:32]
+	if d, e := s.Store.Document(docID); e == nil {
+		// Importing a file again brings it back from the trash.
+		if d, err = s.restore(docID); err != nil {
+			return failure(500, "无法恢复回收站中的文档")
+		}
+		if err = s.Store.enqueuePDF(d); err != nil {
+			return failure(500, "无法创建解析任务")
+		}
+		return d, 200, nil
+	}
+	if kind == "pdf" {
+		f, e := os.Open(temp)
+		if e != nil {
+			return failure(500, "无法验证文件")
+		}
+		head := make([]byte, 5)
+		_, e = io.ReadFull(f, head)
+		f.Close()
+		if e != nil || string(head) != "%PDF-" {
+			return failure(400, "文件不是有效的 PDF")
+		}
+	}
+	if library == "papers" {
+		if reason := paperLimit(kind, size, temp); reason != "" {
+			return failure(400, reason)
+		}
+	}
+	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}
+	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags, d.Folders = "article", "default", "pending", []string{}, []string{}
 	if kind == "epub" {
 		d.Category = "book"
-		d.ClassificationStatus = "pending"
+	}
+	if library == "papers" {
+		// The library choice is the user's classification; no AI guess is needed.
+		d.Category, d.CategorySource, d.ClassificationStatus = "paper", "manual", "done"
 	}
 	var texts map[string]string
 	cache := filepath.Join(s.Store.Root, "cache", docID)
@@ -227,25 +307,10 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 			_ = os.RemoveAll(cache)
 		}
 	}()
-	if kind == "pdf" {
-		f, e := os.Open(temp.Name())
-		if e != nil {
-			fail(w, 500, "无法验证文件")
-			return
-		}
-		head := make([]byte, 5)
-		_, e = io.ReadFull(f, head)
-		f.Close()
-		if e != nil || string(head) != "%PDF-" {
-			fail(w, 400, "文件不是有效的 PDF")
-			return
-		}
-	}
 	if kind == "epub" {
-		m, t, e := prepareEPUB(r.Context(), temp.Name(), cache)
+		m, t, e := prepareEPUB(ctx, temp, cache)
 		if e != nil {
-			fail(w, 400, "EPUB 无法导入："+e.Error())
-			return
+			return failure(400, "EPUB 无法导入："+e.Error())
 		}
 		texts = t
 		if metadata, ok := m["metadata"].(map[string]any); ok {
@@ -266,18 +331,21 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	dest := s.Store.File(d)
-	if err = os.Rename(temp.Name(), dest); err != nil {
-		fail(w, 500, "无法保存原文件")
-		return
+	if err = os.Rename(temp, dest); err != nil {
+		return failure(500, "无法保存原文件")
 	}
 	tx, err := s.Store.DB.Begin()
 	if err != nil {
 		_ = os.Remove(dest)
-		fail(w, 500, "无法写入书库")
-		return
+		return failure(500, "无法写入书库")
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,classification_status) VALUES(?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.ClassificationStatus)
+	metadata := "{}"
+	if library == "papers" {
+		// Papers imported from files look up their metadata once parsed.
+		metadata = `{"lookup":"pending"}`
+	}
+	_, err = tx.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,category,category_source,classification_status,library,metadata) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", d.ID, d.Type, d.Title, d.Author, d.Size, d.CreatedAt, d.LastOpenedAt, d.Category, d.CategorySource, d.ClassificationStatus, d.Library, metadata)
 	if err == nil {
 		for href, text := range texts {
 			_, err = tx.Exec("INSERT INTO search_index(document_id,href,content) VALUES(?,?,?)", d.ID, href, text)
@@ -298,11 +366,13 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		_ = os.Remove(dest)
-		fail(w, 500, "书库保存失败")
-		return
+		return failure(500, "书库保存失败")
 	}
 	success = true
-	respond(w, 201, d)
+	if saved, e := s.Store.Document(d.ID); e == nil {
+		d = saved
+	}
+	return d, 201, nil
 }
 func validLocation(data json.RawMessage, kind string) bool {
 	var l struct {
@@ -327,18 +397,22 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var v struct {
-		Title      json.RawMessage `json:"title"`
-		Author     json.RawMessage `json:"author"`
-		Category   json.RawMessage `json:"category"`
-		Tags       json.RawMessage `json:"tags"`
-		Favorite   *bool           `json:"favorite"`
-		Progress   json.RawMessage `json:"progress"`
-		Percentage *float64        `json:"percentage"`
+		Title      json.RawMessage            `json:"title"`
+		Author     json.RawMessage            `json:"author"`
+		Category   json.RawMessage            `json:"category"`
+		Tags       json.RawMessage            `json:"tags"`
+		Folders    json.RawMessage            `json:"folders"`
+		Favorite   *bool                      `json:"favorite"`
+		Progress   json.RawMessage            `json:"progress"`
+		Percentage *float64                   `json:"percentage"`
+		Library    *string                    `json:"library"`
+		Metadata   map[string]json.RawMessage `json:"metadata"`
+		Status     *string                    `json:"readingStatus"`
 	}
 	if !decode(w, r, &v) {
 		return
 	}
-	var title, author, category, tags any
+	var title, author, category, tags, folders, library, metadata, status any
 	if v.Title != nil {
 		title, err = metadataText(v.Title, 300, false)
 		if err != nil {
@@ -352,6 +426,34 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "作者最多 200 个字符，不能包含控制字符")
 			return
 		}
+	}
+	if v.Metadata != nil || v.Title != nil {
+		m := d.Metadata
+		if err = m.ApplyManual(v.Metadata); err != nil {
+			fail(w, 400, err.Error())
+			return
+		}
+		if v.Title != nil {
+			if m.Sources == nil {
+				m.Sources = map[string]string{}
+			}
+			m.Sources["title"] = "manual"
+		}
+		if _, ok := v.Metadata["creators"]; ok && v.Author == nil {
+			author = CreatorNames(m.Creators)
+		}
+		b, _ := json.Marshal(m)
+		metadata = string(b)
+	}
+	if v.Status != nil {
+		if !validReadingStatus(*v.Status) {
+			fail(w, 400, "阅读状态须为未读、在读或已读")
+			return
+		}
+		status = *v.Status
+	} else if v.Percentage != nil && *v.Percentage > 0 && d.ReadingStatus == "unread" {
+		// Reading starts on the first progress; finishing stays a user decision.
+		status = "reading"
 	}
 	if v.Category != nil {
 		var c string
@@ -369,6 +471,38 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		}
 		b, _ := json.Marshal(normalized)
 		tags = string(b)
+	}
+	if v.Folders != nil {
+		normalized, e := normalizeTags(v.Folders)
+		if e != nil {
+			fail(w, 400, "分类必须为数组，最多 30 个，每个 1–40 个字符")
+			return
+		}
+		b, _ := json.Marshal(normalized)
+		folders = string(b)
+	}
+	if v.Library != nil {
+		if !validLibrary(*v.Library) {
+			fail(w, 400, "未知书库")
+			return
+		}
+		if *v.Library == "papers" && d.Library != "papers" {
+			if reason := paperLimit(d.Type, d.Size, s.Store.File(d)); reason != "" {
+				fail(w, 400, reason)
+				return
+			}
+			// Moving into the paper library is an explicit classification.
+			if category == nil {
+				category = "paper"
+			}
+			if metadata == nil && d.Metadata.Lookup == "" {
+				m := d.Metadata
+				m.Lookup = "pending"
+				b, _ := json.Marshal(m)
+				metadata = string(b)
+			}
+		}
+		library = *v.Library
 	}
 	if v.Progress != nil {
 		if !validLocation(v.Progress, d.Type) {
@@ -389,14 +523,14 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	var openedAt any
 	// Organization and favorites must not move a document into recent reading.
-	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Title == nil && v.Author == nil) {
+	if v.Progress != nil || v.Percentage != nil || (v.Favorite == nil && v.Category == nil && v.Tags == nil && v.Folders == nil && v.Title == nil && v.Author == nil && v.Library == nil && v.Metadata == nil && v.Status == nil) {
 		openedAt = now()
 	}
 	var progress any
 	if v.Progress != nil {
 		progress = string(v.Progress)
 	}
-	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, category, category, category, d.ID)
+	_, err = s.Store.DB.Exec("UPDATE documents SET title=COALESCE(?,title),author=COALESCE(?,author),favorite=COALESCE(?,favorite),progress=COALESCE(?,progress),percentage=COALESCE(?,percentage),last_opened_at=COALESCE(?,last_opened_at),category=COALESCE(?,category),tags=COALESCE(?,tags),folders=COALESCE(?,folders),library=COALESCE(?,library),metadata=COALESCE(?,metadata),reading_status=COALESCE(?,reading_status),category_source=CASE WHEN ? IS NOT NULL THEN 'manual' ELSE category_source END,classification_status=CASE WHEN ? IS NOT NULL THEN 'done' ELSE classification_status END,classification_error=CASE WHEN ? IS NOT NULL THEN '' ELSE classification_error END WHERE id=?", title, author, v.Favorite, progress, v.Percentage, openedAt, category, tags, folders, library, metadata, status, category, category, category, d.ID)
 	if err != nil {
 		fail(w, 500, "保存失败")
 		return
@@ -436,13 +570,14 @@ func (s *Server) saveAnnotation(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &a) {
 		return
 	}
-	if !validLocation(a.Location, d.Type) || (a.Kind != "highlight" && a.Kind != "underline" && a.Kind != "note" && a.Kind != "bookmark") {
+	if !validLocation(a.Location, d.Type) || (a.Kind != "highlight" && a.Kind != "underline" && a.Kind != "note" && a.Kind != "question" && a.Kind != "bookmark") {
 		fail(w, 400, "批注类型或位置无效")
 		return
 	}
 	a.ID = id()
 	a.DocumentID = d.ID
 	a.CreatedAt = now()
+	a.AnswerID, a.Resolved = "", false
 	result, err := s.Store.saveAnnotation(a)
 	if err != nil {
 		fail(w, 500, "批注保存失败")

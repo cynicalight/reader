@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import type { ReaderTheme } from "@reader/core";
+import { defaultTheme, type ReaderTheme } from "@reader/core";
 const query = "(prefers-color-scheme: dark)";
 function subscribe(callback: () => void) {
   const media = window.matchMedia(query);
@@ -18,7 +18,8 @@ export function resolveTheme(
         : "light"
       : appearance === "dark"
         ? "dark"
-        : theme.mode === "sepia"
+        : // Older settings kept paper as light appearance plus a sepia mode.
+          appearance === "sepia" || theme.mode === "sepia"
           ? "sepia"
           : "light";
   return { ...theme, mode };
@@ -31,3 +32,32 @@ export function useResolvedTheme(theme: ReaderTheme) {
   );
   return useMemo(() => resolveTheme(theme, dark), [theme, dark]);
 }
+
+/** Translated text size, 80–160% in 5% steps. */
+export function stepTranslationSize(size: number, by: -1 | 1) {
+  return Math.min(
+    1.6,
+    Math.max(0.8, Math.round((size + by * 0.05) * 100) / 100),
+  );
+}
+
+const serifStack =
+  '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", ui-serif, serif';
+
+/** CSS font-family for translated text; installed fonts fall back to sans. */
+export function translationFont(
+  family = defaultTheme.translationFontFamily ?? "serif",
+) {
+  if (family === "sans-serif") return "inherit";
+  if (family === "serif") return serifStack;
+  return `"${family.replace(/["\\]/g, "")}", system-ui, sans-serif`;
+}
+
+export const translationFontLabel = (
+  family = defaultTheme.translationFontFamily ?? "serif",
+) =>
+  family === "sans-serif"
+    ? "黑体 / 无衬线"
+    : family === "serif"
+      ? "宋体 / 衬线"
+      : family;

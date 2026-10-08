@@ -21,7 +21,7 @@ import type {
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
-import { isPDFPageDecoration } from "@reader/core";
+import { defaultTheme, isPDFPageDecoration } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
@@ -33,9 +33,14 @@ import { animatePDFScroll } from "../readers/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
-import { paintTranslatedAnnotations } from "./annotations";
+import { useSentenceMarks } from "./useSentenceMarks";
+import { linkTranslatedSelection, sentenceLink } from "./sentence-links";
 import { translatedSelection as captureTranslationSelection } from "./selection";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
+import { translationFont } from "../appearance";
+import { selectSentence } from "../readers/sentence-selection";
+import { installCitationHover } from "../readers/citation-hover";
+import { numberedReference } from "../readers/pdf-citations";
 import "./translation.css";
 
 import { AssistanceControls } from "./AssistanceControls";
@@ -83,6 +88,7 @@ export function PDFReadingView({
     );
   };
   const previousMode = useRef<Mode>("source");
+  const enteringParallel = useRef<string | undefined>(undefined);
   const explicitFocus = useRef({
     operation: 0,
     moving: false,
@@ -134,8 +140,18 @@ export function PDFReadingView({
       cancelTranslationMotion();
     };
   }, [mode, doc.id]);
-  const state = useRef({ mode, blocks, translations, events });
-  state.current = { mode, blocks, translations, events };
+  const state = useRef({ mode, blocks, translations, events, theme });
+  state.current = { mode, blocks, translations, events, theme };
+  useSentenceMarks(
+    root,
+    engine,
+    blocks,
+    translations,
+    annotations,
+    theme.linkTranslationAnnotations !== false,
+    mode,
+    events,
+  );
   const byId = useMemo(
     () => new Map(translations.map((t) => [t.blockId, t])),
     [translations],
@@ -185,6 +201,12 @@ export function PDFReadingView({
       clearTimeout(timer);
     };
   }, [doc.id]);
+  useEffect(() => {
+    if (theme.linkTranslationAnnotations === false) {
+      setLinked(undefined);
+      void engine?.focusSentences?.("", []);
+    }
+  }, [theme.linkTranslationAnnotations, engine]);
   const translate = async (blockId = "") => {
     try {
       await api.translate(doc.id, blockId);
@@ -286,16 +308,51 @@ export function PDFReadingView({
   };
   const focusTranslation = (block: PDFBlock) =>
     focusBlock(block, "translation");
+  const locationBlock = (location: DocumentLocation) => {
+    if (location.type !== "pdf") return;
+    const readable = state.current.blocks.filter(
+      (b) => !isPDFPageDecoration(b),
+    );
+    return (
+      readable.find((b) => b.id === location.translation?.blockId) ??
+      readable
+        .filter((b) => b.page === location.page)
+        .sort((a, b) => {
+          const distance = (block: PDFBlock) =>
+            Math.max(
+              block.bounds.y - (location.y ?? 0),
+              (location.y ?? 0) - block.bounds.y - block.bounds.height,
+              0,
+            ) +
+            Math.max(
+              block.bounds.x - (location.x ?? 0),
+              (location.x ?? 0) - block.bounds.x - block.bounds.width,
+              0,
+            ) *
+              2;
+          return distance(a) - distance(b);
+        })[0]
+    );
+  };
   const go = async (location: DocumentLocation) => {
     input(mode === "translation" ? "translation" : "source");
     await engine?.goTo(location);
     if (location.type !== "pdf") return;
-    const block =
-      state.current.blocks.find(
-        (b) => b.id === location.translation?.blockId,
-      ) ?? state.current.blocks.find((b) => b.page === location.page);
+    const block = locationBlock(location);
     if (block) {
-      const anchor = { blockId: block.id, fraction: 0 };
+      const anchor = {
+        blockId: block.id,
+        fraction:
+          location.y === undefined
+            ? 0
+            : Math.max(
+                0,
+                Math.min(
+                  1,
+                  (location.y - block.bounds.y) / (block.bounds.height || 1),
+                ),
+              ),
+      };
       recordReading(anchor);
       followTranslation(anchor, location.translation?.sentenceIndexes[0]);
       state.current.events.location(
@@ -308,10 +365,63 @@ export function PDFReadingView({
   const facade = useRef<ReaderAdapter | undefined>(undefined);
   const actions = useRef({ go });
   actions.current = { go };
+  useEffect(() => {
+    if (!root.current || !engine) return;
+    return installCitationHover(
+      root.current,
+      async (blockId, label) =>
+        (await engine.resolveCitation?.(blockId, label)) ??
+        numberedReference(blocks, label),
+      async (location, anchor) => {
+        await engine.previewCitation?.(location, anchor);
+      },
+      () => engine.hideCitationPreview?.(),
+    );
+  }, [engine, blocks, mode]);
+  const visitCitation = async (blockId: string, label: string) => {
+    try {
+      const target =
+        (await engine?.resolveCitation?.(blockId, label)) ??
+        numberedReference(blocks, label);
+      if (!target) throw new Error(`未找到参考文献 [${label}] 的跳转位置`);
+      if (facade.current) events.internalLink?.(facade.current.getLocation());
+      await go(target);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const ready = (adapter: ReaderAdapter, toc: TOCItem[]) => {
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
       get(target, key) {
+        if (key === "prepareAnnotation")
+          return async (value: ReaderSelection) => {
+            if (value.location.type !== "pdf") return value;
+            if (state.current.theme.linkTranslationAnnotations === false) {
+              const { sentenceLink: _, ...location } = value.location;
+              return { ...value, location };
+            }
+            if (value.location.sentenceLink) return value;
+            if (value.location.translation)
+              return linkTranslatedSelection(value, state.current.translations);
+            const currentTranslations = state.current.translations;
+            const links =
+              (await target.matchSentences?.(
+                value.location,
+                currentTranslations,
+              )) ?? [];
+            return {
+              ...value,
+              location: {
+                ...value.location,
+                sentenceLink: sentenceLink(
+                  links,
+                  currentTranslations,
+                  "source",
+                ),
+              },
+            };
+          };
         if (key === "goTo")
           return (l: DocumentLocation) => actions.current.go(l);
         if (key === "next" || key === "previous")
@@ -343,6 +453,30 @@ export function PDFReadingView({
                 }
               : target.getLocation();
           };
+        if (key === "isNear" && state.current.mode === "translation")
+          return (location: DocumentLocation) => {
+            const block = locationBlock(location),
+              host = pane.current;
+            const node = block && targetNode(block.id);
+            if (!block || !host || !node || location.type !== "pdf")
+              return false;
+            const rect = node.getBoundingClientRect(),
+              view = host.getBoundingClientRect();
+            const fraction = Math.max(
+              0,
+              Math.min(
+                1,
+                ((location.y ?? block.bounds.y) - block.bounds.y) /
+                  (block.bounds.height || 1),
+              ),
+            );
+            return (
+              Math.abs(
+                rect.top + rect.height * fraction - view.top - view.height / 2,
+              ) <
+              view.height / 4
+            );
+          };
         if (key === "clearSelection")
           return () => {
             window.getSelection()?.removeAllRanges();
@@ -373,6 +507,34 @@ export function PDFReadingView({
     window.getSelection()?.removeAllRanges();
     setLinked(undefined);
     void engine.focusSentences?.("", []);
+    if (previous !== mode && mode === "parallel") {
+      const block = blocks.find(
+        (b) => b.id === (enteringParallel.current ?? reading.current?.blockId),
+      );
+      enteringParallel.current = undefined;
+      if (block) {
+        // Panel resize commits and ResizeObserver callbacks can follow this effect.
+        // Keep the selected block fixed until both panes have their new geometry.
+        const motion = explicitFocus.current;
+        const operation = motion.operation;
+        motion.moving = true;
+        let frame = requestAnimationFrame(() => {
+          frame = requestAnimationFrame(() => {
+            if (cancelled || operation !== motion.operation) return;
+            focusBlock(
+              block,
+              previous === "translation" ? "translation" : "source",
+            );
+          });
+        });
+        return () => {
+          cancelled = true;
+          cancelAnimationFrame(frame);
+          if (operation === motion.operation) motion.moving = false;
+          engine.hoverBlock?.(null);
+        };
+      }
+    }
     const restore = async () => {
       if (previous !== mode && mode !== "translation" && reading.current)
         await engine.followBlock?.(reading.current);
@@ -400,26 +562,6 @@ export function PDFReadingView({
       window.removeEventListener("pointercancel", release);
     };
   }, []);
-  useEffect(() => {
-    const host = pane.current;
-    if (!host) return;
-    let clean: (() => void) | undefined;
-    const paint = () => {
-      clean?.();
-      clean = paintTranslatedAnnotations(host, annotations, translations);
-    };
-    paint();
-    const observer = new MutationObserver(paint);
-    observer.observe(host, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    });
-    return () => {
-      observer.disconnect();
-      clean?.();
-    };
-  }, [mode, annotations, translations]);
   const input = (active: typeof side.current) => {
     cancelTranslationMotion();
     if (explicitFocus.current.moving || active === "translation")
@@ -434,7 +576,11 @@ export function PDFReadingView({
     if (side.current !== "source") return;
     selection.current = value;
     events.selection(value);
-    if (!value || value.location.type !== "pdf") {
+    if (
+      !value ||
+      value.location.type !== "pdf" ||
+      theme.linkTranslationAnnotations === false
+    ) {
       setLinked(undefined);
       return;
     }
@@ -455,15 +601,24 @@ export function PDFReadingView({
         return [
           {
             blockId: block.id,
-            sentenceIndexes:
-              matches.length === 1 ? matches : t.sentences.map((_, i) => i),
+            sentenceIndexes: matches.length === 1 ? matches : [],
           },
         ];
       });
     const map = async () => {
-      const links =
-        (await engine?.matchSentences?.(location, translations)) ?? fallback;
+      const links = (
+        (await engine?.matchSentences?.(location, translations)) ?? fallback
+      ).filter((l) => l.sentenceIndexes.length);
       if (selection.current !== value || !links.length) return;
+      const enriched = {
+        ...value,
+        location: {
+          ...location,
+          sentenceLink: sentenceLink(links, translations, "source"),
+        },
+      };
+      selection.current = enriched;
+      events.selection(enriched);
       setLinked(
         Object.fromEntries(links.map((l) => [l.blockId, l.sentenceIndexes])),
       );
@@ -486,8 +641,13 @@ export function PDFReadingView({
       translations,
     );
     if (!value) return;
-    selection.current = value.selection;
-    events.selection(value.selection);
+    const captured =
+      theme.linkTranslationAnnotations === false
+        ? value.selection
+        : linkTranslatedSelection(value.selection, translations);
+    selection.current = captured;
+    events.selection(captured);
+    if (theme.linkTranslationAnnotations === false) return;
     setLinked(
       Object.fromEntries(
         value.links.map((l) => [l.blockId, l.sentenceIndexes]),
@@ -548,6 +708,56 @@ export function PDFReadingView({
     });
   };
   const changeMode = (value: Mode) => {
+    if (value === "parallel" && mode !== "parallel") {
+      // Pick from the current viewport before the panels change width.
+      const host =
+        mode === "translation"
+          ? pane.current
+          : root.current?.querySelector<HTMLElement>(".pdf-container");
+      let nearest: string | undefined;
+      let distance = Infinity;
+      if (host) {
+        const view = host.getBoundingClientRect();
+        const x = view.left + view.width / 2,
+          y = view.top + view.height / 2;
+        for (const block of visibleBlocks) {
+          let rect: DOMRect | undefined;
+          if (mode === "translation")
+            rect = targetNode(block.id)?.getBoundingClientRect();
+          else {
+            const page = host
+              .querySelector<HTMLElement>(
+                `.page[data-page-number="${block.page}"]`,
+              )
+              ?.getBoundingClientRect();
+            if (page)
+              rect = new DOMRect(
+                page.left + block.bounds.x * page.width,
+                page.top + block.bounds.y * page.height,
+                block.bounds.width * page.width,
+                block.bounds.height * page.height,
+              );
+          }
+          if (
+            !rect?.height ||
+            !rect.width ||
+            rect.bottom <= view.top ||
+            rect.top >= view.bottom ||
+            rect.right <= view.left ||
+            rect.left >= view.right
+          )
+            continue;
+          const d =
+            Math.max(rect.left - x, x - rect.right, 0) * 2 +
+            Math.max(rect.top - y, y - rect.bottom, 0);
+          if (d < distance) {
+            distance = d;
+            nearest = block.id;
+          }
+        }
+      }
+      enteringParallel.current = nearest ?? reading.current?.blockId;
+    }
     input(value === "translation" ? "translation" : "source");
     setPopup(undefined);
     setMode(value);
@@ -679,10 +889,33 @@ export function PDFReadingView({
                 void engine?.focusSentences?.("", []);
               }}
               onPointerUp={translatedSelection}
+              onDoubleClick={(event) => {
+                // Select the translated sentence; untranslated text falls
+                // back to the sentence around the word.
+                const target = event.target as Element;
+                const sentence = target.closest(".translation-sentence");
+                const selected = window.getSelection();
+                if (sentence && selected) {
+                  const range = document.createRange();
+                  range.selectNodeContents(sentence);
+                  selected.removeAllRanges();
+                  selected.addRange(range);
+                } else {
+                  const section = target.closest("section");
+                  if (section) selectSentence(selected, section);
+                }
+                translatedSelection();
+              }}
               onKeyDownCapture={() => input("translation")}
               onKeyUp={translatedSelection}
               style={{
-                fontSize: `${theme.fontSize}rem`,
+                fontSize: `${theme.translationFontSize ?? 1}rem`,
+                fontFamily: translationFont(theme.translationFontFamily),
+                fontWeight:
+                  (theme.translationFontWeight ??
+                    defaultTheme.translationFontWeight) === "bold"
+                    ? 600
+                    : undefined,
                 lineHeight: theme.lineHeight,
               }}
             >
@@ -702,6 +935,19 @@ export function PDFReadingView({
                       a.location.type === "pdf"
                         ? a.location.translation
                         : undefined;
+                    const pair =
+                      a.location.type === "pdf" &&
+                      theme.linkTranslationAnnotations !== false
+                        ? a.location.sentenceLink
+                        : undefined;
+                    if (pair?.origin === "source")
+                      return pair.parts
+                        .filter(
+                          (p) =>
+                            p.blockId === block.id &&
+                            p.sourceHash === translated?.sourceHash,
+                        )
+                        .map((p) => p.sentenceIndex);
                     return mark
                       ? (mark.ranges ?? [mark])
                           .filter(
@@ -765,6 +1011,9 @@ export function PDFReadingView({
                   >
                     <TranslationText
                       block={block}
+                      onCitation={(blockId, label) =>
+                        void visitCitation(blockId, label)
+                      }
                       formulaNumber={equationNumbers.byFormula.get(block.id)}
                       translation={translated}
                       documentId={doc.id}
@@ -803,6 +1052,9 @@ export function PDFReadingView({
             <>
               <TranslationText
                 block={popup.block}
+                onCitation={(blockId, label) =>
+                  void visitCitation(blockId, label)
+                }
                 formulaNumber={equationNumbers.byFormula.get(popup.block.id)}
                 translation={activePopup}
                 documentId={doc.id}

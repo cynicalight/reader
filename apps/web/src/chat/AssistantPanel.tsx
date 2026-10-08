@@ -1,5 +1,6 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, Copy } from "lucide-react";
+import { ArrowDown, Copy, LoaderCircle } from "lucide-react";
+import { ProviderGlyph } from "../ProviderIdentity";
 import type { Message } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { ScrollArea } from "@reader/ui/components/scroll-area";
@@ -87,8 +88,27 @@ export function AssistantPanel({
             return (
               <div
                 key={key}
+                data-message-id={message?.id}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
+                {answer?.phase === "generating" && !content && (
+                  <div
+                    className="chat-waiting"
+                    role="status"
+                    aria-label="正在等待回答"
+                  >
+                    <span className="chat-waiting-icon" aria-hidden="true">
+                      {answer.fallback ||
+                      !["codex", "claude", "kimi"].includes(
+                        answer.input.provider,
+                      ) ? (
+                        <LoaderCircle size={24} />
+                      ) : (
+                        <ProviderGlyph provider={answer.input.provider} />
+                      )}
+                    </span>
+                  </div>
+                )}
                 {assistant ? (
                   <Suspense
                     fallback={

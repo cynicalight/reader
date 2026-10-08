@@ -22,6 +22,11 @@ import type {
   AIConfig,
   AICapability,
   AgentModel,
+  LibraryMode,
+  LibraryPreferences,
+  PaperMetadata,
+  PaperMetadataField,
+  ReadingStatus,
 } from "@reader/core";
 let sessionToken = "";
 export function configureAPI(token: string) {
@@ -149,13 +154,54 @@ export const api = {
     if (error) throw new Error(error.error);
     return data;
   },
-  import: (file: File) => {
+  import: (file: File, library: LibraryMode = "books") => {
     const form = new FormData();
+    form.append("library", library);
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
+  /** Import a paper from an arXiv ID, DOI, paper link, PDF link or title. */
+  resolveDocument: (ref: string) =>
+    request<Document>("/api/documents/resolve", {
+      method: "POST",
+      body: JSON.stringify({ ref }),
+    }),
+  lookupMetadata: (id: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/metadata/lookup`,
+      { method: "POST" },
+    ),
   removeDocument: (id: string) =>
     request<void>(`/api/documents/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  trashDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/trash`, {
+      method: "POST",
+    }),
+  relateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "PUT" },
+    ),
+  unrelateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "DELETE" },
+    ),
+  mergeDocuments: (id: string, from: string[]) =>
+    request<{ document: Document; trashed: string[] }>(
+      `/api/documents/${encodeURIComponent(id)}/merge`,
+      { method: "POST", body: JSON.stringify({ from }) },
+    ),
+  restoreDocument: (id: string) =>
+    request<Document>(`/api/documents/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+    }),
+  trash: (library: LibraryMode) =>
+    request<Document[]>(`/api/trash?library=${library}`),
+  emptyTrash: (library: LibraryMode) =>
+    request<{ removed: number }>(`/api/trash?library=${library}`, {
       method: "DELETE",
     }),
   classify: (id: string) =>
@@ -169,9 +215,13 @@ export const api = {
       author?: string;
       category?: Document["category"];
       tags?: string[];
+      folders?: string[];
       favorite?: boolean;
       progress?: DocumentLocation;
       percentage?: number;
+      library?: LibraryMode;
+      metadata?: Partial<Pick<PaperMetadata, PaperMetadataField>>;
+      readingStatus?: ReadingStatus;
     },
   ) =>
     request<Document>(`/api/documents/${id}`, {
@@ -199,6 +249,30 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ note }),
     }),
+  updateAnnotation: (
+    id: string,
+    annotation: string,
+    patch: {
+      note?: string;
+      answerId?: string;
+      resolved?: boolean;
+      color?: string;
+      tags?: string[];
+    },
+  ) =>
+    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  documentNote: (id: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+    ),
+  saveDocumentNote: (id: string, body: string) =>
+    request<{ body: string; updatedAt?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/note`,
+      { method: "PUT", body: JSON.stringify({ body }) },
+    ),
   removeAnnotation: (id: string, annotation: string) =>
     request<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",
@@ -211,6 +285,24 @@ export const api = {
     request<Message[]>(`/api/documents/${id}/messages`, { signal }),
   providers: (checkAuth = true) =>
     request<Provider[]>(`/api/providers${checkAuth ? "" : "?auth=skip"}`),
+  /** Rename a category across a library, or remove it when `to` is omitted. */
+  changeLibraryFolder: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/folders`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
+  changeLibraryTag: (library: LibraryMode, from: string, to?: string) =>
+    request<{ changed: number }>(`/api/libraries/${library}/tags`, {
+      method: "POST",
+      body: JSON.stringify(to === undefined ? { from } : { from, to }),
+    }),
+  libraryPreferences: () =>
+    request<LibraryPreferences>("/api/preferences/library"),
+  saveLibraryPreferences: (preferences: LibraryPreferences) =>
+    request<LibraryPreferences>("/api/preferences/library", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    }),
   settings: () => request<Partial<ReaderTheme>>("/api/settings"),
   saveSettings: (theme: ReaderTheme) =>
     request<ReaderTheme>("/api/settings", {

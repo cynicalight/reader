@@ -3,16 +3,30 @@ import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { lazy, Suspense } from "react";
+import { ReadingLinkNavigation } from "../reading-links";
 const FormulaFragment = lazy(() => import("./FormulaFragment"));
 const Markdown = lazy(() =>
   import("../chat/MessageMarkdown").then((module) => ({
     default: module.MessageMarkdown,
   })),
 );
-function MessageMarkdown({ content }: { content: string }) {
+function MessageMarkdown({
+  content,
+  blockId,
+  onCitation,
+}: {
+  content: string;
+  blockId?: string;
+  onCitation?: (blockId: string, label: string) => void;
+}) {
   return (
     <Suspense fallback={<span>{content}</span>}>
-      <Markdown content={content} />
+      <ReadingLinkNavigation.Provider value={onCitation}>
+        <Markdown
+          content={content}
+          citationBlockId={onCitation ? blockId : undefined}
+        />
+      </ReadingLinkNavigation.Provider>
     </Suspense>
   );
 }
@@ -24,6 +38,7 @@ export function TranslationText({
   retry,
   linked = [],
   formulaNumber,
+  onCitation,
 }: {
   block: PDFBlock;
   translation?: TranslationBlock;
@@ -31,6 +46,7 @@ export function TranslationText({
   retry: () => void;
   linked?: number[];
   formulaNumber?: string;
+  onCitation?: (blockId: string, label: string) => void;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const asset =
@@ -104,7 +120,11 @@ export function TranslationText({
         (block.label === "algorithm" ? (
           <pre>{block.text}</pre>
         ) : (
-          <MessageMarkdown content={block.text} />
+          <MessageMarkdown
+            content={block.text}
+            blockId={block.id}
+            onCitation={onCitation}
+          />
         ))
       ) : translation?.status === "complete" ? (
         <div className="translation-sentences">
@@ -115,7 +135,11 @@ export function TranslationText({
               data-sentence={i}
               data-linked={linked.includes(i) || undefined}
             >
-              <MessageMarkdown content={sentence.target} />
+              <MessageMarkdown
+                content={sentence.target}
+                blockId={block.id}
+                onCitation={onCitation}
+              />
             </div>
           ))}
         </div>

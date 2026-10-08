@@ -1,4 +1,10 @@
 export { zoomCommand } from "./zoom-shortcut";
+export {
+  READER_SCHEME,
+  readerLink,
+  parseReaderLink,
+  type ReaderLinkTarget,
+} from "./reader-link";
 
 export type PDFLocation = {
   type: "pdf";
@@ -6,6 +12,17 @@ export type PDFLocation = {
   x?: number;
   y?: number;
   quote?: string;
+  /** Sentence pairs captured when marking; both sides share one annotation. */
+  sentenceLink?: {
+    origin: "source" | "translation";
+    parts: {
+      blockId: string;
+      sourceHash: string;
+      sentenceIndex: number;
+      source: string;
+      target: string;
+    }[];
+  };
   translation?: {
     blockId: string;
     sourceHash: string;
@@ -32,6 +49,108 @@ export type EPUBLocation = {
 };
 export type DocumentLocation = PDFLocation | EPUBLocation;
 export type DocumentCategory = "book" | "article" | "paper";
+/** Books and papers are separate libraries; papers are PDFs up to 150 pages and 50 MB. */
+export type LibraryMode = "books" | "papers";
+export type PaperItemType =
+  | "journal"
+  | "conference"
+  | "preprint"
+  | "thesis"
+  | "book"
+  | "chapter"
+  | "report"
+  | "other";
+/** CSL-style name: given/family for split names, name for one literal name. */
+export interface Creator {
+  given?: string;
+  family?: string;
+  name?: string;
+}
+export type MetadataSource = "file" | "lookup" | "manual";
+export interface PaperMetadata {
+  itemType?: PaperItemType;
+  translatedTitle?: string;
+  shortTitle?: string;
+  creators?: Creator[];
+  affiliation?: string;
+  /** YYYY, YYYY-MM or YYYY-MM-DD. */
+  date?: string;
+  venue?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  publisher?: string;
+  doi?: string;
+  arxiv?: string;
+  isbn?: string;
+  url?: string;
+  abstract?: string;
+  language?: string;
+  /** The reader's own note on the item; never looked up. */
+  remark?: string;
+  /** Where each field came from; lookups never replace manual values. */
+  sources?: Partial<Record<string, MetadataSource>>;
+  /** Automatic lookup state for papers imported from files. */
+  lookup?: "pending" | "done" | "notFound" | "failed";
+  lookedUpAt?: string;
+}
+export type PaperMetadataField = Exclude<
+  keyof PaperMetadata,
+  "sources" | "lookup" | "lookedUpAt"
+>;
+export type ReadingStatus = "unread" | "reading" | "done";
+export type PaperSort =
+  | "opened"
+  | "added"
+  | "year"
+  | "title"
+  | "author"
+  | "venue"
+  | "status"
+  | "notes";
+/** Optional columns of the paper table; the title is always shown. */
+export type PaperColumn =
+  "authors" | "year" | "venue" | "added" | "opened" | "notes" | "status";
+export interface PaperLibraryPreferences {
+  /** Category (folder) order, including categories without papers. */
+  categories?: string[];
+  /** Categories that collect every paper carrying all of their tags. */
+  smartCategories?: SmartCategory[];
+  /** Pinned sidebar entries: "view:<id>", "folder:<path>", "smart:<id>" or "doc:<id>". */
+  pinned?: string[];
+  /** Hidden built-in views ("view:<id>") and categories ("folder:<path>", "smart:<id>"). */
+  hidden?: string[];
+  /** Categories whose subcategories are folded in the sidebar. */
+  collapsed?: string[];
+  /** A category also lists papers filed in its subcategories (default on). */
+  subcategoryItems?: boolean;
+  /** Paper pairs ("<id>:<id>", ids sorted) marked as not duplicates. */
+  notDuplicates?: string[];
+  /** Colored categories; the n-th one is toggled with the number key n. */
+  colorCategories?: { name: string; color: string }[];
+  sort?: PaperSort;
+  /** Reverse the natural order of `sort`. */
+  sortReverse?: boolean;
+  layout?: "list" | "table";
+  /** Visible table columns in order. */
+  columns?: PaperColumn[];
+  /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
+  autoLookup?: boolean;
+  citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
+  citationOrder?: "author" | "year" | "custom";
+}
+export interface SmartCategory {
+  id: string;
+  name: string;
+  /** A paper belongs when it has every one of these tags. */
+  tags: string[];
+}
+export interface LibraryPreferences {
+  /** Library opened at startup; defaults to papers. */
+  primaryMode?: LibraryMode;
+  mode?: LibraryMode;
+  papers?: PaperLibraryPreferences;
+}
 export interface TagBoard {
   id: string;
   name: string;
@@ -44,6 +163,20 @@ export interface Document {
   classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
   classificationError: string;
   tags: string[];
+  /** Paper-library categories; "a/b" is nested in "a". */
+  folders: string[];
+  library: LibraryMode;
+  /** Set while the document is in the trash. */
+  deletedAt?: string;
+  metadata: PaperMetadata;
+  readingStatus: ReadingStatus;
+  noteCount: number;
+  /** Highlights and underlines. */
+  highlightCount: number;
+  /** Questions without an answer that are not resolved. */
+  openQuestionCount: number;
+  /** Documents linked as related, in both directions; may include trashed ones. */
+  related: string[];
   id: string;
   type: "epub" | "pdf";
   title: string;
@@ -64,12 +197,19 @@ export interface TOCItem {
 export interface Annotation {
   id: string;
   documentId: string;
-  kind: "highlight" | "underline" | "note" | "bookmark";
+  kind: "highlight" | "underline" | "note" | "question" | "bookmark";
   location: DocumentLocation;
   quote: string;
+  /** The note text, or the question for a question. */
   note: string;
   color: string;
   createdAt: string;
+  /** Chat message that answers a question. */
+  answerId?: string;
+  /** A question closed without an answer. */
+  resolved?: boolean;
+  /** The reader's labels for filtering annotations. */
+  tags?: string[];
 }
 export interface SearchResult {
   id: string;
@@ -91,7 +231,7 @@ export interface ReaderAnnotationTarget {
   ids: string[];
   anchor: SelectionAnchor;
 }
-export type Appearance = "light" | "dark" | "system";
+export type Appearance = "light" | "sepia" | "dark" | "system";
 export interface ReaderTheme {
   autoTranslatePDF?: boolean;
   appearance?: Appearance;
@@ -102,6 +242,19 @@ export interface ReaderTheme {
   margin: number;
   scroll: boolean;
   zoom: number | "width";
+  /** Translated text size in rem; smaller than the source by default. */
+  translationFontSize?: number;
+  /** "sans-serif", "serif" or an installed font family name. */
+  translationFontFamily?: string;
+  linkTranslationAnnotations?: boolean;
+  translationFontWeight?: "normal" | "bold";
+  /** The highlight palette, in order; the defaults apply when unset. */
+  highlightColors?: HighlightColor[];
+}
+export interface HighlightColor {
+  /** #rrggbb */
+  value: string;
+  label: string;
 }
 export const defaultTheme: ReaderTheme = {
   autoTranslatePDF: true,
@@ -113,6 +266,10 @@ export const defaultTheme: ReaderTheme = {
   margin: 40,
   scroll: false,
   zoom: "width",
+  translationFontSize: 1,
+  translationFontFamily: "serif",
+  translationFontWeight: "bold",
+  linkTranslationAnnotations: true,
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
@@ -129,7 +286,20 @@ export interface PDFSentenceLink {
   blockId: string;
   sentenceIndexes: number[];
 }
+/** The target region of a hovered internal PDF link, rendered as an image. */
+export interface LinkPreview {
+  /** The link's rectangle in viewport coordinates. */
+  anchor: { left: number; top: number; width: number; height: number };
+  page: number;
+  image: string;
+  /** Image width divided by height. */
+  ratio: number;
+}
 export interface ReaderEvents {
+  /** Show (or hide with null) a preview of an internal link's target. */
+  linkPreview?: (preview: LinkPreview | null) => void;
+  /** An internal link is about to move away from this location. */
+  internalLink?: (origin: DocumentLocation) => void;
   blockHover?: (block: PDFBlock | null) => void;
   annotation?: (target: ReaderAnnotationTarget | null) => void;
   zoom?: (zoom: ReaderTheme["zoom"]) => void;
@@ -153,15 +323,28 @@ export interface ReaderAdapter {
   highlight(annotations: Annotation[]): Promise<void>;
   setTheme(theme: ReaderTheme): Promise<void>;
   getContext(): Promise<string>;
+  /** Whether most of a remembered viewport position is on screen again. */
+  isNear?(location: DocumentLocation): boolean;
   setBlocks?(blocks: PDFBlock[]): void;
   hoverBlock?(blockId: string | null): void;
   renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
+  previewCitation?(
+    location: PDFLocation,
+    anchor: HTMLAnchorElement,
+  ): Promise<void>;
+  hideCitationPreview?(): void;
+  resolveCitation?(
+    blockId: string,
+    label: string,
+  ): Promise<PDFLocation | undefined>;
   focusSentences?(
     blockId: string,
     sources: string[],
     scroll?: boolean,
   ): Promise<void>;
+  sentenceRanges?(passages: PDFPassage[]): Range[];
+  prepareAnnotation?(selection: ReaderSelection): Promise<ReaderSelection>;
   focusPassages?(passages: PDFPassage[], scroll?: boolean): Promise<void>;
   matchSentences?(
     location: PDFLocation,

@@ -53,10 +53,24 @@ export interface paths {
           "multipart/form-data": {
             /** Format: binary */
             file: string;
+            /**
+             * @description Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.
+             * @enum {unknown}
+             */
+            library?: "books" | "papers";
           };
         };
       };
       responses: {
+        /** @description The identical file already exists, in either library */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
         /** @description Success */
         201: {
           headers: {
@@ -93,7 +107,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Delete a document and its library-owned data after stopping background tasks */
+    /** Permanently delete a document and its library-owned data after stopping background tasks */
     delete: {
       parameters: {
         query?: never;
@@ -140,11 +154,46 @@ export interface paths {
             /** @enum {unknown} */
             category?: "book" | "article" | "paper";
             tags?: string[];
+            folders?: string[];
             favorite?: boolean;
             progress?: components["schemas"]["DocumentLocation"];
             percentage?: number;
             title?: string;
             author?: string;
+            /** @enum {unknown} */
+            library?: "books" | "papers";
+            /** @description Fields to replace; each becomes a manual value. Empty strings clear a field. */
+            metadata?: {
+              /** @enum {unknown} */
+              itemType?:
+                | "journal"
+                | "conference"
+                | "preprint"
+                | "thesis"
+                | "book"
+                | "chapter"
+                | "report"
+                | "other";
+              translatedTitle?: string;
+              shortTitle?: string;
+              creators?: components["schemas"]["Creator"][];
+              affiliation?: string;
+              date?: string;
+              venue?: string;
+              volume?: string;
+              issue?: string;
+              pages?: string;
+              publisher?: string;
+              doi?: string;
+              arxiv?: string;
+              isbn?: string;
+              url?: string;
+              abstract?: string;
+              language?: string;
+              remark?: string;
+            };
+            /** @enum {unknown} */
+            readingStatus?: "unread" | "reading" | "done";
           };
         };
       };
@@ -365,7 +414,13 @@ export interface paths {
       requestBody: {
         content: {
           "application/json": {
-            note: string;
+            note?: string;
+            /** @description Message ID of this document; empty clears */
+            answerId?: string;
+            resolved?: boolean;
+            color?: string;
+            /** @description Replaces the tags; trimmed and de-duplicated without regard to case */
+            tags?: string[];
           };
         };
       };
@@ -1449,6 +1504,712 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/preferences/{key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: "library";
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Saved preferences, or an empty object */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          key: "library";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              [key: string]: unknown;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/related/{other}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        other: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /** Link two documents as related (both directions, idempotent, at most 100 per document) */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          other: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The document at id */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    /** Remove the link between two documents */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          other: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The document at id */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/merge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            from: string[];
+          };
+        };
+      };
+      responses: {
+        /** @description Merged */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              document: components["schemas"]["Document"];
+              trashed: string[];
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/trash": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Move to the trash, keeping files and records; idempotent */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Trashed */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Restore from the trash; idempotent */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Restored */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/trash": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query: {
+          library: "books" | "papers";
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Trashed documents, newest first */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"][];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    /** Permanently delete every trashed document in a library */
+    delete: {
+      parameters: {
+        query: {
+          library: "books" | "papers";
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Emptied */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              removed: number;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/libraries/{library}/folders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          library: "books" | "papers";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            from: string;
+            to?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Changed documents */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              changed: number;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/libraries/{library}/tags": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          library: "books" | "papers";
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            from: string;
+            to?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Changed documents */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              changed: number;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            ref: string;
+          };
+        };
+      };
+      responses: {
+        /** @description The same file already exists */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Imported */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/metadata/lookup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Updated */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/documents/{id}/note": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The document's free-form paper note */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Note (empty when unset) */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              body: string;
+              updatedAt?: string;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            body: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Saved */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              body: string;
+              updatedAt?: string;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1467,6 +2228,17 @@ export interface components {
             width: number;
             height: number;
           }[];
+          sentenceLink?: {
+            /** @enum {string} */
+            origin: "source" | "translation";
+            parts: {
+              blockId: string;
+              sourceHash: string;
+              sentenceIndex: number;
+              source: string;
+              target: string;
+            }[];
+          };
           translation?: {
             blockId: string;
             sourceHash: string;
@@ -1500,6 +2272,8 @@ export interface components {
       classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
       classificationError: string;
       tags: string[];
+      /** @description Paper-library categories; a/b is nested in a */
+      folders: string[];
       id: string;
       /** @enum {unknown} */
       type: "pdf" | "epub";
@@ -1511,17 +2285,36 @@ export interface components {
       favorite: boolean;
       percentage: number;
       progress?: components["schemas"]["DocumentLocation"];
+      /** @enum {unknown} */
+      library: "books" | "papers";
+      /** @description Set while the document is in the trash */
+      deletedAt?: string;
+      metadata: components["schemas"]["PaperMetadata"];
+      /** @enum {unknown} */
+      readingStatus: "unread" | "reading" | "done";
+      noteCount: number;
+      /** @description Highlights and underlines */
+      highlightCount: number;
+      /** @description Questions without an answer that are not resolved */
+      openQuestionCount: number;
+      /** @description Documents linked as related, in both directions; may include trashed ones */
+      related: string[];
     };
     Annotation: {
       id: string;
       documentId: string;
       /** @enum {unknown} */
-      kind: "highlight" | "underline" | "note" | "bookmark";
+      kind: "highlight" | "underline" | "note" | "question" | "bookmark";
       location: components["schemas"]["DocumentLocation"];
       quote: string;
       note: string;
       color: string;
       createdAt: string;
+      /** @description Chat message that answers a question */
+      answerId?: string;
+      /** @description A question closed without an answer */
+      resolved?: boolean;
+      tags?: string[];
     };
     SavedAnnotation: components["schemas"]["Annotation"] & {
       /** @description IDs removed when overlapping underlines were merged into the returned annotation. */
@@ -1771,6 +2564,52 @@ export interface components {
       failedCalls: number;
       partialCalls: number;
       elapsedMs: number;
+    };
+    /** @description CSL-style name: given/family for split names, name for a single literal name */
+    Creator: {
+      given?: string;
+      family?: string;
+      name?: string;
+    };
+    PaperMetadata: {
+      /** @enum {unknown} */
+      itemType?:
+        | "journal"
+        | "conference"
+        | "preprint"
+        | "thesis"
+        | "book"
+        | "chapter"
+        | "report"
+        | "other";
+      translatedTitle?: string;
+      shortTitle?: string;
+      creators?: components["schemas"]["Creator"][];
+      affiliation?: string;
+      date?: string;
+      venue?: string;
+      volume?: string;
+      issue?: string;
+      pages?: string;
+      publisher?: string;
+      doi?: string;
+      arxiv?: string;
+      isbn?: string;
+      url?: string;
+      abstract?: string;
+      language?: string;
+      /** @description The reader's own note on the item; never looked up */
+      remark?: string;
+      /** @description Origin per field; lookups never replace manual values */
+      sources?: {
+        [key: string]: "file" | "lookup" | "manual";
+      };
+      lookedUpAt?: string;
+      /**
+       * @description Automatic lookup state for papers imported from files
+       * @enum {unknown}
+       */
+      lookup?: "pending" | "done" | "notFound" | "failed";
     };
   };
   responses: never;

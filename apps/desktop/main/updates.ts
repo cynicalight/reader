@@ -12,6 +12,8 @@ export interface ReleaseUpdate {
   installer: string;
   downloadURL: string;
   checksumURL: string;
+  // macOS app archive for Squirrel.Mac in-place updates. Older releases lack it.
+  archive?: { installer: string; downloadURL: string };
 }
 export type UpdateResult =
   | { status: "current" }
@@ -48,6 +50,10 @@ function record(value: unknown): Record<string, unknown> {
     throw new Error("GitHub 返回了无效的更新信息");
   return value as Record<string, unknown>;
 }
+const installerTargets: Record<string, string> = {
+  "darwin/arm64": "mac-arm64.dmg",
+  "win32/x64": "win-x64.exe",
+};
 export function selectRelease(
   value: unknown,
   installed: string,
@@ -62,10 +68,10 @@ export function selectRelease(
   // Stable channel; never offer pre-releases even if incorrectly marked on GitHub.
   if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error("发布版本号格式无效");
   if (!newerRelease(tag, installed)) return { status: "current" };
-  if (platform !== "darwin" || arch !== "arm64")
-    throw new Error("当前平台没有官方更新安装包");
+  const target = installerTargets[`${platform}/${arch}`];
+  if (!target) throw new Error("当前平台没有官方更新安装包");
   const version = tag.slice(1);
-  const installer = `Reader-${version}-mac-arm64.dmg`;
+  const installer = `Reader-${version}-${target}`;
   if (!Array.isArray(release.assets)) throw new Error("缺少发布文件列表");
   const assets = release.assets.map(record);
   const assetURL = (name: string) => {
@@ -82,10 +88,19 @@ export function selectRelease(
   const checksumURL = assetURL("SHA256SUMS.txt");
   // Release is published before CI attaches the installers. Retry later.
   if (!downloadURL || !checksumURL) return { status: "pending" };
-  return {
-    status: "available",
-    update: { version, installer, downloadURL, checksumURL },
+  const update: ReleaseUpdate = {
+    version,
+    installer,
+    downloadURL,
+    checksumURL,
   };
+  if (platform === "darwin") {
+    const archive = `Reader-${version}-mac-${arch}.zip`;
+    const archiveURL = assetURL(archive);
+    if (archiveURL)
+      update.archive = { installer: archive, downloadURL: archiveURL };
+  }
+  return { status: "available", update };
 }
 
 export function installerChecksum(text: string, filename: string): string {

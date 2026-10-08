@@ -10,6 +10,8 @@ vi.mock("@reader/api", () => ({
   api: { agentModels: vi.fn(), aiConfig: vi.fn(), saveAIConfig: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+// The first Base UI select also pays jsdom warm-up; CI runners exceed 5 s.
+vi.setConfig({ testTimeout: 20_000 });
 const models: AgentModel[] = [
   { id: "opus", name: "Opus", description: "", isDefault: true },
   {
@@ -91,7 +93,7 @@ it("defaults effort to medium and keys choices per task", () => {
 it("shows recommended translation defaults", async () => {
   await act(async () => root.render(<TaskModels disabled={false} />));
   expect(shown("问答模型")).toBe("Opus");
-  expect(shown("翻译模型")).toBe("自动 · Sonnet");
+  expect(shown("翻译模型")).toBe("Sonnet");
   expect(shown("翻译 Effort")).toBe("Medium");
 });
 it("saves the translation model without touching chat", async () => {
@@ -112,6 +114,6 @@ it("returns translation to automatic selection", async () => {
   config.translationModels = { claude: "fable" };
   useReaderStore.setState({ aiConfig: config });
   await act(async () => root.render(<TaskModels disabled={false} />));
-  await choose("翻译模型", "自动 · Sonnet");
+  await choose("翻译模型", "Sonnet");
   expect(config.translationModels).toEqual({ claude: "" });
 });

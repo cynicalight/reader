@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Library,
@@ -16,10 +16,11 @@ import {
   Check,
   CirclePlus,
   Info,
+  Trash2,
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
 import { api } from "@reader/api";
-import type { Document } from "@reader/core";
+import type { Document, LibraryMode } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import { TooltipProvider } from "@reader/ui/components/tooltip";
@@ -31,7 +32,21 @@ import {
   DialogDescription,
 } from "@reader/ui/components/dialog";
 import { Toaster, toast } from "sonner";
-import { useReaderStore, refreshLibrary } from "./store";
+import {
+  useReaderStore,
+  refreshLibrary,
+  libraryMode,
+  loadLibraryPreferences,
+  updateLibraryPreferences,
+  refreshTrash,
+  openLinkTarget,
+} from "./store";
+import { TrashView } from "./TrashView";
+import { PaperLibrary } from "./papers/PaperLibrary";
+import { PaperSidebar } from "./papers/PaperSidebar";
+import { usePaperUI } from "./papers/state";
+import { ImportPaperDialog } from "./papers/ImportPaperDialog";
+import { LibraryModeSwitcher, libraryModes } from "./LibraryModeSwitcher";
 import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
 import { useProcessing } from "./ProcessingStatus";
@@ -41,10 +56,27 @@ import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
+const currentMode = () =>
+  libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
-  const { documents, active, theme, setTheme, open } = useReaderStore();
+  const {
+    documents: allDocuments,
+    active,
+    theme,
+    setTheme,
+    open,
+    libraryPreferences,
+    trash,
+  } = useReaderStore();
+  const mode = libraryMode(libraryPreferences);
+  const papers = mode === "papers";
+  const documents = allDocuments.filter((d) => d.library === mode);
   const resolvedTheme = useResolvedTheme(theme);
   const { jobs, error: processingError } = useProcessing();
+  const jobsById = useMemo(
+    () => new Map(jobs.map((job) => [job.documentId, job])),
+    [jobs],
+  );
   const [settings, setSettings] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
@@ -59,12 +91,14 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [command, setCommand] = useState(false);
+  const [importingPaper, setImportingPaper] = useState(false);
   const [nav, setNav] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const hydrated = useRef(false);
   useEffect(() => {
     Promise.all([
       refreshLibrary(),
+      loadLibraryPreferences(),
       api.settings().then((value) => setTheme(value)),
     ])
       .catch((e) => setError(e.message))
@@ -73,6 +107,10 @@ export function App() {
         hydrated.current = true;
       });
   }, [setTheme]);
+  useEffect(() => {
+    if (loading) return;
+    void refreshTrash().catch((e) => toast.error(e.message));
+  }, [mode, loading]);
   useEffect(() => {
     if (!hydrated.current) return;
     const timer = setTimeout(() => {
@@ -122,11 +160,21 @@ export function App() {
     if (window.readerDesktop) {
       setBusy(true);
       void window.readerDesktop
-        .importFiles()
+        .importFiles(currentMode())
         .catch((e) => toast.error(e.message))
         .finally(() => setBusy(false));
     } else fileRef.current?.click();
   };
+  useEffect(() => {
+    if (loading) return;
+    return window.readerDesktop?.onOpenLink?.((target) => {
+      void openLinkTarget(target)
+        .then((found) => {
+          if (!found) toast.error("找不到这份文档，它可能已被删除或在回收站中");
+        })
+        .catch((e) => toast.error((e as Error).message));
+    });
+  }, [loading]);
   useEffect(
     () =>
       window.readerDesktop?.onLibraryChanged(() => {
@@ -135,12 +183,33 @@ export function App() {
     [],
   );
   const importFiles = async (files: File[]) => {
-    if (!files.length) return;
+    const target = currentMode();
+    const accepted = files.filter((file) =>
+      target === "papers"
+        ? /\.pdf$/i.test(file.name)
+        : /\.(epub|pdf)$/i.test(file.name),
+    );
+    if (accepted.length < files.length)
+      toast.info(
+        target === "papers"
+          ? "文献库只支持 PDF，已跳过其他文件"
+          : "仅支持 EPUB 和 PDF，已跳过其他文件",
+      );
+    if (!accepted.length) return;
     setBusy(true);
     try {
-      for (const file of files) await api.import(file);
+      const elsewhere: Document[] = [];
+      for (const file of accepted) {
+        const document = await api.import(file, target);
+        if (document.library !== target) elsewhere.push(document);
+      }
       await refreshLibrary();
-      toast.success(`已导入 ${files.length} 个文件`);
+      if (elsewhere.length)
+        toast.info(
+          `${elsewhere.length} 个文件已在${libraryModes[elsewhere[0].library].label}中，可在那里移动`,
+        );
+      if (accepted.length > elsewhere.length)
+        toast.success(`已导入 ${accepted.length - elsewhere.length} 个文件`);
       setError("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -162,6 +231,25 @@ export function App() {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const switchMode = (next: LibraryMode) => {
+    if (next === mode) return;
+    setFilter("all");
+    setFilters(initialFilters);
+    setQuery("");
+    setEditingLibrary(false);
+    void updateLibraryPreferences({ mode: next }).catch((e) =>
+      toast.error(e.message),
+    );
+  };
+  const moveDocument = async (doc: Document, library: LibraryMode) => {
+    try {
+      await api.update(doc.id, { library });
+      await refreshLibrary();
+      toast.success(`已移到${libraryModes[library].label}`);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
   const openDocument = (doc: Document) => {
@@ -231,7 +319,7 @@ export function App() {
           ref={fileRef}
           hidden
           multiple
-          accept=".pdf,.epub"
+          accept={papers ? ".pdf" : ".pdf,.epub"}
           onChange={(e) => {
             void importFiles(Array.from(e.target.files || []));
             e.target.value = "";
@@ -251,11 +339,14 @@ export function App() {
           />
         ) : (
           <>
+            {/* Outside the sidebar, which is transformed while collapsed. */}
+            <div className="window-top-drag" aria-hidden="true" />
             <aside
               className={`library-sidebar ${nav ? "" : "collapsed"}`}
               inert={!nav}
             >
               <div className="window-drag-handle" aria-hidden="true" />
+              <LibraryModeSwitcher mode={mode} onChange={switchMode} />
               <Button
                 className="w-full justify-between"
                 variant="outline"
@@ -267,47 +358,66 @@ export function App() {
                 </span>
                 <kbd>⌘ K</kbd>
               </Button>
-              <nav className="space-y-1">
-                {[
-                  {
-                    id: "all",
-                    label: "全部文档",
-                    icon: Library,
-                    count: documents.length,
-                  },
-                  {
-                    id: "tags",
-                    label: "标签看板",
-                    icon: Tags,
-                    count: undefined,
-                  },
-                  {
-                    id: "favorites",
-                    label: "收藏",
-                    icon: Star,
-                    count: documents.filter((d) => d.favorite).length,
-                  },
-                ].map((item) => (
-                  <Button
-                    key={item.id}
-                    variant="ghost"
-                    className={`nav-item ${filter === item.id ? "active" : ""}`}
-                    onClick={() => {
-                      setFilter(item.id);
-                      setEditingLibrary(false);
-                    }}
-                  >
-                    <item.icon className="size-4" />
-                    <span>{item.label}</span>
-                    <span className="nav-count">{item.count}</span>
-                  </Button>
-                ))}
-              </nav>
+              {papers ? (
+                <PaperSidebar
+                  documents={documents}
+                  jobs={jobsById}
+                  trashCount={trash.length}
+                  openDocument={openDocument}
+                  onNewCategory={() => usePaperUI.getState().setNaming([])}
+                />
+              ) : (
+                <nav className="space-y-1">
+                  {[
+                    {
+                      id: "all",
+                      label: papers ? "全部论文" : "全部文档",
+                      icon: Library,
+                      count: documents.length,
+                    },
+                    {
+                      id: "tags",
+                      label: "标签看板",
+                      icon: Tags,
+                      count: undefined,
+                    },
+                    {
+                      id: "favorites",
+                      label: "收藏",
+                      icon: Star,
+                      count: documents.filter((d) => d.favorite).length,
+                    },
+                    ...(trash.length || filter === "trash"
+                      ? [
+                          {
+                            id: "trash",
+                            label: "回收站",
+                            icon: Trash2,
+                            count: trash.length,
+                          },
+                        ]
+                      : []),
+                  ].map((item) => (
+                    <Button
+                      key={item.id}
+                      variant="ghost"
+                      className={`nav-item ${filter === item.id ? "active" : ""}`}
+                      onClick={() => {
+                        setFilter(item.id);
+                        setEditingLibrary(false);
+                      }}
+                    >
+                      <item.icon className="size-4" />
+                      <span>{item.label}</span>
+                      <span className="nav-count">{item.count}</span>
+                    </Button>
+                  ))}
+                </nav>
+              )}
               <div className="sidebar-bottom">
                 <Button
-                  variant="ghost"
-                  className="mb-2 h-10 w-full gap-2 rounded-full bg-foreground/7 text-foreground/80 hover:bg-foreground/12 hover:text-foreground dark:hover:bg-foreground/12"
-                  onClick={chooseFiles}
+                  className="mb-2 h-10 w-full gap-2 rounded-full"
+                  onClick={papers ? () => setImportingPaper(true) : chooseFiles}
                   disabled={busy}
                 >
                   {busy ? (
@@ -315,7 +425,9 @@ export function App() {
                   ) : (
                     <CirclePlus className="size-4" />
                   )}
-                  <span>{busy ? "导入中…" : "导入文档"}</span>
+                  <span>
+                    {busy ? "导入中…" : papers ? "导入论文" : "导入文档"}
+                  </span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -340,51 +452,43 @@ export function App() {
                 </Button>
               </div>
             </aside>
-            <main className="library-main">
-              <header className="library-topbar">
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="切换侧栏"
-                    aria-expanded={nav}
-                    onClick={() => setNav(!nav)}
-                  >
-                    <PanelLeft />
-                  </Button>
-                  <h1 className="library-title">
-                    {filter === "tags"
-                      ? "标签看板"
-                      : filter === "favorites"
-                        ? "收藏"
-                        : "全部文档"}
-                  </h1>
-                </div>
-                {filter === "tags" ? (
-                  <div className="search-field">
-                    <Search className="size-4" />
-                    <Input
-                      aria-label="搜索书库"
-                      placeholder="搜索标题、作者、标签…"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
+            {papers ? (
+              <PaperLibrary
+                documents={documents}
+                trash={trash}
+                jobs={jobsById}
+                loading={loading}
+                openDocument={openDocument}
+                moveToBooks={(doc) => void moveDocument(doc, "books")}
+                navOpen={nav}
+                onToggleNav={() => setNav(!nav)}
+              />
+            ) : (
+              <main className="library-main">
+                <header className="library-topbar">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="切换侧栏"
+                      aria-expanded={nav}
+                      onClick={() => setNav(!nav)}
+                    >
+                      <PanelLeft />
+                    </Button>
+                    <h1 className="library-title">
+                      {filter === "tags"
+                        ? "标签看板"
+                        : filter === "trash"
+                          ? "回收站"
+                          : filter === "favorites"
+                            ? "收藏"
+                            : papers
+                              ? "全部论文"
+                              : "全部文档"}
+                    </h1>
                   </div>
-                ) : (
-                  <Button
-                    variant={editingLibrary ? "secondary" : "outline"}
-                    aria-pressed={editingLibrary}
-                    disabled={!filtered.length && !editingLibrary}
-                    onClick={() => setEditingLibrary(!editingLibrary)}
-                  >
-                    {editingLibrary ? <Check /> : <Pencil />}
-                    {editingLibrary ? "完成" : "编辑"}
-                  </Button>
-                )}
-              </header>
-              <div className="library-content">
-                {filter === "favorites" && (
-                  <div className="library-controls">
+                  {filter === "tags" ? (
                     <div className="search-field">
                       <Search className="size-4" />
                       <Input
@@ -394,103 +498,136 @@ export function App() {
                         onChange={(e) => setQuery(e.target.value)}
                       />
                     </div>
-                  </div>
-                )}
-                {filter !== "tags" && (
-                  <LibraryFilterBar
-                    documents={documents}
-                    filters={filters}
-                    onChange={setFilters}
-                    view={libraryView}
-                    onViewChange={setLibraryView}
-                    count={filtered.length}
-                  />
-                )}
-                {processingError && (
-                  <p className="processing-warning" role="status">
-                    解析进度暂时不可用：{processingError}
-                  </p>
-                )}
-                {error ? (
-                  <div className="empty-state">
-                    <h2>暂时无法连接本地书库</h2>
-                    <p>{error}</p>
-                    <Button variant="outline" onClick={() => location.reload()}>
-                      重新连接
+                  ) : filter === "trash" ? null : (
+                    <Button
+                      variant={editingLibrary ? "secondary" : "outline"}
+                      aria-pressed={editingLibrary}
+                      disabled={!filtered.length && !editingLibrary}
+                      onClick={() => setEditingLibrary(!editingLibrary)}
+                    >
+                      {editingLibrary ? <Check /> : <Pencil />}
+                      {editingLibrary ? "完成" : "编辑"}
                     </Button>
-                  </div>
-                ) : loading ? (
-                  <div className="empty-state">
-                    <Loader2 className="animate-spin text-muted-foreground" />
-                    <p>正在打开本地书库</p>
-                  </div>
-                ) : filter === "tags" ? (
-                  <TagBoards
-                    documents={documents}
-                    query={query}
-                    jobs={jobs}
-                    processingError={processingError}
-                    openDocument={openDocument}
-                    favorite={favorite}
-                    onEdit={setEditingId}
-                    onSettings={() => setSettings(true)}
-                  />
-                ) : filtered.length ? (
-                  <LibraryDocuments
-                    key={JSON.stringify([filter, query, filters])}
-                    documents={filtered}
-                    libraryView={libraryView}
-                    editing={editingLibrary}
-                    onEditingChange={setEditingLibrary}
-                    jobs={jobs}
-                    processingError={processingError}
-                    openDocument={openDocument}
-                    favorite={favorite}
-                    onEdit={setEditingId}
-                    onSettings={() => setSettings(true)}
-                  />
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-books">
-                      <span>
-                        <FileText />
-                      </span>
-                      <span>
-                        <BookOpen />
-                      </span>
+                  )}
+                </header>
+                <div className="library-content">
+                  {filter === "favorites" && (
+                    <div className="library-controls">
+                      <div className="search-field">
+                        <Search className="size-4" />
+                        <Input
+                          aria-label="搜索书库"
+                          placeholder="搜索标题、作者、标签…"
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                        />
+                      </div>
                     </div>
-                    <h2>
-                      {documents.length
-                        ? "没有符合筛选条件的文档"
-                        : filter === "favorites"
-                          ? "暂无收藏"
-                          : "暂无文档"}
-                    </h2>
-                    {!!documents.length && (
+                  )}
+                  {filter !== "tags" && filter !== "trash" && (
+                    <LibraryFilterBar
+                      documents={documents}
+                      filters={filters}
+                      onChange={setFilters}
+                      view={libraryView}
+                      onViewChange={setLibraryView}
+                      count={filtered.length}
+                    />
+                  )}
+                  {processingError && (
+                    <p className="processing-warning" role="status">
+                      解析进度暂时不可用：{processingError}
+                    </p>
+                  )}
+                  {error ? (
+                    <div className="empty-state">
+                      <h2>暂时无法连接本地书库</h2>
+                      <p>{error}</p>
                       <Button
                         variant="outline"
-                        onClick={() => {
-                          setFilters(initialFilters);
-                          setQuery("");
-                          setFilter("all");
-                        }}
+                        onClick={() => location.reload()}
                       >
-                        显示全部文档
+                        重新连接
                       </Button>
-                    )}
-                    {!documents.length && (
-                      <Button
-                        variant="link"
-                        onClick={() => void sample()}
-                        disabled={busy}
-                      >
-                        先体验示例文档 <ArrowUpRight className="size-3" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </main>
+                    </div>
+                  ) : loading ? (
+                    <div className="empty-state">
+                      <Loader2 className="animate-spin text-muted-foreground" />
+                      <p>正在打开本地书库</p>
+                    </div>
+                  ) : filter === "trash" ? (
+                    <TrashView documents={trash} />
+                  ) : filter === "tags" ? (
+                    <TagBoards
+                      documents={documents}
+                      query={query}
+                      jobs={jobs}
+                      processingError={processingError}
+                      openDocument={openDocument}
+                      favorite={favorite}
+                      onEdit={setEditingId}
+                      onSettings={() => setSettings(true)}
+                    />
+                  ) : filtered.length ? (
+                    <LibraryDocuments
+                      key={JSON.stringify([filter, query, filters])}
+                      documents={filtered}
+                      libraryView={libraryView}
+                      editing={editingLibrary}
+                      onEditingChange={setEditingLibrary}
+                      jobs={jobs}
+                      processingError={processingError}
+                      openDocument={openDocument}
+                      favorite={favorite}
+                      onEdit={setEditingId}
+                      onMove={moveDocument}
+                      onSettings={() => setSettings(true)}
+                    />
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-books">
+                        <span>
+                          <FileText />
+                        </span>
+                        <span>
+                          <BookOpen />
+                        </span>
+                      </div>
+                      <h2>
+                        {documents.length
+                          ? "没有符合筛选条件的文档"
+                          : filter === "favorites"
+                            ? "暂无收藏"
+                            : papers
+                              ? "暂无论文"
+                              : "暂无文档"}
+                      </h2>
+                      {!!documents.length && (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setFilters(initialFilters);
+                            setQuery("");
+                            setFilter("all");
+                          }}
+                        >
+                          显示全部文档
+                        </Button>
+                      )}
+                      {!documents.length && !papers && (
+                        <Button
+                          variant="link"
+                          onClick={() => void sample()}
+                          disabled={busy}
+                        >
+                          先体验示例文档 <ArrowUpRight className="size-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </main>
+            )}
           </>
         )}
         {editing && (
@@ -502,6 +639,11 @@ export function App() {
           />
         )}
         <Settings open={settings} onOpenChange={setSettings} />
+        <ImportPaperDialog
+          open={importingPaper}
+          onOpenChange={setImportingPaper}
+          onChooseFiles={chooseFiles}
+        />
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>

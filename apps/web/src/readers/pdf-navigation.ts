@@ -286,6 +286,43 @@ export class PDFReadingNavigation {
     });
     if (!this.disposed && this.focus === passages) this.paintFocus();
   }
+  sentenceRanges(passages: PDFPassage[]): Range[] {
+    if (this.disposed) return [];
+    return passages.flatMap((passage) => {
+      const block = this.blocks().find((b) => b.id === passage.blockId);
+      const node = block && this.pageNode(block.page);
+      if (!block || !node) return [];
+      return this.domSentenceRanges(
+        node,
+        block,
+        passage.sources,
+        passage.sourceOffset,
+      ).flatMap((range) => {
+        // A cross-node Range includes PDF.js <br> nodes, whose highlight can
+        // extend to the text-layer edge. Restrict every fragment to one text run.
+        const walker = document.createTreeWalker(
+          node.querySelector(".textLayer")!,
+          NodeFilter.SHOW_TEXT,
+        );
+        const fragments: Range[] = [];
+        let text: Node | null;
+        while ((text = walker.nextNode())) {
+          if (!range.intersectsNode(text)) continue;
+          const start = text === range.startContainer ? range.startOffset : 0;
+          const end =
+            text === range.endContainer
+              ? range.endOffset
+              : (text.textContent?.length ?? 0);
+          if (end <= start) continue;
+          const fragment = document.createRange();
+          fragment.setStart(text, start);
+          fragment.setEnd(text, end);
+          fragments.push(fragment);
+        }
+        return fragments;
+      });
+    });
+  }
   private clearLinkedRanges() {
     const registry = typeof CSS !== "undefined" ? CSS.highlights : undefined;
     const highlight = registry?.get("reader-linked-sentences");
@@ -362,13 +399,28 @@ export class PDFReadingNavigation {
         if (boxes.some((b) => selection.some((r) => overlap(b, r) > 0)))
           indexes.push(i);
       }
-      result.push({
-        blockId: block.id,
-        sentenceIndexes:
-          reliable && indexes.length
-            ? indexes
-            : translation.sentences.map((_, i) => i),
-      });
+      if (reliable && indexes.length) {
+        result.push({ blockId: block.id, sentenceIndexes: indexes });
+      } else {
+        const normalize = (text: string) =>
+          text.toLowerCase().replace(/[\s\u00ad]/g, "");
+        const needle = normalize(location.quote ?? "");
+        const joined = translation.sentences
+          .map((s) => normalize(s.source))
+          .join("");
+        const start = needle ? joined.indexOf(needle) : -1;
+        // Missing geometry must not associate the entire paragraph or a repeated phrase.
+        if (start < 0 || joined.indexOf(needle, start + 1) >= 0) continue;
+        let offset = 0;
+        const matches = translation.sentences.flatMap((sentence, i) => {
+          const end = offset + normalize(sentence.source).length;
+          const overlaps = offset < start + needle.length && end > start;
+          offset = end;
+          return overlaps ? [i] : [];
+        });
+        if (matches.length)
+          result.push({ blockId: block.id, sentenceIndexes: matches });
+      }
     }
     return result;
   }
