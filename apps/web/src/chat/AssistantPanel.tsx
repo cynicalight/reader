@@ -87,6 +87,7 @@ export function AssistantPanel({
             return (
               <div
                 key={key}
+                data-message-id={message?.id}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
                 {assistant ? (

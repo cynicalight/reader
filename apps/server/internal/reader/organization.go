@@ -44,6 +44,11 @@ func (s *Store) migrateOrganization() error {
 		{"classification_status", "TEXT NOT NULL DEFAULT 'pending'"},
 		{"classification_error", "TEXT NOT NULL DEFAULT ''"},
 		{"tags", "TEXT NOT NULL DEFAULT '[]'"},
+		{"library", "TEXT NOT NULL DEFAULT 'books' CHECK(library IN ('books','papers'))"},
+		{"deleted_at", "TEXT NOT NULL DEFAULT ''"},
+		{"metadata", "TEXT NOT NULL DEFAULT '{}'"},
+		{"reading_status", "TEXT NOT NULL DEFAULT 'unread' CHECK(reading_status IN ('unread','reading','done'))"},
+		{"folders", "TEXT NOT NULL DEFAULT '[]'"},
 	} {
 		if !columns[column.name] {
 			if _, err = tx.Exec("ALTER TABLE documents ADD COLUMN " + column.name + " " + column.definition); err != nil {
@@ -56,7 +61,21 @@ func (s *Store) migrateOrganization() error {
 			return err
 		}
 	}
+	// Existing papers open in the paper library; everything else stays with books.
+	if !columns["library"] {
+		if _, err = tx.Exec("UPDATE documents SET library='papers' WHERE type='pdf' AND category='paper' AND size<=?", maxPaperBytes); err != nil {
+			return err
+		}
+	}
+	if !columns["reading_status"] {
+		if _, err = tx.Exec("UPDATE documents SET reading_status=CASE WHEN percentage>=0.98 THEN 'done' WHEN percentage>0 THEN 'reading' ELSE 'unread' END"); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
+}
+func validReadingStatus(status string) bool {
+	return status == "unread" || status == "reading" || status == "done"
 }
 func validCategory(c string) bool { return c == "book" || c == "article" || c == "paper" }
 func normalizeTags(raw json.RawMessage) ([]string, error) {
@@ -121,7 +140,7 @@ func (s *Server) classificationWorker(ctx context.Context) {
 		var id string
 		// Wait for PDF extraction; failed extraction becomes an actionable classification failure.
 		err := s.Store.DB.QueryRow(`SELECT d.id FROM documents d LEFT JOIN document_processing p ON p.document_id=d.id
-   WHERE d.classification_status='pending' AND d.category_source!='manual'
+   WHERE d.classification_status='pending' AND d.category_source!='manual' AND d.deleted_at=''
    AND (d.type='epub' OR p.document_id IS NULL OR p.phase!='learning' OR p.status='failed')
    ORDER BY d.created_at LIMIT 1`).Scan(&id)
 		if err != nil {

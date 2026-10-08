@@ -7,6 +7,7 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   publish: null,
+  protocols: [{ name: "Reader", schemes: ["reader"] }],
   mac: {
     // The zip is the Squirrel.Mac in-place update payload.
     target: ["dmg", "zip"],

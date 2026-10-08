@@ -1,0 +1,94 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { api } from "@reader/api";
+import { toast } from "sonner";
+import { ImportPaperDialog } from "./ImportPaperDialog";
+import { looksLikeReference } from "./actions";
+import { usePaperUI } from "./state";
+import { paper } from "./fixtures";
+vi.mock("@reader/api", () => ({
+  api: { resolveDocument: vi.fn(), documents: vi.fn(async () => []) },
+}));
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+let root: Root, host: HTMLDivElement;
+const close = vi.fn(),
+  choose = vi.fn();
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.clearAllMocks();
+  usePaperUI.setState({ view: "starred", query: "x", selectedId: null });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ImportPaperDialog open onOpenChange={close} onChooseFiles={choose} />,
+    ),
+  );
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  document.body.innerHTML = "";
+});
+const type = (input: HTMLInputElement, value: string) => {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+it("recognizes pasted identifiers but not arbitrary text", () => {
+  for (const ref of [
+    "2401.01234",
+    "arXiv:2401.01234v2",
+    "10.1145/3290605.3300857",
+    "doi:10.1000/x",
+    "https://openreview.net/forum?id=abc",
+  ])
+    expect(looksLikeReference(ref)).toBe(true);
+  for (const text of ["hello world", "Attention is all you need", "2024"])
+    expect(looksLikeReference(text)).toBe(false);
+});
+it("imports by reference and shows the new paper", async () => {
+  vi.mocked(api.resolveDocument).mockResolvedValue(
+    paper({ id: "new", title: "Attention" }),
+  );
+  const input = document.querySelector<HTMLInputElement>(
+    '[aria-label="论文标识或链接"]',
+  )!;
+  await act(async () => type(input, " 1706.03762 "));
+  await act(async () =>
+    input.form!.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(api.resolveDocument).toHaveBeenCalledExactlyOnceWith("1706.03762");
+  expect(toast.success).toHaveBeenCalledWith("已导入《Attention》");
+  expect(usePaperUI.getState()).toMatchObject({
+    view: "all",
+    query: "",
+    selectedId: "new",
+  });
+  expect(close).toHaveBeenCalledWith(false);
+});
+it("keeps the dialog open and reports a failed lookup", async () => {
+  vi.mocked(api.resolveDocument).mockRejectedValue(
+    new Error("找到了《X》，但没有公开的 PDF"),
+  );
+  const input = document.querySelector<HTMLInputElement>(
+    '[aria-label="论文标识或链接"]',
+  )!;
+  await act(async () => type(input, "10.1000/closed"));
+  await act(async () =>
+    input.form!.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(toast.error).toHaveBeenCalledWith("找到了《X》，但没有公开的 PDF");
+  expect(close).not.toHaveBeenCalled();
+});

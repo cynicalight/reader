@@ -5,6 +5,7 @@ import {
   ipcMain,
   session,
   nativeTheme,
+  shell,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, resolve } from "node:path";
@@ -13,6 +14,11 @@ import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
+import {
+  READER_SCHEME,
+  parseReaderLink,
+  type ReaderLinkTarget,
+} from "../../../packages/reader-core/src/reader-link";
 import { writeClipboardText } from "./clipboard";
 import { childProxyEnvironment } from "./proxy";
 import { startUpdateService } from "./update-service";
@@ -119,11 +125,21 @@ async function startServer() {
     });
   });
 }
-async function importPaths(paths: string[]) {
+/** Window background before the renderer paints, matching the theme. */
+function windowBackground(appearance: unknown) {
+  if (appearance === "sepia") return "#eeede7";
+  return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
+}
+async function importPaths(
+  paths: string[],
+  library: "books" | "papers" = "books",
+) {
+  const accepted = library === "papers" ? /\.pdf$/i : /\.(epub|pdf)$/i;
   for (const path of paths) {
-    if (!/\.(epub|pdf)$/i.test(path)) continue;
+    if (!accepted.test(path)) continue;
     const data = await readFile(path);
     const form = new FormData();
+    form.append("library", library);
     form.append("file", new Blob([data]), path.split(/[\\/]/).pop()!);
     const response = await fetch(`${serverURL}/api/documents`, {
       method: "POST",
@@ -133,6 +149,39 @@ async function importPaths(paths: string[]) {
     if (!response.ok) throw new Error((await response.json()).error);
   }
   window?.webContents.send("reader:library-changed");
+}
+// reader:// links reach one window. The renderer claims queued links once its
+// listener exists; later links are sent directly.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+const pendingLinks: ReaderLinkTarget[] = [];
+let linksClaimed = false;
+function openLink(link: string) {
+  const target = parseReaderLink(link);
+  if (!target) return;
+  if (linksClaimed && window && !window.isDestroyed()) {
+    window.webContents.send("reader:open-link", target);
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  } else pendingLinks.push(target);
+}
+const linkArgument = (argv: string[]) =>
+  argv.find((arg) => arg.toLowerCase().startsWith(`${READER_SCHEME}://`));
+app.on("open-url", (event, link) => {
+  event.preventDefault();
+  openLink(link);
+});
+app.on("second-instance", (_event, argv) => {
+  const link = linkArgument(argv);
+  if (link) openLink(link);
+  else if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  }
+});
+{
+  const link = linkArgument(process.argv);
+  if (link) openLink(link);
 }
 const pendingFiles: string[] = [];
 app.on("open-file", (event, path) => {
@@ -146,9 +195,30 @@ app.on("open-file", (event, path) => {
 app
   .whenReady()
   .then(async () => {
+    if (!primary) return;
+    // Development runs need the entry script registered beside Electron.
+    if (process.defaultApp && process.argv.length >= 2)
+      app.setAsDefaultProtocolClient(READER_SCHEME, process.execPath, [
+        resolve(process.argv[1]),
+      ]);
+    else app.setAsDefaultProtocolClient(READER_SCHEME);
     const url = await startServer();
     session.defaultSession.setPermissionRequestHandler(
-      (_contents, _permission, callback) => callback(false),
+      (contents, permission, callback, details) => {
+        // Only Reader's own page may list installed fonts, for the
+        // translation font picker; every other request stays denied.
+        let origin = "";
+        try {
+          origin = new URL(details.requestingUrl).origin;
+        } catch {
+          /* not a URL */
+        }
+        callback(
+          permission === "local-fonts" &&
+            contents === window?.webContents &&
+            origin === new URL(url).origin,
+        );
+      },
     );
     const preferences: unknown = await fetch(`${url}/api/settings`, {
       headers: { Authorization: `Bearer ${serverToken}` },
@@ -162,7 +232,11 @@ app
         ? preferences.appearance
         : undefined;
     nativeTheme.themeSource =
-      appearance === "light" || appearance === "dark" ? appearance : "system";
+      appearance === "light" || appearance === "dark"
+        ? appearance
+        : appearance === "sepia"
+          ? "light"
+          : "system";
     window = new BrowserWindow({
       width: 1440,
       height: 940,
@@ -175,7 +249,7 @@ app
             trafficLightPosition: { x: 20, y: 20 },
           }
         : {}),
-      backgroundColor: nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
+      backgroundColor: windowBackground(appearance),
       webPreferences: {
         preload: join(__dirname, "preload.cjs"),
         contextIsolation: true,
@@ -254,26 +328,79 @@ app
         throw new Error("Invalid sender");
       if (
         appearance !== "light" &&
+        appearance !== "sepia" &&
         appearance !== "dark" &&
         appearance !== "system"
       )
         throw new Error("Invalid appearance");
-      nativeTheme.themeSource = appearance;
-      window.setBackgroundColor(
-        nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
-      );
+      // Paper is a light theme for native chrome with its own background.
+      nativeTheme.themeSource = appearance === "sepia" ? "light" : appearance;
+      window.setBackgroundColor(windowBackground(appearance));
     });
-    ipcMain.handle("reader:import", async (event) => {
+    ipcMain.handle(
+      "reader:document-file",
+      async (event, id: unknown, type: unknown, action: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        // Only library-owned copies, addressed by content hash, can be reached.
+        if (
+          typeof id !== "string" ||
+          !/^[0-9a-f]{32}$/.test(id) ||
+          (type !== "pdf" && type !== "epub") ||
+          (action !== "show" && action !== "open")
+        )
+          throw new Error("Invalid document");
+        const file = join(
+          app.getPath("userData"),
+          "library",
+          type === "pdf" ? "papers" : "books",
+          `${id}.${type}`,
+        );
+        if (action === "show") shell.showItemInFolder(file);
+        else {
+          const error = await shell.openPath(file);
+          if (error) throw new Error(error);
+        }
+      },
+    );
+    ipcMain.handle("reader:take-links", (event) => {
       if (
         event.sender !== window?.webContents ||
         event.senderFrame !== window.webContents.mainFrame
       )
         throw new Error("Invalid sender");
+      linksClaimed = true;
+      return pendingLinks.splice(0);
+    });
+    ipcMain.handle("reader:open-external", async (event, url: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url))
+        throw new Error("Invalid link");
+      await shell.openExternal(new URL(url).toString());
+    });
+    ipcMain.handle("reader:import", async (event, library: unknown) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      if (library !== "books" && library !== "papers")
+        throw new Error("Invalid library");
       const selected = await dialog.showOpenDialog(window, {
         properties: ["openFile", "multiSelections"],
-        filters: [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
+        filters:
+          library === "papers"
+            ? [{ name: "PDF", extensions: ["pdf"] }]
+            : [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
       });
-      if (!selected.canceled) await importPaths(selected.filePaths);
+      if (!selected.canceled) await importPaths(selected.filePaths, library);
     });
     await window.loadURL(`${url}/#token=${serverToken}`);
     if (pendingFiles.length) await importPaths(pendingFiles.splice(0));

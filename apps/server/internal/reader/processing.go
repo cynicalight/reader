@@ -60,10 +60,12 @@ type PDFBlock struct {
 	Caption string `json:"caption,omitempty"`
 }
 type layoutManifest struct {
-	IncompletePages []int      `json:"incompletePages"`
-	Pages           int        `json:"pages"`
-	Blocks          []PDFBlock `json:"blocks"`
-	Warnings        []string   `json:"warnings"`
+	// PDF document information (Title, Author, …) as read by PDF.js.
+	Metadata        map[string]any `json:"metadata"`
+	IncompletePages []int          `json:"incompletePages"`
+	Pages           int            `json:"pages"`
+	Blocks          []PDFBlock     `json:"blocks"`
+	Warnings        []string       `json:"warnings"`
 }
 
 var blockIDPattern = regexp.MustCompile(`^p[1-9][0-9]*-b[1-9][0-9]*$`)
@@ -257,7 +259,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Lock()
 				var body string
-				e := s.Store.DB.QueryRow("SELECT body FROM document_processing WHERE phase=? AND status='queued' ORDER BY rowid LIMIT 1", phase).Scan(&body)
+				// Documents in the trash keep their queue position until restored.
+				e := s.Store.DB.QueryRow("SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id WHERE p.phase=? AND p.status='queued' AND d.deleted_at='' ORDER BY p.rowid LIMIT 1", phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)
@@ -307,6 +310,8 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	}
 	workers.Add(1)
 	go func() { defer workers.Done(); s.classificationWorker(ctx) }()
+	workers.Add(1)
+	go func() { defer workers.Done(); s.metadataWorker(ctx) }()
 	return func() { cancel(); workers.Wait() }
 }
 func (s *Server) wakeProcessing() {

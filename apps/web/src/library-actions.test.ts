@@ -7,11 +7,17 @@ import {
 } from "./library-actions";
 import { useReaderStore, refreshLibrary } from "./store";
 vi.mock("@reader/api", () => ({
-  api: { removeDocument: vi.fn(), documents: vi.fn() },
+  api: {
+    trashDocument: vi.fn(),
+    restoreDocument: vi.fn(),
+    documents: vi.fn(),
+    trash: vi.fn(),
+  },
 }));
 const doc = (id: string) => ({ id }) as Document;
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.trash).mockResolvedValue([]);
   useReaderStore.setState({
     documents: [doc("a"), doc("b"), doc("c")],
     active: null,
@@ -25,13 +31,14 @@ it("selects ranges only inside current results and toggles one document", () => 
     ...toggleDocumentSelection(new Set(["a", "b"]), ["a", "b"], "a", null),
   ]).toEqual(["b"]);
 });
-it("removes acknowledged documents once and preserves failed documents for retry", async () => {
-  vi.mocked(api.removeDocument).mockImplementation(async (id) => {
+it("trashes acknowledged documents once and preserves failed documents for retry", async () => {
+  vi.mocked(api.trashDocument).mockImplementation(async (id) => {
     if (id === "b") throw new Error("offline");
+    return doc(id);
   });
   const result = await removeLibraryDocuments(["a", "a", "b"]);
   expect(result).toEqual({ deleted: ["a"], failed: ["b"] });
-  expect(api.removeDocument).toHaveBeenCalledTimes(2);
+  expect(api.trashDocument).toHaveBeenCalledTimes(2);
   expect(useReaderStore.getState().documents.map((d) => d.id)).toEqual([
     "b",
     "c",
@@ -44,7 +51,7 @@ it("does not resurrect a deleted document from an older poll", async () => {
       finish = resolve;
     }),
   );
-  vi.mocked(api.removeDocument).mockResolvedValue(undefined);
+  vi.mocked(api.trashDocument).mockResolvedValue(doc("a"));
   const refreshing = refreshLibrary();
   await removeLibraryDocuments(["a"]);
   finish([doc("a"), doc("b"), doc("c")]);

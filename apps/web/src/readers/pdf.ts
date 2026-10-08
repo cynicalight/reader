@@ -3,6 +3,7 @@ import { pdfQuotePoint } from "./pdf-reference-location";
 import { PDFBlockOverlay } from "./pdf-blocks";
 import { PDFReadingNavigation } from "./pdf-navigation";
 import { PDFAnnotationLayer } from "./pdf-annotations";
+import { PDFLinkPreview } from "./pdf-link-preview";
 import * as pdfjs from "pdfjs-dist";
 import {
   EventBus,
@@ -26,6 +27,7 @@ import type {
 } from "@reader/core";
 import { publicationURL } from "@reader/api";
 import { zoomCommand } from "@reader/core";
+import { selectSentence } from "./sentence-selection";
 pdfjs.GlobalWorkerOptions.workerSrc = workerURL;
 export class PDFReaderAdapter implements ReaderAdapter {
   private pdf?: pdfjs.PDFDocumentProxy;
@@ -36,6 +38,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private location: PDFLocation = { type: "pdf", page: 1 };
   private selection: ReaderSelection | null = null;
   private annotationLayer: PDFAnnotationLayer;
+  private linkPreview: PDFLinkPreview;
   private texts = new Map<number, string>();
   private resize: ResizeObserver;
   private resizeTimer?: ReturnType<typeof setTimeout>;
@@ -56,6 +59,12 @@ export class PDFReaderAdapter implements ReaderAdapter {
     container.classList.add("pdf-container");
     this.annotationLayer = new PDFAnnotationLayer(container, (target) =>
       this.events.annotation?.(target),
+    );
+    this.linkPreview = new PDFLinkPreview(
+      container,
+      () => this.pdf,
+      (preview) => this.events.linkPreview?.(preview),
+      () => this.events.internalLink?.(this.getLocation()),
     );
     this.blocks = new PDFBlockOverlay(
       container,
@@ -209,6 +218,18 @@ export class PDFReaderAdapter implements ReaderAdapter {
       x: Math.max(0, Math.min(1, (viewport.left - bounds.left) / bounds.width)),
       y: Math.max(0, Math.min(1, (viewport.top - bounds.top) / bounds.height)),
     };
+  }
+  isNear(location: DocumentLocation) {
+    if (location.type !== "pdf") return false;
+    const page = this.viewer.getPageView(location.page - 1)?.div as
+      HTMLElement | undefined;
+    const bounds = page?.getBoundingClientRect();
+    if (!bounds?.height) return false;
+    const view = this.container.getBoundingClientRect();
+    const top = bounds.top + (location.y ?? 0) * bounds.height;
+    const overlap =
+      Math.min(view.bottom, top + view.height) - Math.max(view.top, top);
+    return overlap > view.height / 2;
   }
   async goTo(location: DocumentLocation) {
     if (location.type !== "pdf" || !this.pdf) return;
@@ -384,6 +405,13 @@ export class PDFReaderAdapter implements ReaderAdapter {
   private onMouseUp = (event: MouseEvent) => {
     this.selecting = false;
     if (!isSelectionToolbar(event.target)) {
+      // A double click selects the whole sentence instead of one word.
+      const layer =
+        event.detail === 2 && event.target instanceof Element
+          ? event.target.closest(".textLayer")
+          : null;
+      if (layer && this.container.contains(layer))
+        selectSentence(window.getSelection(), layer);
       this.pointer = { x: event.clientX, y: event.clientY };
       this.onSelection();
     }
@@ -542,6 +570,7 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.navigation.destroy();
     this.blocks.destroy();
     this.annotationLayer.destroy();
+    this.linkPreview.destroy();
     this.disposed = true;
     this.resize.disconnect();
     clearTimeout(this.resizeTimer);

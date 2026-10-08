@@ -52,6 +52,14 @@ beforeEach(() => {
     categorySource: "default",
     classificationStatus: "pending",
     classificationError: "",
+    library: "books",
+    metadata: {},
+    readingStatus: "unread",
+    noteCount: 0,
+    highlightCount: 0,
+    openQuestionCount: 0,
+    related: [],
+    folders: [],
     tags: ["Web"],
   };
   vi.mocked(api.update).mockImplementation(async () => doc);

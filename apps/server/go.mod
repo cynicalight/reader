@@ -7,6 +7,7 @@ require (
 	github.com/readium/go-toolkit v0.16.1
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.60.1
+	rsc.io/pdf v0.1.1
 )
 
 require (

@@ -36,6 +36,8 @@ import { TranslationText } from "./TranslationText";
 import { paintTranslatedAnnotations } from "./annotations";
 import { translatedSelection as captureTranslationSelection } from "./selection";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
+import { translationFont } from "../appearance";
+import { selectSentence } from "../readers/sentence-selection";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -670,10 +672,30 @@ export function PDFReadingView({
                 void engine?.focusSentences?.("", []);
               }}
               onPointerUp={translatedSelection}
+              onDoubleClick={(event) => {
+                // Select the translated sentence; untranslated text falls
+                // back to the sentence around the word.
+                const target = event.target as Element;
+                const sentence = target.closest(".translation-sentence");
+                const selected = window.getSelection();
+                if (sentence && selected) {
+                  const range = document.createRange();
+                  range.selectNodeContents(sentence);
+                  selected.removeAllRanges();
+                  selected.addRange(range);
+                } else {
+                  const section = target.closest("section");
+                  if (section) selectSentence(selected, section);
+                }
+                translatedSelection();
+              }}
               onKeyDownCapture={() => input("translation")}
               onKeyUp={translatedSelection}
               style={{
-                fontSize: `${theme.fontSize}rem`,
+                fontSize: `${theme.translationFontSize ?? 1}rem`,
+                fontFamily: translationFont(theme.translationFontFamily),
+                fontWeight:
+                  theme.translationFontWeight === "bold" ? 600 : undefined,
                 lineHeight: theme.lineHeight,
               }}
             >
