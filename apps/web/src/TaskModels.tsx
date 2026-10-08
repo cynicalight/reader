@@ -129,7 +129,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
         const { model, effort } = taskChoice(config, task);
         const recommended = selectedAgentModel(models, "", task);
         const current = model ? selectedAgentModel(models, model, task) : null;
-        const autoLabel = recommended ? `自动 · ${recommended.name}` : "自动";
+        const defaultLabel = recommended?.name ?? "默认模型";
         const options =
           current && !models.some((m) => m.id === current.id)
             ? [current, ...models]
@@ -140,9 +140,12 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
               {label}
             </span>
             <Select
-              value={current?.id ?? AUTO}
+              value={current?.id ?? recommended?.id ?? AUTO}
               disabled={disabled || saving}
-              onValueChange={(value) => value && void chooseModel(task, value)}
+              onValueChange={(value) =>
+                value &&
+                void chooseModel(task, value === recommended?.id ? AUTO : value)
+              }
             >
               <SelectTrigger
                 className="min-w-0 flex-1"
@@ -150,13 +153,15 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
                 aria-busy={loading || saving}
               >
                 <SelectValue>
-                  {current?.name ?? (loading ? "加载模型…" : autoLabel)}
+                  {current?.name ?? (loading ? "加载模型…" : defaultLabel)}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={AUTO} label={autoLabel}>
-                  {autoLabel}
-                </SelectItem>
+                {!recommended && (
+                  <SelectItem value={AUTO} label={defaultLabel}>
+                    {defaultLabel}
+                  </SelectItem>
+                )}
                 {options.map((m) => (
                   <SelectItem key={m.id} value={m.id} label={m.name}>
                     {m.name}
