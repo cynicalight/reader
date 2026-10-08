@@ -1,4 +1,4 @@
-import type { Annotation } from "@reader/core";
+import type { Annotation, HighlightColor, ReaderTheme } from "@reader/core";
 
 export function activeAnnotation(items: Annotation[], ids: string[]) {
   const matches = items.filter((item) => ids.includes(item.id));
@@ -38,28 +38,46 @@ export function documentOrder(a: Annotation, b: Annotation) {
   return a.createdAt.localeCompare(b.createdAt);
 }
 
-/** Highlight colors; the first is the default used before this palette existed. */
-export const highlightColors = [
+/** Default highlight colors; the first is the color of older marks. */
+export const highlightColors: HighlightColor[] = [
   { value: "#e6b94c", label: "黄色" },
   { value: "#6cc58c", label: "绿色" },
   { value: "#5b9fe8", label: "蓝色" },
   { value: "#e8746b", label: "红色" },
-  { value: "#a985e0", label: "紫色" },
-] as const;
+];
+export const MAX_HIGHLIGHT_COLORS = 8;
+/** Colors marks may carry from earlier palettes, so they keep their names. */
+const retiredColors: HighlightColor[] = [{ value: "#a985e0", label: "紫色" }];
 
-export const colorLabel = (color: string) =>
-  highlightColors.find((c) => c.value.toLowerCase() === color.toLowerCase())
-    ?.label || "其他颜色";
+/** The user's palette, or the defaults when it is unset or empty. */
+export const highlightPalette = (
+  theme?: Pick<ReaderTheme, "highlightColors">,
+) => (theme?.highlightColors?.length ? theme.highlightColors : highlightColors);
+
+export const colorLabel = (
+  color: string,
+  palette: HighlightColor[] = highlightColors,
+) =>
+  [...palette, ...highlightColors, ...retiredColors].find(
+    (c) => c.value.toLowerCase() === color.toLowerCase(),
+  )?.label || "其他颜色";
+
+export const validHighlightColor = (value: string) =>
+  /^#[0-9a-f]{6}$/i.test(value);
 
 /**
  * The reader's marks grouped by color, so questions like "how do my red
  * formulas relate" can be answered. Bookmarks carry no text and are skipped.
  */
-export function annotationContext(annotations: Annotation[], limit = 4000) {
+export function annotationContext(
+  annotations: Annotation[],
+  limit = 4000,
+  palette: HighlightColor[] = highlightColors,
+) {
   const groups = new Map<string, Annotation[]>();
   for (const a of [...annotations].sort(documentOrder)) {
     if (a.kind === "bookmark" || !(a.quote || a.note)) continue;
-    const label = colorLabel(a.color || highlightColors[0].value);
+    const label = colorLabel(a.color || highlightColors[0].value, palette);
     groups.set(label, [...(groups.get(label) || []), a]);
   }
   if (!groups.size) return "";

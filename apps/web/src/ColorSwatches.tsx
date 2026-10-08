@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { Button } from "@reader/ui/components/button";
-import { highlightColors } from "./annotations";
+import { highlightPalette } from "./annotations";
+import { useReaderStore } from "./store";
 
 /** One button per highlight color; `current` is marked as pressed. */
 export function ColorSwatches({
@@ -14,9 +15,10 @@ export function ColorSwatches({
   disabled?: boolean;
   onPick: (color: string) => void;
 }) {
+  const palette = highlightPalette(useReaderStore((s) => s.theme));
   return (
     <span className="color-swatches" role="group" aria-label={action}>
-      {highlightColors.map((color) => {
+      {palette.map((color) => {
         const on = current?.toLowerCase() === color.value;
         return (
           <Button

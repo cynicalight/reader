@@ -233,6 +233,13 @@ export interface ReaderTheme {
   /** "sans-serif", "serif" or an installed font family name. */
   translationFontFamily?: string;
   translationFontWeight?: "normal" | "bold";
+  /** The highlight palette, in order; the defaults apply when unset. */
+  highlightColors?: HighlightColor[];
+}
+export interface HighlightColor {
+  /** #rrggbb */
+  value: string;
+  label: string;
 }
 export const defaultTheme: ReaderTheme = {
   appearance: "system",

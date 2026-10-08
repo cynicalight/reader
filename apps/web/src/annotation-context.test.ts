@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Annotation } from "@reader/core";
-import { annotationContext, colorLabel } from "./annotations";
+import { annotationContext, colorLabel, highlightPalette } from "./annotations";
 
 const mark = (patch: Partial<Annotation>): Annotation => ({
   id: "x",
@@ -61,4 +61,12 @@ it("bounds the context", () => {
   const text = annotationContext(many, 1000);
   expect(text.length).toBeLessThan(1020);
   expect(text.endsWith("（其余标注已省略）")).toBe(true);
+});
+
+it("names colors from the user's palette and keeps retired names", () => {
+  const palette = [{ value: "#112233", label: "重点" }];
+  expect(colorLabel("#112233", palette)).toBe("重点");
+  expect(colorLabel("#a985e0", palette)).toBe("紫色");
+  expect(highlightPalette({ highlightColors: [] })).toHaveLength(4);
+  expect(highlightPalette({ highlightColors: palette })).toBe(palette);
 });

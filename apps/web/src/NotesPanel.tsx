@@ -37,7 +37,8 @@ import {
 import { toast } from "sonner";
 import { annotationLabels } from "./AnnotationToolbar";
 import { copyText } from "./chat/clipboard";
-import { colorLabel, documentOrder } from "./annotations";
+import { colorLabel, documentOrder, highlightPalette } from "./annotations";
+import { useReaderStore } from "./store";
 import { annotationDigest } from "./notes-export";
 
 export { documentOrder };
@@ -420,6 +421,7 @@ export function NotesPanel({
   const [color, setColor] = useState("");
   const [tag, setTag] = useState("");
   const facets = annotationFacets(annotations);
+  const palette = highlightPalette(useReaderStore((s) => s.theme));
   // A facet that no longer exists (deleted, retagged) stops filtering.
   const activeColor = facets.colors.some(
     (c) => c.toLowerCase() === color.toLowerCase(),
@@ -503,8 +505,8 @@ export function NotesPanel({
                     <ToggleGroupItem
                       key={c}
                       value={c}
-                      aria-label={`只看${colorLabel(c)}`}
-                      title={colorLabel(c)}
+                      aria-label={`只看${colorLabel(c, palette)}`}
+                      title={colorLabel(c, palette)}
                       className="size-7 min-w-7 px-0"
                     >
                       <span className="color-dot" style={{ background: c }} />

@@ -105,7 +105,7 @@ import {
   activeAnnotation,
   annotationContext,
   applySavedAnnotation,
-  highlightColors,
+  highlightPalette,
 } from "./annotations";
 import { ColorSwatches } from "./ColorSwatches";
 import { copyText } from "./chat/clipboard";
@@ -317,16 +317,18 @@ export function Workspace({
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteKind, setNoteKind] = useState<"note" | "question">("note");
-  const [markColor, setMarkColor] = useState<string>(() => {
+  const palette = highlightPalette(useReaderStore((s) => s.theme));
+  const [savedColor, setMarkColor] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem("reader.mark-color") || "";
-      return highlightColors.some((c) => c.value === saved)
-        ? saved
-        : highlightColors[0].value;
+      return localStorage.getItem("reader.mark-color") || "";
     } catch {
-      return highlightColors[0].value;
+      return "";
     }
   });
+  // The last color used, while it is still in the palette.
+  const markColor = palette.some((c) => c.value === savedColor)
+    ? savedColor
+    : palette[0].value;
   const chooseColor = (color: string) => {
     setMarkColor(color);
     try {
@@ -667,7 +669,7 @@ export function Workspace({
       }
       if (controller.signal.aborted) return;
       // The reader's marks go last so they never displace the passage itself.
-      const marks = annotationContext(annotations);
+      const marks = annotationContext(annotations, 4000, palette);
       const passage = context.slice(
         0,
         marks ? 21000 - marks.length - 2 : 21000,

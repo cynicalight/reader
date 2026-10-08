@@ -2751,3 +2751,41 @@ textarea.paper-note-input {
   width: 10px;
   height: 10px;
 }
+.settings-dialog {
+  height: min(620px, 85vh);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.settings-tabs {
+  min-height: 0;
+  gap: 20px;
+}
+.settings-nav.settings-nav {
+  width: 132px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.settings-nav [data-slot="tabs-trigger"] {
+  height: 32px;
+  gap: 8px;
+  padding-inline: 10px;
+}
+.settings-panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 4px 8px 0;
+  scrollbar-width: none;
+}
+.settings-panel::-webkit-scrollbar {
+  display: none;
+}
+.highlight-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.highlight-color-picker.highlight-color-picker {
+  width: 36px;
+  height: 32px;
+  padding: 3px;
+  cursor: pointer;
+}

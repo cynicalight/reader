@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Bot,
   Check,
   CircleCheck,
   CircleHelp,
+  Highlighter,
+  Library,
   LoaderCircle,
+  Monitor,
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
@@ -31,7 +35,13 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@reader/ui/components/tooltip";
-import { Separator } from "@reader/ui/components/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@reader/ui/components/tabs";
+import { HighlightColorsEditor } from "./HighlightColorsEditor";
 import { updateLibraryPreferences, useReaderStore } from "./store";
 import { Checkbox } from "@reader/ui/components/checkbox";
 import { toast } from "sonner";
@@ -148,237 +158,271 @@ export function Settings({
   }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="settings-dialog sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
-            外观与 AI 连接
+            显示、阅读、文献库与 Agent 连接
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-6 py-3">
-          <section>
-            <h3 className="mb-3 text-sm font-medium">界面主题</h3>
-            <div className="flex gap-2">
-              {(["light", "sepia", "dark", "system"] as const).map(
-                (mode, i) => (
-                  <Button
-                    key={mode}
-                    aria-pressed={(theme.appearance ?? "system") === mode}
-                    variant={
-                      (theme.appearance ?? "system") === mode
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setTheme({
-                        appearance: mode,
-                        mode:
-                          mode === "dark" || mode === "sepia" ? mode : "light",
-                      })
-                    }
-                  >
-                    {["浅色", "纸张", "深色", "跟随系统"][i]}
-                    {(theme.appearance ?? "system") === mode && (
-                      <Check className="size-3" />
-                    )}
-                  </Button>
-                ),
-              )}
-            </div>
-          </section>
-          <Separator />
-          <section>
-            <h3 className="mb-3 text-sm font-medium">文献库</h3>
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox
-                className="mt-0.5"
-                checked={paperPreferences.autoLookup !== false}
-                onCheckedChange={(checked) =>
-                  void updateLibraryPreferences({
-                    papers: { ...paperPreferences, autoLookup: !!checked },
-                  }).catch((e) => toast.error(e.message))
-                }
-              />
-              <span>
-                导入 PDF 后自动补全文献信息
-                <span className="block text-xs text-muted-foreground">
-                  只把文中的 DOI 或 arXiv 编号发送给 arXiv、Crossref 与 Semantic
-                  Scholar
-                </span>
-              </span>
-            </label>
-          </section>
-          <Separator />
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-medium">Agent 连接</h3>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="重新检测 Agent"
-                title="重新检测 Agent"
-                disabled={loading || testing.size > 0}
-                onClick={() => void refresh(true)}
-              >
-                <RefreshCw className={loading ? "animate-spin" : ""} />
-              </Button>
-            </div>
-            {config && (
-              <div className="mb-4 flex flex-col gap-2">
-                <label className="text-sm" id="primary-agent-label">
-                  Agent SDK
-                </label>
-                <Select
-                  value={config.primary || null}
-                  disabled={saving || aiModelSaving || testing.size > 0}
-                  onValueChange={async (value) => {
-                    if (!value) return;
-                    setSaving(true);
-                    try {
-                      const latest = await api.aiConfig();
-                      const saved = await api.saveAIConfig({
-                        ...latest,
-                        primary: value,
-                      });
-                      setAIConfig(saved);
-                    } catch (e) {
-                      toast.error((e as Error).message);
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    aria-labelledby="primary-agent-label"
-                    className="w-full"
-                  >
-                    <SelectValue placeholder="请选择 Agent SDK">
-                      {config.primary ? (
-                        <ProviderIdentity provider={config.primary} />
-                      ) : undefined}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="codex">
-                      <ProviderIdentity provider="codex" />
-                    </SelectItem>
-                    <SelectItem value="claude">
-                      <ProviderIdentity provider="claude" />
-                    </SelectItem>
-                    <SelectItem value="kimi">
-                      <ProviderIdentity provider="kimi" />
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  对话使用此
-                  SDK，具体模型在对话框中选择。图片理解检测通过后，导入的 PDF
-                  将自动生成图表解析稿；图片会发送给此 Agent。
-                </p>
+        <Tabs
+          orientation="vertical"
+          defaultValue="display"
+          className="settings-tabs"
+        >
+          <TabsList aria-label="设置分类" className="settings-nav">
+            <TabsTrigger value="display">
+              <Monitor />
+              显示
+            </TabsTrigger>
+            <TabsTrigger value="reading">
+              <Highlighter />
+              阅读
+            </TabsTrigger>
+            <TabsTrigger value="papers">
+              <Library />
+              文献库
+            </TabsTrigger>
+            <TabsTrigger value="agent">
+              <Bot />
+              Agent
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="display" className="settings-panel" keepMounted>
+            <section>
+              <h3 className="mb-3 text-sm font-medium">界面主题</h3>
+              <div className="flex gap-2">
+                {(["light", "sepia", "dark", "system"] as const).map(
+                  (mode, i) => (
+                    <Button
+                      key={mode}
+                      aria-pressed={(theme.appearance ?? "system") === mode}
+                      variant={
+                        (theme.appearance ?? "system") === mode
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() =>
+                        setTheme({
+                          appearance: mode,
+                          mode:
+                            mode === "dark" || mode === "sepia"
+                              ? mode
+                              : "light",
+                        })
+                      }
+                    >
+                      {["浅色", "纸张", "深色", "跟随系统"][i]}
+                      {(theme.appearance ?? "system") === mode && (
+                        <Check className="size-3" />
+                      )}
+                    </Button>
+                  ),
+                )}
               </div>
-            )}
-            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
-              {(["codex", "claude", "kimi"] as const).map((name) => {
-                const p = providers.find((p) => p.id === name);
-                const capability = config?.capabilities[name];
-                const pending = testing.has(name);
+            </section>
+          </TabsContent>
+          <TabsContent value="reading" className="settings-panel" keepMounted>
+            <section>
+              <h3 className="mb-3 text-sm font-medium">高亮颜色</h3>
+              <HighlightColorsEditor />
+            </section>
+          </TabsContent>
+          <TabsContent value="papers" className="settings-panel" keepMounted>
+            <section>
+              <h3 className="mb-3 text-sm font-medium">文献库</h3>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={paperPreferences.autoLookup !== false}
+                  onCheckedChange={(checked) =>
+                    void updateLibraryPreferences({
+                      papers: { ...paperPreferences, autoLookup: !!checked },
+                    }).catch((e) => toast.error(e.message))
+                  }
+                />
+                <span>
+                  导入 PDF 后自动补全文献信息
+                  <span className="block text-xs text-muted-foreground">
+                    只把文中的 DOI 或 arXiv 编号发送给 arXiv、Crossref 与
+                    Semantic Scholar
+                  </span>
+                </span>
+              </label>
+            </section>
+          </TabsContent>
+          <TabsContent value="agent" className="settings-panel" keepMounted>
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-medium">Agent 连接</h3>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="重新检测 Agent"
+                  title="重新检测 Agent"
+                  disabled={loading || testing.size > 0}
+                  onClick={() => void refresh(true)}
+                >
+                  <RefreshCw className={loading ? "animate-spin" : ""} />
+                </Button>
+              </div>
+              {config && (
+                <div className="mb-4 flex flex-col gap-2">
+                  <label className="text-sm" id="primary-agent-label">
+                    Agent SDK
+                  </label>
+                  <Select
+                    value={config.primary || null}
+                    disabled={saving || aiModelSaving || testing.size > 0}
+                    onValueChange={async (value) => {
+                      if (!value) return;
+                      setSaving(true);
+                      try {
+                        const latest = await api.aiConfig();
+                        const saved = await api.saveAIConfig({
+                          ...latest,
+                          primary: value,
+                        });
+                        setAIConfig(saved);
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-labelledby="primary-agent-label"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="请选择 Agent SDK">
+                        {config.primary ? (
+                          <ProviderIdentity provider={config.primary} />
+                        ) : undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="codex">
+                        <ProviderIdentity provider="codex" />
+                      </SelectItem>
+                      <SelectItem value="claude">
+                        <ProviderIdentity provider="claude" />
+                      </SelectItem>
+                      <SelectItem value="kimi">
+                        <ProviderIdentity provider="kimi" />
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    对话使用此
+                    SDK，具体模型在对话框中选择。图片理解检测通过后，导入的 PDF
+                    将自动生成图表解析稿；图片会发送给此 Agent。
+                  </p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+                {(["codex", "claude", "kimi"] as const).map((name) => {
+                  const p = providers.find((p) => p.id === name);
+                  const capability = config?.capabilities[name];
+                  const pending = testing.has(name);
 
-                return (
-                  <div key={name} className="min-w-0 rounded-xl border p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex-1 text-base font-medium">
-                        <ProviderIdentity provider={name} size={36} />
-                      </span>
-                      {!loading && !p?.installed && (
-                        <Badge variant="outline">未安装</Badge>
+                  return (
+                    <div key={name} className="min-w-0 rounded-xl border p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex-1 text-base font-medium">
+                          <ProviderIdentity provider={name} size={36} />
+                        </span>
+                        {!loading && !p?.installed && (
+                          <Badge variant="outline">未安装</Badge>
+                        )}
+                      </div>
+                      {(pending || p?.installed || capability) && (
+                        <div className="flex flex-wrap gap-x-5">
+                          {(
+                            [
+                              ["text", "文本推理"],
+                              ["vision", "图片理解"],
+                            ] as const
+                          ).map(([kind, label]) => {
+                            const stage = testing.get(name);
+                            const pending =
+                              stage === "text" ||
+                              (stage === "vision" && kind === "vision");
+                            const error =
+                              errors[`${name}:${kind}`] || capability?.error;
+                            const ready =
+                              !errors[`${name}:text`] &&
+                              !errors[`${name}:${kind}`] &&
+                              !!capability?.[kind];
+                            const state = pending
+                              ? "pending"
+                              : ready
+                                ? "passed"
+                                : "failed";
+                            return (
+                              <div
+                                key={kind}
+                                className="agent-check-status"
+                                role="status"
+                                aria-live="polite"
+                                aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
+                              >
+                                <span
+                                  className="agent-check-icon"
+                                  key={state}
+                                  data-state={state}
+                                >
+                                  {pending ? (
+                                    <LoaderCircle className="animate-spin" />
+                                  ) : ready ? (
+                                    <CircleCheck />
+                                  ) : (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        render={
+                                          <Button variant="ghost" size="icon" />
+                                        }
+                                        className="size-4 p-0 text-inherit hover:bg-transparent hover:text-inherit"
+                                        aria-label={`${label}未通过：查看详情`}
+                                      >
+                                        <TriangleAlert />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="block max-w-xs space-y-2 leading-5 break-words">
+                                        <p>
+                                          {error ||
+                                            (capability?.text
+                                              ? "文本推理可用，图片理解未通过检测。"
+                                              : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
+                                        </p>
+                                        {!capability?.text && (
+                                          <p>
+                                            支持 CLI 当前使用的订阅登录或 API
+                                            Key 配置；以实际调用结果为准。
+                                          </p>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </span>
+                                <span>{label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    {(pending || p?.installed || capability) && (
-                      <div className="flex flex-wrap gap-x-5">
-                        {(
-                          [
-                            ["text", "文本推理"],
-                            ["vision", "图片理解"],
-                          ] as const
-                        ).map(([kind, label]) => {
-                          const stage = testing.get(name);
-                          const pending =
-                            stage === "text" ||
-                            (stage === "vision" && kind === "vision");
-                          const error =
-                            errors[`${name}:${kind}`] || capability?.error;
-                          const ready =
-                            !errors[`${name}:text`] &&
-                            !errors[`${name}:${kind}`] &&
-                            !!capability?.[kind];
-                          const state = pending
-                            ? "pending"
-                            : ready
-                              ? "passed"
-                              : "failed";
-                          return (
-                            <div
-                              key={kind}
-                              className="agent-check-status"
-                              role="status"
-                              aria-live="polite"
-                              aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
-                            >
-                              <span
-                                className="agent-check-icon"
-                                key={state}
-                                data-state={state}
-                              >
-                                {pending ? (
-                                  <LoaderCircle className="animate-spin" />
-                                ) : ready ? (
-                                  <CircleCheck />
-                                ) : (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      render={
-                                        <Button variant="ghost" size="icon" />
-                                      }
-                                      className="size-4 p-0 text-inherit hover:bg-transparent hover:text-inherit"
-                                      aria-label={`${label}未通过：查看详情`}
-                                    >
-                                      <TriangleAlert />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="block max-w-xs space-y-2 leading-5 break-words">
-                                      <p>
-                                        {error ||
-                                          (capability?.text
-                                            ? "文本推理可用，图片理解未通过检测。"
-                                            : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
-                                      </p>
-                                      {!capability?.text && (
-                                        <p>
-                                          支持 CLI 当前使用的订阅登录或 API Key
-                                          配置；以实际调用结果为准。
-                                        </p>
-                                      )}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </span>
-                              <span>{label}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <p className="mt-4 flex gap-2 text-xs leading-5 text-muted-foreground">
-              <CircleHelp className="mt-0.5 size-4 shrink-0" />
-              Reader 调用已安装的 CLI，不读取账号凭据。AI 请求使用 CLI
-              当前账户与计费方式；选择订阅登录时无需另填 API
-              Key。发送的选区或章节会交给对应服务。
-            </p>
-          </section>
-        </div>
+                  );
+                })}
+              </div>
+              <p className="mt-4 flex gap-2 text-xs leading-5 text-muted-foreground">
+                <CircleHelp className="mt-0.5 size-4 shrink-0" />
+                Reader 调用已安装的 CLI，不读取账号凭据。AI 请求使用 CLI
+                当前账户与计费方式；选择订阅登录时无需另填 API
+                Key。发送的选区或章节会交给对应服务。
+              </p>
+            </section>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
