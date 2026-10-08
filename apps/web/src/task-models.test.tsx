@@ -10,6 +10,8 @@ vi.mock("@reader/api", () => ({
   api: { agentModels: vi.fn(), aiConfig: vi.fn(), saveAIConfig: vi.fn() },
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+// The first Base UI select also pays jsdom warm-up; CI runners exceed 5 s.
+vi.setConfig({ testTimeout: 20_000 });
 const models: AgentModel[] = [
   { id: "opus", name: "Opus", description: "", isDefault: true },
   {
