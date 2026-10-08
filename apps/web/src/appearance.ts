@@ -18,7 +18,8 @@ export function resolveTheme(
         : "light"
       : appearance === "dark"
         ? "dark"
-        : theme.mode === "sepia"
+        : // Older settings kept paper as light appearance plus a sepia mode.
+          appearance === "sepia" || theme.mode === "sepia"
           ? "sepia"
           : "light";
   return { ...theme, mode };
@@ -31,3 +32,18 @@ export function useResolvedTheme(theme: ReaderTheme) {
   );
   return useMemo(() => resolveTheme(theme, dark), [theme, dark]);
 }
+
+/** Translated text size, 80–160% in 5% steps. */
+export function stepTranslationSize(size: number, by: -1 | 1) {
+  return Math.min(
+    1.6,
+    Math.max(0.8, Math.round((size + by * 0.05) * 100) / 100),
+  );
+}
+
+/** Font stacks for translated text. */
+export const translationFonts = {
+  serif:
+    '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", ui-serif, serif',
+  "sans-serif": "inherit",
+} as const;

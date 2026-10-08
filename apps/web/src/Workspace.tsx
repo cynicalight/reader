@@ -115,6 +115,7 @@ import { ExportNotesDialog } from "./ExportNotesDialog";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
+import { stepTranslationSize } from "./appearance";
 function IconButton({
   label,
   children,
@@ -214,6 +215,7 @@ export function Workspace({
   onSettings: () => void;
 }) {
   const { setTheme, aiConfig, setAIConfig, aiModelSaving } = useReaderStore();
+  const translationSize = theme.translationFontSize ?? 1;
   const linkTarget = useReaderStore((s) => s.linkTarget);
   const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
@@ -895,12 +897,7 @@ export function Workspace({
                       key={mode}
                       size="sm"
                       variant={theme.mode === mode ? "default" : "outline"}
-                      onClick={() =>
-                        setTheme({
-                          mode,
-                          appearance: mode === "sepia" ? "light" : mode,
-                        })
-                      }
+                      onClick={() => setTheme({ mode, appearance: mode })}
                     >
                       {["浅色", "纸张", "深色"][i]}
                     </Button>
@@ -992,18 +989,73 @@ export function Workspace({
                     </div>
                   </>
                 ) : (
-                  <div className="flex gap-2">
-                    {(["width", 1, 1.25, 1.5] as const).map((zoom) => (
+                  <>
+                    <div className="flex gap-2">
+                      {(["width", 1, 1.25, 1.5] as const).map((zoom) => (
+                        <Button
+                          key={zoom}
+                          size="sm"
+                          variant={theme.zoom === zoom ? "default" : "outline"}
+                          onClick={() => setTheme({ zoom })}
+                        >
+                          {zoom === "width" ? "适宽" : `${zoom * 100}%`}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="setting-row">
+                      <span>译文字号</span>
                       <Button
-                        key={zoom}
-                        size="sm"
-                        variant={theme.zoom === zoom ? "default" : "outline"}
-                        onClick={() => setTheme({ zoom })}
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label="减小译文字号"
+                        onClick={() =>
+                          setTheme({
+                            translationFontSize: stepTranslationSize(
+                              translationSize,
+                              -1,
+                            ),
+                          })
+                        }
                       >
-                        {zoom === "width" ? "适宽" : `${zoom * 100}%`}
+                        −
                       </Button>
-                    ))}
-                  </div>
+                      <span>{Math.round(translationSize * 100)}%</span>
+                      <Button
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label="增大译文字号"
+                        onClick={() =>
+                          setTheme({
+                            translationFontSize: stepTranslationSize(
+                              translationSize,
+                              1,
+                            ),
+                          })
+                        }
+                      >
+                        +
+                      </Button>
+                    </div>
+                    <div className="setting-row">
+                      <span>译文字体</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setTheme({
+                            translationFontFamily:
+                              theme.translationFontFamily === "serif"
+                                ? "sans-serif"
+                                : "serif",
+                          })
+                        }
+                      >
+                        {theme.translationFontFamily === "serif"
+                          ? "宋体 / 衬线"
+                          : "黑体 / 无衬线"}
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
             </PopoverContent>

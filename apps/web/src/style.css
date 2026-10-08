@@ -43,6 +43,27 @@
   --input: oklch(0.34 0 0);
   --ring: oklch(0.55 0 0);
 }
+/* Paper: a warm light theme for the whole window, not just the page. */
+:root[data-theme="sepia"] {
+  color-scheme: light;
+  --background: #f5efdf;
+  --foreground: #3b3226;
+  --card: #f8f3e7;
+  --card-foreground: #3b3226;
+  --popover: #faf6ec;
+  --popover-foreground: #3b3226;
+  --primary: #3b3226;
+  --primary-foreground: #f8f3e7;
+  --secondary: #ece4d0;
+  --secondary-foreground: #3b3226;
+  --muted: #ece4d0;
+  --muted-foreground: #7b6f5b;
+  --accent: #e7ddc6;
+  --accent-foreground: #3b3226;
+  --border: #e2d7bd;
+  --input: #d9ccae;
+  --ring: #a8987a;
+}
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -216,7 +216,7 @@ export interface ReaderAnnotationTarget {
   ids: string[];
   anchor: SelectionAnchor;
 }
-export type Appearance = "light" | "dark" | "system";
+export type Appearance = "light" | "sepia" | "dark" | "system";
 export interface ReaderTheme {
   appearance?: Appearance;
   mode: "light" | "sepia" | "dark";
@@ -226,6 +226,9 @@ export interface ReaderTheme {
   margin: number;
   scroll: boolean;
   zoom: number | "width";
+  /** Translated text size in rem; smaller than the source by default. */
+  translationFontSize?: number;
+  translationFontFamily?: "serif" | "sans-serif";
 }
 export const defaultTheme: ReaderTheme = {
   appearance: "system",
@@ -236,6 +239,8 @@ export const defaultTheme: ReaderTheme = {
   margin: 40,
   scroll: false,
   zoom: "width",
+  translationFontSize: 1,
+  translationFontFamily: "sans-serif",
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {

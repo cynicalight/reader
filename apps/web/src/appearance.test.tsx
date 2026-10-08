@@ -3,7 +3,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { defaultTheme, type ReaderTheme } from "@reader/core";
-import { resolveTheme, useResolvedTheme } from "./appearance";
+import {
+  resolveTheme,
+  stepTranslationSize,
+  useResolvedTheme,
+} from "./appearance";
 let root: Root | undefined;
 afterEach(() => {
   if (root) act(() => root!.unmount());
@@ -21,6 +25,15 @@ it("resolves explicit appearance independently from OS and preserves paper mode"
     resolveTheme({ ...defaultTheme, appearance: "light", mode: "sepia" }, true)
       .mode,
   ).toBe("sepia");
+  expect(
+    resolveTheme({ ...defaultTheme, appearance: "sepia" }, true).mode,
+  ).toBe("sepia");
+});
+it("steps translated text size within bounds", () => {
+  expect(defaultTheme.translationFontSize).toBeLessThan(defaultTheme.fontSize);
+  expect(stepTranslationSize(1, 1)).toBe(1.05);
+  expect(stepTranslationSize(0.8, -1)).toBe(0.8);
+  expect(stepTranslationSize(1.6, 1)).toBe(1.6);
 });
 it("follows live system changes and unsubscribes on unmount", () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld("readerDesktop", {
     ipcRenderer.on("reader:flush", listener);
     return () => ipcRenderer.removeListener("reader:flush", listener);
   },
-  setAppearance: (appearance: "light" | "dark" | "system") =>
+  setAppearance: (appearance: "light" | "sepia" | "dark" | "system") =>
     ipcRenderer.invoke("reader:appearance", appearance),
   importFiles: (library: "books" | "papers") =>
     ipcRenderer.invoke("reader:import", library),

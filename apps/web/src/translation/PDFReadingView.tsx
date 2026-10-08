@@ -36,6 +36,7 @@ import { TranslationText } from "./TranslationText";
 import { paintTranslatedAnnotations } from "./annotations";
 import { translatedSelection as captureTranslationSelection } from "./selection";
 import { installTranslationSelectionHighlight } from "./selection-highlight";
+import { translationFonts } from "../appearance";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -673,7 +674,9 @@ export function PDFReadingView({
               onKeyDownCapture={() => input("translation")}
               onKeyUp={translatedSelection}
               style={{
-                fontSize: `${theme.fontSize}rem`,
+                fontSize: `${theme.translationFontSize ?? 1}rem`,
+                fontFamily:
+                  translationFonts[theme.translationFontFamily ?? "sans-serif"],
                 lineHeight: theme.lineHeight,
               }}
             >

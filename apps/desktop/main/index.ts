@@ -125,6 +125,11 @@ async function startServer() {
     });
   });
 }
+/** Window background before the renderer paints, matching the theme. */
+function windowBackground(appearance: unknown) {
+  if (appearance === "sepia") return "#f5efdf";
+  return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
+}
 async function importPaths(
   paths: string[],
   library: "books" | "papers" = "books",
@@ -213,7 +218,11 @@ app
         ? preferences.appearance
         : undefined;
     nativeTheme.themeSource =
-      appearance === "light" || appearance === "dark" ? appearance : "system";
+      appearance === "light" || appearance === "dark"
+        ? appearance
+        : appearance === "sepia"
+          ? "light"
+          : "system";
     window = new BrowserWindow({
       width: 1440,
       height: 940,
@@ -226,7 +235,7 @@ app
             trafficLightPosition: { x: 20, y: 20 },
           }
         : {}),
-      backgroundColor: nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
+      backgroundColor: windowBackground(appearance),
       webPreferences: {
         preload: join(__dirname, "preload.cjs"),
         contextIsolation: true,
@@ -305,14 +314,14 @@ app
         throw new Error("Invalid sender");
       if (
         appearance !== "light" &&
+        appearance !== "sepia" &&
         appearance !== "dark" &&
         appearance !== "system"
       )
         throw new Error("Invalid appearance");
-      nativeTheme.themeSource = appearance;
-      window.setBackgroundColor(
-        nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff",
-      );
+      // Paper is a light theme for native chrome with its own background.
+      nativeTheme.themeSource = appearance === "sepia" ? "light" : appearance;
+      window.setBackgroundColor(windowBackground(appearance));
     });
     ipcMain.handle(
       "reader:document-file",

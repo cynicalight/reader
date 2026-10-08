@@ -5,7 +5,9 @@ interface Window {
     platform: string;
     checkForUpdates: () => Promise<void>;
     writeClipboardText: (text: string) => Promise<void>;
-    setAppearance: (appearance: "light" | "dark" | "system") => Promise<void>;
+    setAppearance: (
+      appearance: "light" | "sepia" | "dark" | "system",
+    ) => Promise<void>;
     importFiles: (library: "books" | "papers") => Promise<void>;
     showDocumentFile: (id: string, type: "pdf" | "epub") => Promise<void>;
     openDocumentFile: (id: string, type: "pdf" | "epub") => Promise<void>;

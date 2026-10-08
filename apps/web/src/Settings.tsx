@@ -159,28 +159,31 @@ export function Settings({
           <section>
             <h3 className="mb-3 text-sm font-medium">界面主题</h3>
             <div className="flex gap-2">
-              {(["light", "dark", "system"] as const).map((mode, i) => (
-                <Button
-                  key={mode}
-                  aria-pressed={(theme.appearance ?? "system") === mode}
-                  variant={
-                    (theme.appearance ?? "system") === mode
-                      ? "default"
-                      : "outline"
-                  }
-                  onClick={() =>
-                    setTheme({
-                      appearance: mode,
-                      mode: mode === "dark" ? "dark" : "light",
-                    })
-                  }
-                >
-                  {["浅色", "深色", "跟随系统"][i]}
-                  {(theme.appearance ?? "system") === mode && (
-                    <Check className="size-3" />
-                  )}
-                </Button>
-              ))}
+              {(["light", "sepia", "dark", "system"] as const).map(
+                (mode, i) => (
+                  <Button
+                    key={mode}
+                    aria-pressed={(theme.appearance ?? "system") === mode}
+                    variant={
+                      (theme.appearance ?? "system") === mode
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setTheme({
+                        appearance: mode,
+                        mode:
+                          mode === "dark" || mode === "sepia" ? mode : "light",
+                      })
+                    }
+                  >
+                    {["浅色", "纸张", "深色", "跟随系统"][i]}
+                    {(theme.appearance ?? "system") === mode && (
+                      <Check className="size-3" />
+                    )}
+                  </Button>
+                ),
+              )}
             </div>
           </section>
           <Separator />
