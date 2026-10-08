@@ -166,11 +166,7 @@ export function Settings({
             显示、阅读、文献库与 Agent 连接
           </DialogDescription>
         </DialogHeader>
-        <Tabs
-          orientation="vertical"
-          defaultValue="display"
-          className="settings-tabs"
-        >
+        <Tabs defaultValue="display" className="settings-tabs">
           <TabsList aria-label="设置分类" className="settings-nav">
             <TabsTrigger value="display">
               <Monitor />

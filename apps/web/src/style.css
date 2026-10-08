@@ -2761,9 +2761,9 @@ textarea.paper-note-input {
   gap: 20px;
 }
 .settings-nav.settings-nav {
-  width: 132px;
+  width: 100%;
+  height: 38px;
   flex-shrink: 0;
-  align-self: flex-start;
 }
 .settings-nav [data-slot="tabs-trigger"] {
   height: 32px;
