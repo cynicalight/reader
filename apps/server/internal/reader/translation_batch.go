@@ -155,7 +155,7 @@ func (d *translationJSONL) line(line string) error {
 	delete(d.invalid, row.BlockID)
 	return nil
 }
-func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManifest, batch translationBatch, config AIConfig, progress func()) error {
+func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManifest, batch translationBatch, service *GenerationService, progress func()) error {
 	decoder := newTranslationJSONL(batch, func(t TranslationBlock) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -166,8 +166,6 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 		progress()
 		return nil
 	})
-	service := s.taskGenerationService(config, taskTranslation)
-	service.timeout = translationBatchTimeout
 	service.usageSink = s.processingUsageSink(doc.ID, "translating", batch.Paragraphs[0].BlockID+"…"+batch.Paragraphs[len(batch.Paragraphs)-1].BlockID)
 	_, callErr := service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {
 		if event.Text == "" {
@@ -291,6 +289,8 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
+				service, session := s.translationService(config)
+				defer session.close()
 				for batch := range jobs {
 					if work.Err() != nil {
 						return
@@ -305,7 +305,7 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 					}
 					s.processingMu.Unlock()
 					if startErr == nil {
-						startErr = s.translateBatch(work, doc, m, batch, config, progress)
+						startErr = s.translateBatch(work, doc, m, batch, service, progress)
 					}
 					if startErr != nil {
 						failures <- startErr
