@@ -37,6 +37,7 @@ func runTranslationSessionProcess() {
 	scan.Buffer(make([]byte, 4096), maxProviderFrame)
 	enc := json.NewEncoder(os.Stdout)
 	turn := 0
+	model := ""
 	for scan.Scan() {
 		var req struct {
 			ID     json.RawMessage `json:"id"`
@@ -57,7 +58,16 @@ func runTranslationSessionProcess() {
 		case "initialize":
 			reply(map[string]any{})
 		case "thread/start":
-			reply(map[string]any{"thread": map[string]string{"id": "thread"}, "model": translationCodexModel})
+			var params struct {
+				Model string `json:"model"`
+			}
+			_ = json.Unmarshal(req.Params, &params)
+			model = params.Model
+			actual := model
+			if actual == "" {
+				actual = "cli-default"
+			}
+			reply(map[string]any{"thread": map[string]string{"id": "thread"}, "model": actual})
 		case "turn/start":
 			turn++
 			tid := fmt.Sprintf("turn-%d", turn)
@@ -82,7 +92,7 @@ func runTranslationSessionProcess() {
 				_ = enc.Encode(map[string]any{"method": "item/agentMessage/delta", "params": map[string]any{"threadId": "thread", "turnId": fmt.Sprintf("turn-%d", turn-1), "itemId": "old", "delta": "stale\n"}})
 			}
 			notify("thread/tokenUsage/updated", map[string]any{"tokenUsage": map[string]any{"total": TokenCounts{InputTokens: int64(turn * 20), OutputTokens: int64(turn * 10), TotalTokens: int64(turn * 30), CachedInputTokens: tokenCount(int64(turn * 8))}}})
-			if os.Getenv("READER_TRANSLATION_FAIL_SECOND") == "1" && turn == 2 {
+			if os.Getenv("READER_TRANSLATION_FAIL_SECOND") == "1" && turn == 2 || os.Getenv("READER_TRANSLATION_FAIL_MODEL") == model && model != "" {
 				notify("turn/completed", map[string]any{"turn": map[string]string{"id": tid, "status": "failed"}})
 				continue
 			}
@@ -110,23 +120,77 @@ func runTranslationSessionProcess() {
 		}
 	}
 }
+
+func TestTranslationCodexUsesMainAutomaticSelectionAndFallback(t *testing.T) {
+	for _, fallback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fallback=%v", fallback), func(t *testing.T) {
+			s, _, m, capture := translationSessionFixture(t)
+			config := s.aiConfig()
+			config.TranslationModels = nil
+			config.TranslationEfforts = nil
+			s.modelCache = map[string]modelCatalogEntry{"codex": {
+				models:  []AgentModel{{ID: "gpt-6-luna", SupportedEfforts: []string{"low", "medium", "high"}}, {ID: "gpt-5.6-luna"}},
+				expires: time.Now().Add(time.Minute),
+			}}
+			if fallback {
+				t.Setenv("READER_TRANSLATION_FAIL_MODEL", "gpt-6-luna")
+			}
+			service, adapter := s.translationService(config)
+			defer adapter.close()
+			batch := translationBatch{Paragraphs: []translationParagraph{{BlockID: m.Blocks[0].ID, SourceHash: translationHash(m.Blocks[0].Text), Source: m.Blocks[0].Text}}}
+			if _, err := service.Generate(t.Context(), AIInput{Prompt: translationPrompt(Document{}, m, batch)}, false, nil); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var selected []string
+			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+				var row struct {
+					Method string `json:"method"`
+					Params struct {
+						Model  string `json:"model"`
+						Effort string `json:"effort"`
+					} `json:"params"`
+				}
+				if err := json.Unmarshal([]byte(line), &row); err != nil {
+					t.Fatal(err)
+				}
+				if row.Method == "thread/start" {
+					selected = append(selected, row.Params.Model)
+				}
+				if row.Method == "turn/start" && row.Params.Effort != "medium" {
+					t.Fatalf("did not use default effort: %+v", row)
+				}
+			}
+			if len(selected) == 0 || selected[0] != "gpt-6-luna" {
+				t.Fatalf("wrong automatic model: %v", selected)
+			}
+			if fallback && (len(selected) != 2 || selected[1] != "") || !fallback && len(selected) != 1 {
+				t.Fatalf("wrong fallback: %v", selected)
+			}
+		})
+	}
+}
 func translationSessionFixture(t *testing.T) (*Server, Processing, layoutManifest, string) {
 	t.Helper()
 	fakeAgent(t, "codex", "translation-session")
 	capture := filepath.Join(t.TempDir(), "requests.jsonl")
 	t.Setenv("READER_TRANSLATION_CAPTURE", capture)
 	s, p, m := translationFixture(t)
+	s.modelCache = map[string]modelCatalogEntry{"codex": {models: []AgentModel{{ID: "selected-codex", SupportedEfforts: []string{"low", "medium", "high"}}}, expires: time.Now().Add(time.Minute)}}
 	for i := range m.Blocks {
 		m.Blocks[i].Text = strings.Repeat(fmt.Sprintf("Paragraph %d. ", i), 1000)
 	}
-	c := AIConfig{Primary: "codex", Models: map[string]string{"codex": "chat-model"}, Capabilities: map[string]Capability{}}
+	c := AIConfig{Primary: "codex", Models: map[string]string{"codex": "chat-model"}, TranslationModels: map[string]string{"codex": "selected-codex"}, TranslationEfforts: map[string]map[string]string{"codex": {"selected-codex": "high"}}, Capabilities: map[string]Capability{}}
 	c.Capabilities["codex"] = Capability{Text: true, Fingerprint: configPrint(c, "codex")}
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
 	return s, p, m, capture
 }
-func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
+func TestTranslationCodexWorkersReuseSelectedModelAndEffort(t *testing.T) {
 	s, p, m, capture := translationSessionFixture(t)
 	for i := 2; i < 6; i++ {
 		b := m.Blocks[0]
@@ -165,12 +229,12 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 			count.initializes++
 		case "thread/start":
 			count.starts++
-			if r.Params.Model != translationCodexModel {
+			if r.Params.Model != "selected-codex" {
 				t.Fatal("wrong model")
 			}
 		case "turn/start":
 			count.turns++
-			if r.Params.Effort != "low" || r.Params.ThreadID != "thread" {
+			if r.Params.Effort != "high" || r.Params.ThreadID != "thread" {
 				t.Fatal("wrong effort or thread")
 			}
 		}
@@ -178,10 +242,15 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 	if len(processes) != 3 {
 		t.Fatalf("expected three worker processes: %+v", processes)
 	}
+	turns := 0
 	for pid, count := range processes {
-		if count.initializes != 1 || count.starts != 1 || count.turns != 2 {
+		turns += count.turns
+		if count.initializes != 1 || count.starts != 1 || count.turns < 1 {
 			t.Fatalf("pid=%d counts=%+v", pid, count)
 		}
+	}
+	if turns != 6 {
+		t.Fatalf("expected six turns across three reused threads, got %d", turns)
 	}
 	items, err := s.translations("doc", m)
 	if err != nil {
@@ -200,7 +269,7 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 		t.Fatalf("calls=%+v", report.Calls)
 	}
 	for _, call := range report.Calls {
-		if len(call.Models) != 1 || call.Models[0].Model != translationCodexModel || call.Models[0].Tokens == nil || call.Models[0].Tokens.TotalTokens != 30 {
+		if len(call.Models) != 1 || call.Models[0].Model != "selected-codex" || call.Models[0].Tokens == nil || call.Models[0].Tokens.TotalTokens != 30 {
 			t.Fatalf("usage double-counted: %+v", call)
 		}
 	}
@@ -215,7 +284,7 @@ func TestTranslationCodexReusesThreadWithLunaLow(t *testing.T) {
 func TestTranslationCodexCancellationClosesSession(t *testing.T) {
 	s, _, m, _ := translationSessionFixture(t)
 	t.Setenv("READER_TRANSLATION_CANCEL", "1")
-	a := &translationCodexAdapter{root: s.Store.Root}
+	_, a := s.translationService(s.aiConfig())
 	defer a.close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -294,8 +363,8 @@ func TestTranslationCodexFailureRetryPreservesCompletedParagraphs(t *testing.T) 
 	if err := s.translateBatch(t.Context(), Document{ID: "doc"}, m, batches[0], service, func() {}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.translateBatch(t.Context(), Document{ID: "doc"}, m, batches[1], service, func() {}); err == nil {
-		t.Fatal("failed turn reported success")
+	if err := s.translateBatch(t.Context(), Document{ID: "doc"}, m, batches[1], service, func() {}); err != nil {
+		t.Fatal(err)
 	}
 	adapter.close()
 	items, err := s.translations("doc", m)

@@ -6,12 +6,10 @@ import (
 	"path/filepath"
 )
 
-const translationCodexModel = "gpt-5.6-luna"
-const translationCodexEffort = "low"
-
 // Owned by a single sequential worker, independently of other workers and chat.
 // Failed turns discard the connection; a later batch can start a fresh thread.
 type translationCodexAdapter struct {
+	configuredCLIAdapter
 	root, work string
 	session    *codexSession
 }
@@ -28,24 +26,30 @@ func (a *translationCodexAdapter) close() {
 }
 
 func (s *Server) translationService(config AIConfig) (*GenerationService, *translationCodexAdapter) {
-	// Use task-specific settings for other providers. Codex keeps the fixed
-	// translation model without modifying saved chat or translation settings.
-	ready := capable(config, "codex", false)
 	service := s.taskGenerationService(config, taskTranslation)
-	adapter := &translationCodexAdapter{root: s.Store.Root}
 	connection := service.connections["codex"]
+	adapter := &translationCodexAdapter{
+		configuredCLIAdapter: connection.Adapter.(codexChatAdapter).configuredCLIAdapter,
+		root:                 s.Store.Root,
+	}
 	connection.Adapter = adapter
-	// Preserve the existing CLI text-readiness gate without recording a
-	// synthetic capability test for the translation model.
-	connection.VerifiedText = ready
 	service.connections["codex"] = connection
 	service.timeout = translationBatchTimeout
 	return service, adapter
 }
 
 func (a *translationCodexAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+	return a.streamWith(ctx, req, emit, func(cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
+		return a.stream(ctx, cli, req, emit)
+	})
+}
+
+func (a *translationCodexAdapter) stream(ctx context.Context, cli cliAdapter, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
 	if err := ctx.Err(); err != nil {
 		return GenerateResult{}, err
+	}
+	if a.session != nil && a.session.model != cli.model {
+		a.close()
 	}
 	if a.session == nil {
 		work, err := os.MkdirTemp(filepath.Join(a.root, "ai-work"), "translation-")
@@ -53,13 +57,12 @@ func (a *translationCodexAdapter) Stream(ctx context.Context, req GenerateReques
 			return GenerateResult{}, generationError(ErrorConfiguration, "无法创建隔离的翻译工作目录")
 		}
 		a.work = work
-		a.session, err = newCodexSession(work, translationCodexModel)
+		a.session, err = newCodexSession(work, cli.model)
 		if err != nil {
 			a.close()
 			return GenerateResult{}, err
 		}
 	}
-	req.Input.Effort = translationCodexEffort
 	child, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var emitErr error

@@ -24,7 +24,6 @@ type codexSession struct {
 	usageComplete                      bool
 	completedTurns                     map[string]bool
 	closeOnce                          sync.Once
-	rpcTiming                          func(string, time.Duration)
 }
 
 func (s *codexSession) close() {
@@ -223,12 +222,6 @@ func (s *codexSession) generate(ctx context.Context, in AIInput, delta func(stri
 		return msg, nil
 	}
 	call := func(method string, params any) (json.RawMessage, error) {
-		started := time.Now()
-		defer func() {
-			if s.rpcTiming != nil {
-				s.rpcTiming(method, time.Since(started))
-			}
-		}()
 		s.serial++
 		id := s.serial
 		if ctx.Err() != nil {

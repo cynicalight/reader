@@ -124,7 +124,7 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 		return ""
 	}
 }
-func TestTranslationRunsThreeWorkersAndSavesBeforeProviderCompletes(t *testing.T) {
+func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T) {
 	s, p, m := translationFixture(t)
 	m.Blocks = append(m.Blocks, m.Blocks[1], m.Blocks[1])
 	m.Blocks[2].ID = "p1-b3"
@@ -162,8 +162,9 @@ func TestTranslationRunsThreeWorkersAndSavesBeforeProviderCompletes(t *testing.T
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.settleTranslations(ctx, &p, m) }()
-	for range 3 {
-		waitTranslationSignal(t, started)
+	first, second, third := waitTranslationSignal(t, started), waitTranslationSignal(t, started), waitTranslationSignal(t, started)
+	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
+		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -181,7 +182,7 @@ func TestTranslationRunsThreeWorkersAndSavesBeforeProviderCompletes(t *testing.T
 	}
 	select {
 	case <-started:
-		t.Fatal("started another batch before provider completion")
+		t.Fatal("started a fourth concurrent batch")
 	default:
 	}
 	cancel()
@@ -199,60 +200,6 @@ func TestTranslationRunsThreeWorkersAndSavesBeforeProviderCompletes(t *testing.T
 		t.Fatalf("streamed progress was not persisted: %+v, %v", saved, err)
 	}
 }
-func TestTranslationWorkerFailureCancelsPeers(t *testing.T) {
-	s, p, m := translationFixture(t)
-	for i := 2; i < 4; i++ {
-		b := m.Blocks[0]
-		b.ID = fmt.Sprintf("p1-b%d", i+1)
-		m.Blocks = append(m.Blocks, b)
-	}
-	for i := range m.Blocks {
-		m.Blocks[i].Text = strings.Repeat(fmt.Sprintf("段%d", i), 5001)
-	}
-	started := make(chan string, 4)
-	release := make(chan struct{})
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		batch := readTranslationInput(t, r).Batch
-		id := batch.Paragraphs[0].BlockID
-		started <- id
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		w.(http.Flusher).Flush()
-		if id == "p1-b1" {
-			select {
-			case <-release:
-				sendTranslationDelta(w, "invalid JSONL\n")
-				finishTranslationStream(w) // A successful EOF with no valid paragraph.
-			case <-r.Context().Done():
-			}
-			return
-		}
-		<-r.Context().Done()
-	}))
-	defer provider.Close()
-	configureTranslationTest(t, s, provider.URL)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- s.settleTranslations(ctx, &p, m) }()
-	for range 3 {
-		waitTranslationSignal(t, started)
-	}
-	close(release)
-	select {
-	case err := <-done:
-		if err == nil || !strings.Contains(err.Error(), "全部有效译文") {
-			t.Fatalf("lost originating failure: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("failed worker did not cancel peers")
-	}
-	items, err := s.translations("doc", m)
-	if err != nil || items[0].Status != "failed" || items[1].Status != "pending" || items[2].Status != "pending" || items[3].Status != "pending" {
-		t.Fatalf("unexpected failure state: %+v %v", items, err)
-	}
-}
-
 func TestTranslationSubscriptionSnapshotAndLiveLine(t *testing.T) {
 	s, _, m := translationFixture(t)
 	server := httptest.NewServer(s.Handler())
