@@ -8,6 +8,21 @@ import type {
   ReaderAdapter,
   TranslationBlock,
 } from "@reader/core";
+// Geometry/lifecycle assertions are independent of the composited hover renderer.
+vi.mock("./sentence-hover", () => ({
+  SentenceHover: class {
+    invalidate() {}
+    show(_key: string, ranges: Range[]) {
+      CSS.highlights.set("test-hover", new Highlight(...ranges));
+    }
+    clear() {
+      CSS.highlights.delete("test-hover");
+    }
+    destroy() {
+      this.clear();
+    }
+  },
+}));
 import { useSentenceMarks } from "./useSentenceMarks";
 import { sentenceLink } from "./sentence-links";
 const t: TranslationBlock = {
@@ -53,7 +68,9 @@ function App({
   return (
     <div ref={ref}>
       <div className="page" data-page-number="1">
-        <span data-source>Original sentence.</span>
+        <div className="textLayer">
+          <span data-source>Original sentence.</span>
+        </div>
       </div>
       <section data-translation-block="p1-b1">
         <div data-sentence="0">翻译句子。</div>
@@ -62,6 +79,7 @@ function App({
   );
 }
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Highlight",
@@ -109,6 +127,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   registry.clear();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   events.annotation.mockClear();
@@ -120,17 +139,16 @@ const texts = (ranges: Set<Range> | undefined) =>
   [...(ranges ?? [])].map((r) => r.toString());
 async function pointer(selector: string, type: string, x: number, buttons = 0) {
   await act(async () => {
-    host
-      .querySelector(selector)!
-      .dispatchEvent(
-        new MouseEvent(type, {
-          bubbles: true,
-          clientX: x,
-          clientY: 5,
-          buttons,
-          button: 0,
-        }),
-      );
+    host.querySelector(selector)!.dispatchEvent(
+      new MouseEvent(type, {
+        bubbles: true,
+        clientX: x,
+        clientY: 5,
+        buttons,
+        button: 0,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(425);
   });
 }
 it("highlights both sentence texts in either direction, clears on drag, and keeps native selection untouched", async () => {
@@ -224,4 +242,112 @@ it("projects a source note onto the complete translated sentence and removes sta
     ),
   );
   expect(registry.size).toBe(0);
+});
+
+it("keeps a stationary hover after a child mutation and a parent render", async () => {
+  await act(async () => root.render(<App />));
+  await pointer("[data-sentence]", "pointermove", 210);
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+  await act(async () => {
+    host.querySelector(".page")!.append(document.createElement("i"));
+    await vi.advanceTimersByTimeAsync(50);
+  });
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+  await act(async () => root.render(<App translations={[{ ...t }]} />));
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+});
+
+it("coalesces pointer bursts and ignores block-overlay mutations without rematching PDF text", async () => {
+  const matching = vi.spyOn(engine, "sentenceRanges");
+  const reads = vi.spyOn(Range.prototype, "getClientRects");
+  await act(async () => root.render(<App />));
+  await pointer("[data-sentence]", "pointermove", 210);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(40);
+  });
+  const before = matching.mock.calls.length;
+  reads.mockClear();
+  await act(async () => {
+    for (let i = 0; i < 30; i++)
+      host.querySelector("[data-sentence]")!.dispatchEvent(
+        new MouseEvent("pointermove", {
+          bubbles: true,
+          clientX: 210 + i / 100,
+          clientY: 5,
+        }),
+      );
+    await vi.advanceTimersByTimeAsync(40);
+  });
+  expect(reads).not.toHaveBeenCalled();
+  await act(async () => {
+    const overlay = document.createElement("div");
+    overlay.className = "reader-block-hover";
+    host.querySelector(".page")!.append(overlay);
+    await vi.advanceTimersByTimeAsync(40);
+  });
+  expect(matching.mock.calls.length).toBe(before);
+  await act(async () => {
+    host.querySelector("[data-source]")!.textContent = "Original sentence.";
+    await vi.advanceTimersByTimeAsync(40);
+  });
+  expect(matching.mock.calls.length).toBe(before + 1);
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+});
+
+it("waits for dwell, tolerates line gaps, and cancels pending work on interruption", async () => {
+  await act(async () => root.render(<App />));
+  const matching = vi.spyOn(engine, "sentenceRanges");
+  const send = (x: number, type = "pointermove") =>
+    host.querySelector("[data-source]")!.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, clientX: x, clientY: 5 }),
+    );
+  const advance = async (ms: number) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+  send(10);
+  await advance(399);
+  send(10, "pointerleave");
+  await advance(600);
+  expect(matching).not.toHaveBeenCalled();
+  expect(hover()).toBeUndefined();
+  send(10);
+  await advance(200);
+  send(12);
+  await act(async () => root.render(<App translations={[{ ...t }]} />));
+  await advance(199);
+  expect(matching).not.toHaveBeenCalled();
+  expect(hover()).toBeUndefined();
+  await advance(1);
+  expect(hover()).toBeDefined();
+  expect(matching).toHaveBeenCalledTimes(1);
+  // Whitespace starts a single leave deadline; repeated moves do not extend it.
+  send(150);
+  await advance(300);
+  send(160);
+  await advance(199);
+  expect(hover()).toBeDefined();
+  send(12);
+  await advance(600);
+  expect(hover()).toBeDefined();
+  send(150);
+  await advance(499);
+  expect(hover()).toBeDefined();
+  await advance(1);
+  expect(hover()).toBeUndefined();
+  send(10);
+  await advance(399);
+  send(10, "pointerdown");
+  await advance(600);
+  expect(hover()).toBeUndefined();
+  send(10);
+  await advance(400);
+  expect(hover()).toBeDefined();
+  send(10, "scroll");
+  expect(hover()).toBeUndefined();
+  send(10);
+  send(10, "pointerleave");
+  await advance(600);
+  expect(hover()).toBeUndefined();
 });

@@ -244,10 +244,6 @@
     opacity: 0;
   }
 }
-.translation-document [data-focused],
-.translation-document [data-hovered] {
-  transition-duration: 0s;
-}
 @media (prefers-reduced-motion: reduce) {
   .translation-document section {
     transition: none;
@@ -287,4 +283,21 @@
   gap: 0.5rem;
   font-size: 0.8em;
   color: var(--muted-foreground);
+}
+
+.reader-block-hover:not(.reader-block-focus) {
+  animation: block-hover-in 160ms ease-out;
+}
+@keyframes block-hover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-block-hover:not(.reader-block-focus) {
+    animation: none;
+  }
 }
