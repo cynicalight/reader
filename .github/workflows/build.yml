@@ -22,13 +22,18 @@ jobs:
         include:
           - os: macos-15
             target: mac-arm64
+          - os: windows-2022
+            target: win-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
       RELEASE_TAG: ${{ inputs.release-tag }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      # Ad-hoc only: no signing credentials, including on pull requests.
+      # No Apple or Windows credentials. macOS uses the fixed self-signed
+      # certificate (apps/desktop/mac-sign.cjs) so in-place updates verify.
       CSC_FOR_PULL_REQUEST: "true"
+      READER_MAC_SIGN_P12: ${{ matrix.target == 'mac-arm64' && secrets.MAC_SIGN_P12 || '' }}
+      READER_MAC_SIGN_P12_PASSWORD: ${{ matrix.target == 'mac-arm64' && secrets.MAC_SIGN_P12_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -52,6 +57,8 @@ jobs:
           name: reader-${{ matrix.target }}
           path: |
             release/Reader-*-${{ matrix.target }}.dmg
+            release/Reader-*-${{ matrix.target }}.zip
+            release/Reader-*-${{ matrix.target }}.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

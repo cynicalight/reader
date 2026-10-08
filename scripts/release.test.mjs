@@ -33,10 +33,11 @@ function run(script, cwd, env = {}, args = []) {
 }
 async function installers(cwd) {
   const files = [];
-  for (const target of ["mac-arm64.dmg"]) {
+  for (const target of ["mac-arm64.dmg", "mac-arm64.zip", "win-x64.exe"]) {
     const file = `Reader-0.2.0-${target}`;
     const bytes = Buffer.alloc(1024 * 1024 + 512);
     if (target.endsWith("dmg")) bytes.write("koly", bytes.length - 512);
+    else if (target.endsWith("zip")) bytes.write("PK\u0003\u0004", 0);
     else bytes.write("MZ", 0);
     await writeFile(join(cwd, "release", file), bytes);
     files.push({ file, bytes });
@@ -60,7 +61,7 @@ test("release refuses missing or unexpected artifacts", async () => {
   const cwd = await fixture();
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
-  await rm(join(cwd, "release/Reader-0.2.0-mac-arm64.dmg"));
+  await rm(join(cwd, "release/Reader-0.2.0-win-x64.exe"));
   expect(run("release-assets.mjs", cwd).status).not.toBe(0);
   await installers(cwd);
   await writeFile(join(cwd, "release/Reader-0.2.0-mac-x64.dmg"), "unexpected");

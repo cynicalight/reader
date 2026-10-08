@@ -8,9 +8,12 @@ module.exports = {
   npmRebuild: false,
   publish: null,
   mac: {
-    target: ["dmg"],
+    // The zip is the Squirrel.Mac in-place update payload.
+    target: ["dmg", "zip"],
     category: "public.app-category.books",
     identity: "-",
+    // Replaces the ad-hoc identity with the fixed release certificate when available.
+    sign: (options) => require("./mac-sign.cjs")(options),
     hardenedRuntime: false,
     notarize: false,
     artifactName: "Reader-${version}-mac-${arch}.${ext}",
