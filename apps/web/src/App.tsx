@@ -416,8 +416,7 @@ export function App() {
               )}
               <div className="sidebar-bottom">
                 <Button
-                  variant="ghost"
-                  className="mb-2 h-10 w-full gap-2 rounded-full bg-foreground/7 text-foreground/80 hover:bg-foreground/12 hover:text-foreground dark:hover:bg-foreground/12"
+                  className="mb-2 h-10 w-full gap-2 rounded-full"
                   onClick={papers ? () => setImportingPaper(true) : chooseFiles}
                   disabled={busy}
                 >

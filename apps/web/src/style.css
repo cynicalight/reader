@@ -2454,7 +2454,7 @@ kbd {
 }
 .paper-detail-open.paper-detail-open {
   height: 48px;
-  margin-bottom: -6px;
+  margin-bottom: 4px;
   border-radius: 999px;
   font-size: 14px;
 }
