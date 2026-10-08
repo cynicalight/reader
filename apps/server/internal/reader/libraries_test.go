@@ -222,3 +222,29 @@ func TestRenameAndRemoveLibraryTag(t *testing.T) {
 		t.Fatalf("unknown library: %d", w.Code)
 	}
 }
+
+func TestNestedLibraryTagsFollowTheirParent(t *testing.T) {
+	s := testServer(t)
+	w := uploadTo(t, s, "papers", "p.pdf", testPDF(1))
+	var d Document
+	_ = json.Unmarshal(w.Body.Bytes(), &d)
+	request(t, s, "PATCH", "/api/documents/"+d.ID, strings.NewReader(`{"tags":["ML/Vision","ml/NLP/Parsing","MLOps","Other"]}`))
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"ML","to":"AI"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	d, _ = s.Store.Document(d.ID)
+	if strings.Join(d.Tags, ",") != "AI/Vision,AI/NLP/Parsing,MLOps,Other" {
+		t.Fatalf("rename: %v", d.Tags)
+	}
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"AI/NLP"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	d, _ = s.Store.Document(d.ID)
+	if strings.Join(d.Tags, ",") != "AI/Vision,MLOps,Other" {
+		t.Fatalf("remove: %v", d.Tags)
+	}
+	long := strings.Repeat("x", 39)
+	if w = request(t, s, "POST", "/api/libraries/papers/tags", strings.NewReader(`{"from":"AI","to":"`+long+`"}`)); w.Code != 400 {
+		t.Fatalf("too long after rename: %d", w.Code)
+	}
+}

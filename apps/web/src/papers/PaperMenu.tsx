@@ -43,7 +43,13 @@ import {
 } from "./actions";
 import { paperLink } from "./format";
 import { CitationMenuItems } from "./CitationMenu";
-import { paperCategories, statusLabels, togglePinned } from "./model";
+import {
+  categoryTree,
+  flattenCategories,
+  paperCategories,
+  statusLabels,
+  togglePinned,
+} from "./model";
 
 const kits = {
   context: {
@@ -127,7 +133,8 @@ export function PaperMenuItems({
       <K.Sub>
         <K.SubTrigger>分类</K.SubTrigger>
         <K.SubContent className="max-h-80 min-w-44">
-          {categories.map((name) => {
+          {flattenCategories(categoryTree(categories)).map((node) => {
+            const { name } = node;
             const inside = docs.every((d) =>
               d.tags.some((t) => t.toLowerCase() === name.toLowerCase()),
             );
@@ -141,7 +148,12 @@ export function PaperMenuItems({
                     : addToCategory(docs, name))
                 }
               >
-                <span className="truncate">{name}</span>
+                <span
+                  className="truncate"
+                  style={{ paddingLeft: node.depth * 12 }}
+                >
+                  {node.label}
+                </span>
               </K.Checkbox>
             );
           })}

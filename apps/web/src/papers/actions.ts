@@ -11,10 +11,13 @@ import {
   useReaderStore,
 } from "../store";
 import {
+  cleanCategory,
   paperCategories,
   removeCategoryPreferences,
   renameCategoryPreferences,
   validCategory,
+  withinCategory,
+  type PaperView,
 } from "./model";
 import { usePaperUI } from "./state";
 
@@ -112,11 +115,17 @@ export const setStarred = (docs: Document[], favorite: boolean) =>
       .map((doc) => [doc, { favorite }]),
   );
 
+const invalidName = "分类名（含上级分类）须为 1–40 个字符";
+
 /** Create a category, optionally placing papers in it. Returns false on bad names. */
-export async function createCategory(name: string, docs: Document[] = []) {
-  name = name.trim();
+export async function createCategory(
+  name: string,
+  docs: Document[] = [],
+  parent = "",
+) {
+  name = cleanCategory(parent ? `${parent}/${name}` : name);
   if (!validCategory(name)) {
-    toast.error("分类名须为 1–40 个字符");
+    toast.error(invalidName);
     return false;
   }
   const existing = paperCategories(paperPrefs(), papers()).find(
@@ -131,11 +140,25 @@ export async function createCategory(name: string, docs: Document[] = []) {
   return true;
 }
 
+/** Where the current view goes once `from` is renamed (`to`) or deleted. */
+function followCategory(from: string, to?: string) {
+  const ui = usePaperUI.getState();
+  if (!ui.view.startsWith("tag:")) return;
+  const current = ui.view.slice(4);
+  if (!withinCategory(current, from)) return;
+  ui.setView(
+    to === undefined
+      ? "all"
+      : (`tag:${to}${current.slice(from.length)}` as PaperView),
+  );
+}
+
+/** Rename a category; its subcategories move with it. */
 export async function renameCategory(from: string, to: string) {
-  to = to.trim();
+  to = cleanCategory(to);
   if (to === from) return true;
   if (!validCategory(to)) {
-    toast.error("分类名须为 1–40 个字符");
+    toast.error(invalidName);
     return false;
   }
   const categories = paperCategories(paperPrefs(), papers());
@@ -156,12 +179,12 @@ export async function renameCategory(from: string, to: string) {
   await savePaperPreferences((prefs) =>
     renameCategoryPreferences(prefs, categories, from, to),
   );
-  const ui = usePaperUI.getState();
-  if (ui.view === `tag:${from}`) ui.setView(`tag:${to}`);
+  followCategory(from, to);
   await refreshLibrary().catch(() => {});
   return true;
 }
 
+/** Delete a category and its subcategories; their papers stay. */
 export async function deleteCategory(name: string) {
   const categories = paperCategories(paperPrefs(), papers());
   try {
@@ -173,8 +196,7 @@ export async function deleteCategory(name: string) {
   await savePaperPreferences((prefs) =>
     removeCategoryPreferences(prefs, categories, name),
   );
-  const ui = usePaperUI.getState();
-  if (ui.view === `tag:${name}`) ui.setView("all");
+  followCategory(name);
   await refreshLibrary().catch(() => {});
 }
 

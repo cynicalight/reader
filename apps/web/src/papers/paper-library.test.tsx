@@ -202,3 +202,50 @@ it("renames a category everywhere through the library endpoint", async () => {
     "Machine learning",
   );
 });
+
+it("shows subcategories under their parent and renames only the leaf", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      documents: [{ ...docs[0], tags: ["ML/Vision"] }, docs[1]],
+    }),
+  );
+  expect(navButton("ML").textContent).toContain("1");
+  await act(async () => navButton("ML").click());
+  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
+  await act(async () =>
+    navButton("Vision").dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    ),
+  );
+  const rename = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent === "改名")!;
+  await act(async () => rename.click());
+  const input = host.querySelector<HTMLInputElement>('[aria-label="分类名"]')!;
+  expect(input.value).toBe("Vision");
+  input.value = "CV";
+  await act(async () =>
+    input.form!.dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(api.changeLibraryTag).toHaveBeenCalledExactlyOnceWith(
+    "papers",
+    "ML/Vision",
+    "ML/CV",
+  );
+  const twisty = host.querySelector<HTMLButtonElement>(
+    '[aria-label="折叠“ML”"]',
+  )!;
+  await act(async () => twisty.click());
+  expect(api.saveLibraryPreferences).toHaveBeenCalledWith(
+    expect.objectContaining({
+      papers: expect.objectContaining({ collapsed: ["ML"] }),
+    }),
+  );
+});

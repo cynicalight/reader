@@ -1856,7 +1856,7 @@
         {
           "post":
             {
-              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction",
+              "summary": "Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Nested tags (from/child) follow; 400 when a renamed tag would exceed 40 characters",
               "parameters":
                 [
                   {

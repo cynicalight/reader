@@ -94,6 +94,10 @@ export interface PaperLibraryPreferences {
   pinned?: string[];
   /** Hidden built-in views ("view:<id>") and categories ("tag:<name>"). */
   hidden?: string[];
+  /** Categories whose subcategories are folded in the sidebar. */
+  collapsed?: string[];
+  /** A category also lists papers filed in its subcategories (default on). */
+  subcategoryItems?: boolean;
   sort?: PaperSort;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;

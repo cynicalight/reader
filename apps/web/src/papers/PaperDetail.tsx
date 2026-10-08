@@ -233,7 +233,7 @@ export function PaperDetail({
                 className="paper-category-chip"
                 onClick={() => void toggleCategory(doc, name)}
               >
-                {name}
+                {name.replaceAll("/", " / ")}
               </Button>
             );
           })}

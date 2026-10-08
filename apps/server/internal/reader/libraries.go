@@ -107,7 +107,21 @@ func (s *Server) savePreferences(w http.ResponseWriter, r *http.Request) {
 }
 
 // changeTag renames (to != "") or removes a tag on every document in a library,
-// including the trash, in one transaction.
+// including the trash, in one transaction. Nested tags ("from/child") follow.
+// errInvalidTag is a rename that would produce an invalid tag on some document.
+type errInvalidTag struct{ error }
+
+// tagSuffix reports whether tag is name or nested under it, and the remainder.
+func tagSuffix(tag, name string) (string, bool) {
+	if strings.EqualFold(tag, name) {
+		return "", true
+	}
+	if len(tag) > len(name) && tag[len(name)] == '/' && strings.EqualFold(tag[:len(name)], name) {
+		return tag[len(name):], true
+	}
+	return "", false
+}
+
 func (s *Store) changeTag(library, from, to string) (int, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -129,12 +143,12 @@ func (s *Store) changeTag(library, from, to string) (int, error) {
 		}
 		next, hit := []string{}, false
 		for _, tag := range tags {
-			if strings.EqualFold(tag, from) {
+			if rest, ok := tagSuffix(tag, from); ok {
 				hit = true
 				if to == "" {
 					continue
 				}
-				tag = to
+				tag = to + rest
 			}
 			next = append(next, tag)
 		}
@@ -145,7 +159,7 @@ func (s *Store) changeTag(library, from, to string) (int, error) {
 		normalized, e := normalizeTags(b)
 		if e != nil {
 			rows.Close()
-			return 0, e
+			return 0, errInvalidTag{e}
 		}
 		b, _ = json.Marshal(normalized)
 		changes = append(changes, change{id, string(b)})
@@ -188,6 +202,11 @@ func (s *Server) changeLibraryTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	count, err := s.Store.changeTag(library, from, to)
+	var invalid errInvalidTag
+	if errors.As(err, &invalid) {
+		fail(w, 400, "改名后的分类须为 1–40 个字符（含上级分类）")
+		return
+	}
 	if err != nil {
 		fail(w, 500, "分类保存失败")
 		return

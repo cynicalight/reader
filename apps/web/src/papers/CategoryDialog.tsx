@@ -12,10 +12,12 @@ import {
 /** Names a new category; `count` papers are placed in it on save. */
 export function CategoryDialog({
   count,
+  parent,
   onSave,
   onClose,
 }: {
   count: number;
+  parent?: string;
   onSave: (name: string) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -34,9 +36,14 @@ export function CategoryDialog({
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>新建分类</DialogTitle>
-          <DialogDescription className={count ? "" : "sr-only"}>
-            {count ? `放入所选的 ${count} 篇论文` : "输入分类名"}
+          <DialogTitle>{parent ? "新建子分类" : "新建分类"}</DialogTitle>
+          <DialogDescription className={count || parent ? "" : "sr-only"}>
+            {[
+              parent && `位于“${parent.replaceAll("/", " / ")}”`,
+              count && `放入所选的 ${count} 篇论文`,
+            ]
+              .filter(Boolean)
+              .join("，") || "输入分类名"}
           </DialogDescription>
         </DialogHeader>
         <form

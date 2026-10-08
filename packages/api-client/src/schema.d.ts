@@ -1685,7 +1685,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction */
+    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Nested tags (from/child) follow; 400 when a renamed tag would exceed 40 characters */
     post: {
       parameters: {
         query?: never;

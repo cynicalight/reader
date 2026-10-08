@@ -10,14 +10,20 @@ import {
   shortTitle,
 } from "./format";
 import {
+  categoryTree,
+  cleanCategory,
   filterPapers,
+  flattenCategories,
+  matchesView,
   moveCategory,
   paperCategories,
   recentPapers,
   removeCategoryPreferences,
   renameCategoryPreferences,
   setHidden,
+  siblingPosition,
   togglePinned,
+  validCategory,
 } from "./model";
 
 it("formats author lists by script and falls back to the display author", () => {
@@ -168,4 +174,85 @@ it("lists recently opened papers without pinned ones", () => {
     "latest",
     "old",
   ]);
+});
+
+it("nests categories by slash and lists implied parents", () => {
+  const docs = [
+    paper({ id: "a", tags: ["ML/Vision/Detection"] }),
+    paper({ id: "b", tags: ["ML"] }),
+    paper({ id: "c", tags: [] }),
+  ];
+  const categories = paperCategories(
+    { categories: ["Reading", "ml/NLP"] },
+    docs,
+  );
+  expect(categories).toEqual([
+    "Reading",
+    "ml",
+    "ml/NLP",
+    "ML/Vision",
+    "ML/Vision/Detection",
+  ]);
+  const flat = flattenCategories(categoryTree(categories)).map(
+    (n) => `${n.depth}:${n.label}`,
+  );
+  expect(flat).toEqual([
+    "0:Reading",
+    "0:ml",
+    "1:NLP",
+    "1:Vision",
+    "2:Detection",
+  ]);
+  expect(
+    flattenCategories(categoryTree(categories), (n) => n.name === "ml").map(
+      (n) => n.name,
+    ),
+  ).toEqual(["Reading", "ml"]);
+  const jobs = new Map();
+  expect(matchesView(docs[0], "tag:ML", jobs)).toBe(true);
+  expect(matchesView(docs[0], "tag:ML", jobs, false)).toBe(false);
+  expect(matchesView(docs[0], "tag:ML/Vis", jobs)).toBe(false);
+  expect(docs.filter((d) => matchesView(d, "unfiled", jobs))).toEqual([
+    docs[2],
+  ]);
+  expect(cleanCategory(" ML / Vision ")).toBe("ML/Vision");
+  expect(validCategory("ML//Vision")).toBe(false);
+  expect(validCategory("ML/Vision")).toBe(true);
+});
+
+it("moves, renames and removes a category with its subcategories", () => {
+  const categories = ["A", "A/x", "A/y", "B", "B/z"];
+  expect(moveCategory(categories, "B", -1)).toEqual([
+    "B",
+    "B/z",
+    "A",
+    "A/x",
+    "A/y",
+  ]);
+  expect(moveCategory(categories, "A/y", -1)).toEqual([
+    "A",
+    "A/y",
+    "A/x",
+    "B",
+    "B/z",
+  ]);
+  expect(moveCategory(categories, "A/x", -1)).toEqual(categories);
+  expect(siblingPosition(categories, "A/y")).toEqual({ index: 1, count: 2 });
+  const prefs = {
+    pinned: ["tag:A/x", "tag:AB"],
+    hidden: ["tag:A"],
+    collapsed: ["A", "B"],
+  };
+  expect(renameCategoryPreferences(prefs, categories, "A", "C")).toEqual({
+    categories: ["C", "C/x", "C/y", "B", "B/z"],
+    pinned: ["tag:C/x", "tag:AB"],
+    hidden: ["tag:C"],
+    collapsed: ["C", "B"],
+  });
+  expect(removeCategoryPreferences(prefs, categories, "A")).toEqual({
+    categories: ["B", "B/z"],
+    pinned: ["tag:AB"],
+    hidden: [],
+    collapsed: ["B"],
+  });
 });

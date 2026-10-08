@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   CheckCircle2,
+  ChevronRight,
   Circle,
   CircleHelp,
   Eye,
   FileText,
   Folder,
+  FolderOpen,
+  FolderPlus,
+  Inbox,
   Library,
   Loader2,
   Pin,
@@ -19,6 +23,7 @@ import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
@@ -49,17 +54,25 @@ import {
   setReadingStatus,
   setStarred,
 } from "./actions";
+import { toast } from "sonner";
 import { shortTitle } from "./format";
 import {
+  categoryLeaf,
+  categoryParent,
+  categoryTree,
+  flattenCategories,
   managedViews,
   matchesView,
   moveCategory,
   paperCategories,
   recentPapers,
   setHidden,
+  siblingPosition,
   togglePinned,
   viewLabels,
+  withinCategory,
   type BuiltinView,
+  type CategoryNode,
   type PaperView,
 } from "./model";
 import { usePaperUI } from "./state";
@@ -76,7 +89,26 @@ const viewIcons: Record<BuiltinView, typeof Library> = {
   starred: Star,
   processing: Loader2,
   questions: CircleHelp,
+  unfiled: Inbox,
 };
+
+/** True while ⌥ is held, to show the categories of the selected paper. */
+function useAltKey() {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => setDown(e.altKey);
+    const up = () => setDown(false);
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+    window.addEventListener("blur", up);
+    return () => {
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("keyup", key);
+      window.removeEventListener("blur", up);
+    };
+  }, []);
+  return down;
+}
 
 function droppedIds(e: React.DragEvent) {
   try {
@@ -97,6 +129,7 @@ function SidebarRow({
   onDrop,
   menu,
   title,
+  highlighted,
 }: {
   icon: typeof Library;
   label: string;
@@ -107,6 +140,7 @@ function SidebarRow({
   onDrop?: (ids: string[]) => void;
   menu?: React.ReactNode;
   title?: string;
+  highlighted?: boolean;
 }) {
   const [over, setOver] = useState(false);
   const row = (
@@ -114,6 +148,7 @@ function SidebarRow({
       variant="ghost"
       className={`nav-item paper-nav-item ${active ? "active" : ""}`}
       data-drop-over={over || undefined}
+      data-highlighted={highlighted || undefined}
       title={title || label}
       onClick={onSelect}
       onDragOver={
@@ -169,16 +204,21 @@ export function PaperSidebar({
   onNewCategory: () => void;
 }) {
   const prefs = useReaderStore((s) => s.libraryPreferences.papers) || {};
-  const { view, setView, select, startPicking } = usePaperUI();
+  const { view, setView, select, startPicking, selectedId, setNaming } =
+    usePaperUI();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [recentOpen, setRecentOpen] = useState(false);
+  const alt = useAltKey();
   const pinned = prefs.pinned || [];
   const hidden = prefs.hidden || [];
+  const subcategoryItems = prefs.subcategoryItems !== false;
   const categories = paperCategories(prefs, documents);
-  const count = (v: PaperView) =>
-    documents.filter((d) => matchesView(d, v, jobs)).length;
+  const count = (v: PaperView, sub = subcategoryItems) =>
+    documents.filter((d) => matchesView(d, v, jobs, sub)).length;
   const byId = new Map(documents.map((d) => [d.id, d]));
+  // Holding ⌥ marks every category that holds the selected paper.
+  const marked = alt && selectedId ? byId.get(selectedId) : undefined;
   const docsFor = (ids: string[]) =>
     ids.map((id) => byId.get(id)).filter((d): d is Document => !!d);
   const choose = (next: PaperView) => {
@@ -230,18 +270,56 @@ export function PaperSidebar({
       }
     />
   );
-  const categoryRow = (name: string, isPinned = false) => {
+  const collapsed = new Set(
+    (prefs.collapsed || []).map((name) => name.toLowerCase()),
+  );
+  const toggleCollapsed = (name: string) =>
+    void savePaperPreferences((p) => {
+      const items = p.collapsed || [];
+      return {
+        ...p,
+        collapsed: items.includes(name)
+          ? items.filter((item) => item !== name)
+          : [...items, name],
+      };
+    });
+  const open = (name: string) => !collapsed.has(name.toLowerCase());
+  const isHidden = (name: string) =>
+    hidden.some(
+      (key) => key.startsWith("tag:") && withinCategory(name, key.slice(4)),
+    );
+  const tree = categoryTree(categories.filter((name) => !isHidden(name)));
+  const nested = tree.some((node) => node.children.length > 0);
+  const categoryRow = (
+    node: Pick<CategoryNode, "name" | "label" | "depth" | "children">,
+    isPinned = false,
+  ) => {
+    const { name } = node;
+    const key = `tag:${name}` as const;
+    const parent = categoryParent(name);
+    const expanded = open(name);
+    const indent = {
+      "--depth": isPinned ? 0 : node.depth,
+      "--gutter": nested && !isPinned ? "14px" : "0px",
+    } as React.CSSProperties;
     if (renaming === name && !isPinned)
       return (
         <form
-          key={`tag:${name}`}
+          key={key}
           className="paper-nav-edit"
+          style={indent}
           onSubmit={(e) => {
             e.preventDefault();
-            const value = new FormData(e.currentTarget).get("name");
-            void renameCategory(name, String(value)).then((ok) => {
-              if (ok) setRenaming(null);
-            });
+            const leaf = String(new FormData(e.currentTarget).get("name"));
+            if (leaf.includes("/")) {
+              toast.error("分类名不能包含“/”");
+              return;
+            }
+            void renameCategory(name, parent ? `${parent}/${leaf}` : leaf).then(
+              (ok) => {
+                if (ok) setRenaming(null);
+              },
+            );
           }}
         >
           <Folder className="size-4" />
@@ -250,36 +328,43 @@ export function PaperSidebar({
             autoFocus
             maxLength={40}
             aria-label="分类名"
-            defaultValue={name}
+            defaultValue={node.label}
             onKeyDown={(e) => {
               if (e.key === "Escape") setRenaming(null);
             }}
             onBlur={(e) => {
-              if (e.currentTarget.value.trim() === name) setRenaming(null);
+              if (e.currentTarget.value.trim() === node.label)
+                setRenaming(null);
             }}
           />
         </form>
       );
-    const index = categories.indexOf(name);
-    const key = `tag:${name}` as const;
-    return (
+    const position = siblingPosition(categories, name);
+    const hasChildren = node.children.length > 0;
+    const row = (
       <SidebarRow
         key={key}
-        icon={Folder}
-        label={name}
-        count={count(`tag:${name}`)}
+        icon={hasChildren && expanded && !isPinned ? FolderOpen : Folder}
+        label={isPinned ? categoryLeaf(name) : node.label}
+        title={name.replaceAll("/", " / ")}
+        count={count(key)}
         active={view === key}
         pinned={isPinned}
+        highlighted={marked?.tags.some((tag) => withinCategory(tag, name))}
         onSelect={() => choose(key)}
         onDrop={(ids) => void addToCategory(docsFor(ids), name)}
         menu={
           <>
             {pinItem(key)}
+            <ContextMenuItem onClick={() => setNaming([], name)}>
+              <FolderPlus />
+              新建子分类…
+            </ContextMenuItem>
             <ContextMenuItem onClick={() => setRenaming(name)}>
               改名
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={index <= 0}
+              disabled={position.index <= 0}
               onClick={() =>
                 void savePaperPreferences((p) => ({
                   ...p,
@@ -290,7 +375,9 @@ export function PaperSidebar({
               上移
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={index < 0 || index >= categories.length - 1}
+              disabled={
+                position.index < 0 || position.index >= position.count - 1
+              }
               onClick={() =>
                 void savePaperPreferences((p) => ({
                   ...p,
@@ -301,13 +388,26 @@ export function PaperSidebar({
               下移
             </ContextMenuItem>
             {!isPinned && hideItem(key)}
+            {hasChildren && (
+              <ContextMenuCheckboxItem
+                checked={subcategoryItems}
+                onCheckedChange={(checked) =>
+                  void savePaperPreferences((p) => ({
+                    ...p,
+                    subcategoryItems: checked,
+                  }))
+                }
+              >
+                显示子分类中的论文
+              </ContextMenuCheckboxItem>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem
               onClick={() => {
                 choose(key);
                 startPicking(
                   documents
-                    .filter((d) => matchesView(d, key, jobs))
+                    .filter((d) => matchesView(d, key, jobs, subcategoryItems))
                     .map((d) => d.id),
                 );
               }}
@@ -317,8 +417,10 @@ export function PaperSidebar({
             <ContextMenuItem
               onClick={() =>
                 exportCitations(
-                  documents.filter((d) => matchesView(d, key, jobs)),
-                  name,
+                  documents.filter((d) =>
+                    matchesView(d, key, jobs, subcategoryItems),
+                  ),
+                  categoryLeaf(name),
                 )
               }
             >
@@ -334,6 +436,24 @@ export function PaperSidebar({
           </>
         }
       />
+    );
+    if (isPinned) return row;
+    return (
+      <div key={key} className="paper-nav-node" style={indent}>
+        {hasChildren && (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            className="paper-nav-twisty"
+            aria-label={`${expanded ? "折叠" : "展开"}“${node.label}”`}
+            aria-expanded={expanded}
+            onClick={() => toggleCollapsed(name)}
+          >
+            <ChevronRight data-open={expanded || undefined} />
+          </Button>
+        )}
+        {row}
+      </div>
     );
   };
   const paperRow = (doc: Document, isPinned = false) => (
@@ -363,16 +483,35 @@ export function PaperSidebar({
       }
     />
   );
+  const deleteSummary = (name: string) => {
+    const subs = categories.filter(
+      (item) => item !== name && withinCategory(item, name),
+    ).length;
+    const papers = count(`tag:${name}`, true);
+    return [
+      subs && `其中的 ${subs} 个子分类也会删除。`,
+      papers
+        ? `${papers} 篇论文不会被删除，只是不再属于这些分类。`
+        : "分类中没有论文。",
+    ]
+      .filter(Boolean)
+      .join("");
+  };
   const pinnedRows = pinned
     .map((key) => {
       if (key.startsWith("doc:")) {
         const doc = byId.get(key.slice(4));
         return doc ? paperRow(doc, true) : null;
       }
-      if (key.startsWith("tag:"))
-        return categories.includes(key.slice(4))
-          ? categoryRow(key.slice(4), true)
+      if (key.startsWith("tag:")) {
+        const name = key.slice(4);
+        return categories.includes(name)
+          ? categoryRow(
+              { name, label: categoryLeaf(name), depth: 0, children: [] },
+              true,
+            )
           : null;
+      }
       const v = key.slice(5) as BuiltinView;
       return managedViews.includes(v) ? viewRow(v, true) : null;
     })
@@ -421,13 +560,11 @@ export function PaperSidebar({
           </Button>
         </h3>
         <nav className="space-y-0.5">
-          {categories
-            .filter(
-              (name) =>
-                !hidden.includes(`tag:${name}`) &&
-                !pinned.includes(`tag:${name}`),
-            )
-            .map((name) => categoryRow(name))}
+          {flattenCategories(
+            tree,
+            (node) => !open(node.name) && node.children.length > 0,
+          ).map((node) => categoryRow(node))}
+          {categories.length > 0 && count("unfiled") > 0 && viewRow("unfiled")}
           {!categories.length && (
             <Button
               variant="ghost"
@@ -507,11 +644,11 @@ export function PaperSidebar({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除分类“{deleting}”？</AlertDialogTitle>
+            <AlertDialogTitle>
+              删除分类“{deleting && categoryLeaf(deleting)}”？
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleting && count(`tag:${deleting}`)
-                ? `其中 ${count(`tag:${deleting}`)} 篇论文不会被删除，只是不再属于这个分类。`
-                : "分类中没有论文。"}
+              {deleting && deleteSummary(deleting)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

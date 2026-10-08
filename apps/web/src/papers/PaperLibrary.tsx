@@ -59,7 +59,9 @@ import {
 } from "./actions";
 import { paperByline } from "./format";
 import {
+  categoryTree,
   filterPapers,
+  flattenCategories,
   paperCategories,
   sortLabels,
   statusLabels,
@@ -105,8 +107,17 @@ export function PaperLibrary({
   const listRef = useRef<HTMLDivElement>(null);
   const visible = useMemo(
     () =>
-      view === "trash" ? [] : filterPapers(documents, view, query, sort, jobs),
-    [documents, view, query, sort, jobs],
+      view === "trash"
+        ? []
+        : filterPapers(
+            documents,
+            view,
+            query,
+            sort,
+            jobs,
+            prefs.subcategoryItems !== false,
+          ),
+    [documents, view, query, sort, jobs, prefs.subcategoryItems],
   );
   const visibleIds = visible.map((d) => d.id);
   const selected = documents.find((d) => d.id === selectedId);
@@ -116,7 +127,9 @@ export function PaperLibrary({
   const title =
     view === "trash"
       ? "回收站"
-      : category || viewLabels[view as BuiltinView] || "全部论文";
+      : category.replaceAll("/", " / ") ||
+        viewLabels[view as BuiltinView] ||
+        "全部论文";
   useEffect(() => {
     // Pasting an arXiv ID, DOI or link anywhere outside a field imports it.
     const paste = (e: ClipboardEvent) => {
@@ -349,14 +362,23 @@ export function PaperLibrary({
                       加入分类
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="max-h-80 w-48">
-                      {categories.map((name) => (
-                        <DropdownMenuItem
-                          key={name}
-                          onClick={() => void addToCategory(pickedDocs, name)}
-                        >
-                          <span className="truncate">{name}</span>
-                        </DropdownMenuItem>
-                      ))}
+                      {flattenCategories(categoryTree(categories)).map(
+                        (node) => (
+                          <DropdownMenuItem
+                            key={node.name}
+                            onClick={() =>
+                              void addToCategory(pickedDocs, node.name)
+                            }
+                          >
+                            <span
+                              className="truncate"
+                              style={{ paddingLeft: node.depth * 12 }}
+                            >
+                              {node.label}
+                            </span>
+                          </DropdownMenuItem>
+                        ),
+                      )}
                       {categories.length > 0 && <DropdownMenuSeparator />}
                       <DropdownMenuItem
                         onClick={() => actions.newCategory(pickedDocs)}
@@ -528,11 +550,13 @@ export function PaperLibrary({
       {naming && (
         <CategoryDialog
           count={naming.length}
+          parent={ui.namingParent}
           onClose={() => ui.setNaming(null)}
           onSave={(name) =>
             createCategory(
               name,
               documents.filter((d) => naming.includes(d.id)),
+              ui.namingParent,
             )
           }
         />
