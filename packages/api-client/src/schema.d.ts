@@ -2145,6 +2145,17 @@ export interface components {
             width: number;
             height: number;
           }[];
+          sentenceLink?: {
+            /** @enum {string} */
+            origin: "source" | "translation";
+            parts: {
+              blockId: string;
+              sourceHash: string;
+              sentenceIndex: number;
+              source: string;
+              target: string;
+            }[];
+          };
           translation?: {
             blockId: string;
             sourceHash: string;

@@ -2835,3 +2835,24 @@ textarea.paper-note-input {
     animation: none;
   }
 }
+
+.annotation-quote-pair,
+.annotation-quote-pair > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  white-space: normal;
+  text-align: left;
+}
+.annotation-quote-pair {
+  gap: 0.75rem;
+}
+.annotation-quote-label {
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+.note-quote:has(.annotation-quote-pair) {
+  height: auto;
+  display: block;
+}

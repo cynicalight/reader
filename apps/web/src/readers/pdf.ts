@@ -522,6 +522,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
     if (this.pdf && block)
       return resolvePDFCitation(this.pdf, block, label, pdfjs.OPS);
   }
+  sentenceRanges(passages: import("@reader/core").PDFPassage[]) {
+    return this.navigation.sentenceRanges(passages);
+  }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.navigation.focusSentences(blockId, sources, scroll);
   }

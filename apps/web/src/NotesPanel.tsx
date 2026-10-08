@@ -1,3 +1,4 @@
+import { AnnotationQuote } from "./AnnotationQuote";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -282,7 +283,10 @@ function NoteCard({
         </span>
       </div>
       <Button variant="ghost" className="note-quote" onClick={onGo}>
-        {a.quote || locationLabel(a.location)}
+        <AnnotationQuote
+          quote={a.quote || locationLabel(a.location)}
+          location={a.location}
+        />
       </Button>
       {editing ? (
         <div className="space-y-2">

@@ -1,3 +1,4 @@
+import { AnnotationQuote } from "./AnnotationQuote";
 import {
   useEffect,
   useLayoutEffect,
@@ -450,6 +451,10 @@ export function Workspace({
     const copying =
       kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
+      const prepared =
+        source && kind !== "bookmark" && !editingAnnotation
+          ? ((await adapter?.prepareAnnotation?.(source)) ?? source)
+          : source;
       const a =
         written && editingAnnotation
           ? await api.updateAnnotationNote(
@@ -459,7 +464,8 @@ export function Workspace({
             )
           : await api.annotate(doc.id, {
               kind,
-              location: target,
+              location:
+                kind === "bookmark" ? target : (prepared?.location ?? target),
               quote: kind === "bookmark" ? "" : source?.text || "",
               note: noteText,
               color,
@@ -1534,7 +1540,12 @@ export function Workspace({
             </DialogDescription>
           </DialogHeader>
           <blockquote className="note-preview">
-            {noteSelection?.text}
+            {noteSelection && (
+              <AnnotationQuote
+                quote={noteSelection.text}
+                location={noteSelection.location}
+              />
+            )}
           </blockquote>
           <Textarea
             autoFocus
