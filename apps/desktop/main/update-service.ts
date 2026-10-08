@@ -1,7 +1,12 @@
-import { app, BrowserWindow, dialog, net, shell } from "electron";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { DailyUpdateChecker, type UpdateState } from "./updates";
+import { app, autoUpdater, BrowserWindow, dialog, net, shell } from "electron";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { canUpdateInPlace, stageUpdate } from "./mac-squirrel";
+import {
+  DailyUpdateChecker,
+  type ReleaseUpdate,
+  type UpdateState,
+} from "./updates";
 import { downloadUpdate } from "./update-download";
 
 export async function startUpdateService(window: BrowserWindow) {
@@ -38,7 +43,58 @@ export async function startUpdateService(window: BrowserWindow) {
   let active: Promise<void> | undefined;
   let stopped = false;
   let wantsFeedback = false;
+  let staged: string | undefined;
   const alive = () => !stopped && !window.isDestroyed();
+  const request = (url: string, init: RequestInit) => net.fetch(url, init);
+  const offerRestart = async (version: string) => {
+    const selected = await dialog.showMessageBox(window, {
+      type: "info",
+      message: `Reader ${version} 已准备就绪`,
+      detail:
+        "重启 Reader 即可完成更新。选择“稍后”时，会在退出 Reader 后自动安装。",
+      buttons: ["立即重启", "稍后"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    // Windows still close through the normal flush before Squirrel replaces the app.
+    if (selected.response === 0 && alive()) autoUpdater.quitAndInstall();
+  };
+  // Returns false when the app cannot replace itself; the caller then offers the DMG.
+  const updateInPlace = async (update: ReleaseUpdate): Promise<boolean> => {
+    if (!update.archive) return false;
+    if (staged === update.version) {
+      if (wantsFeedback) await offerRestart(update.version);
+      return true;
+    }
+    try {
+      const bundle = join(app.getPath("exe"), "..", "..", "..");
+      if (!(await canUpdateInPlace(bundle))) return false;
+      if (wantsFeedback) window.setProgressBar(2);
+      const archive = await downloadUpdate(
+        { ...update, ...update.archive },
+        join(directory, "updates"),
+        request,
+      );
+      try {
+        if (!alive()) return true;
+        await stageUpdate(autoUpdater, archive);
+        staged = update.version;
+      } finally {
+        // Squirrel keeps its own copy of a staged update.
+        await rm(dirname(archive), { recursive: true, force: true });
+      }
+    } catch (error) {
+      console.warn(
+        "Reader in-place update:",
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
+    } finally {
+      if (!window.isDestroyed()) window.setProgressBar(-1);
+    }
+    if (alive()) await offerRestart(update.version);
+    return true;
+  };
   const check = (manual = false): Promise<void> => {
     if (active) {
       wantsFeedback ||= manual;
@@ -75,6 +131,12 @@ export async function startUpdateService(window: BrowserWindow) {
             });
           return;
         }
+        if (
+          process.platform === "darwin" &&
+          (await updateInPlace(result.update))
+        )
+          return;
+        if (!alive()) return;
         const windows = process.platform === "win32";
         const selected = await dialog.showMessageBox(window, {
           type: "info",
@@ -92,7 +154,7 @@ export async function startUpdateService(window: BrowserWindow) {
         const path = await downloadUpdate(
           result.update,
           join(directory, "updates"),
-          (url, init) => net.fetch(url, init),
+          request,
         );
         if (!alive()) return;
         const error = await shell.openPath(path);

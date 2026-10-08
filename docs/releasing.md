@@ -5,6 +5,7 @@ Reader 使用 GitHub Actions 和 electron-builder，发布 GitHub Release 后自
 | 文件                             | 运行平台                |
 | -------------------------------- | ----------------------- |
 | `Reader-<version>-mac-arm64.dmg` | Apple Silicon Mac       |
+| `Reader-<version>-mac-arm64.zip` | Mac 应用内原地更新包    |
 | `Reader-<version>-win-x64.exe`   | Windows x64（NSIS）     |
 | `SHA256SUMS.txt`                 | 安装包的 SHA-256 校验值 |
 
@@ -64,17 +65,19 @@ pnpm package      # 构建 DMG 或 NSIS 安装包，并执行相同检查
 
 更新来源为 `cynicalight/reader` 的最新正式 GitHub Release。仅提示比当前版本更新的正式版，不提示草稿、预发布版或旧版本。Release 必须同时提供当前平台（Apple Silicon Mac 或 Windows x64）对应的安装包和 `SHA256SUMS.txt`。在“关于 Reader”中可手动检查，手动检查不受每日间隔限制。
 
-发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用系统代理，并在本地核对 SHA-256。校验成功后：macOS 打开 DMG，请先退出 Reader，再将新 Reader 拖入 Applications 完成替换，应用不会自动退出；Windows 运行 NSIS 安装程序并退出 Reader（退出前照常保存阅读数据），由安装程序替换原安装目录，书库在用户数据目录中不受影响。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
+macOS 正式版优先原地更新：若当前应用由固定证书签名、Release 提供 `mac-arm64.zip`，后台检查发现新版本时直接下载 zip，不弹窗、不显示进度条（手动检查时显示进度条）。zip 同样核对 SHA-256，校验后在本机 loopback 上以随机路径临时提供给 Electron `autoUpdater`（Squirrel.Mac）。Squirrel 会再检查新应用的签名是否满足当前应用的指定要求（同一 bundle ID 与同一证书），通过后暂存，暂存完成后删除下载的 zip。随后提示“立即重启 / 稍后”：立即重启会照常保存阅读数据后退出并安装新版本；选择稍后时在下次退出 Reader 时安装。重启前再次检查同一版本不会重复下载。原地更新需要 Reader 所在目录可写；当前应用为 ad-hoc 签名（本地构建、旧版本）、Release 没有 zip，或下载、校验、Squirrel 任一步失败时，回退到下面的 DMG 流程。从 ad-hoc 签名的旧版本升级到首个固定证书版本，需要手动安装一次 DMG。
 
-当前 macOS 采用 ad-hoc 签名；若要改用标准的自动下载、重启安装机制，需要另行配置可验证的应用签名和更新产物。参见 [Electron 自动更新要求](https://www.electronjs.org/docs/latest/api/auto-updater)与 [electron-builder 更新产物要求](https://www.electron.build/v26/docs/features/auto-update/)。
+其他情况下发现更新后选择“下载安装包”，应用会通过 Electron 网络栈下载文件，使用系统代理，并在本地核对 SHA-256。校验成功后：macOS 打开 DMG，请先退出 Reader，再将新 Reader 拖入 Applications 完成替换，应用不会自动退出；Windows 运行 NSIS 安装程序并退出 Reader（退出前照常保存阅读数据），由安装程序替换原安装目录，书库在用户数据目录中不受影响。下载文件保存在用户数据目录的 `updates/` 下；失败的下载会清理，进程被强制关闭可能留下 `.part` 文件。校验值确认文件与 Release 一致，不能替代开发者签名。
 
-人工检查：安装含此功能的包，打开“关于 Reader → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；确认 DMG 打开（Windows 为安装程序启动且 Reader 退出），安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
+参见 [Electron 自动更新要求](https://www.electronjs.org/docs/latest/api/auto-updater)。
+
+人工检查：安装含此功能的包，打开“关于 Reader → 检查更新”；确认无更新时提示当前版本。随后发布更高版本且安装包上传完成后，再检查并下载；macOS（固定证书版本，位于 Applications）确认出现“已准备就绪”，选择“立即重启”后自动以新版本启动，选择“稍后”则退出再打开后为新版本；Windows 确认安装程序启动且 Reader 退出。安装后版本变化，原书库和阅读位置仍保留。选择“稍后”应继续阅读；断网时手动检查应提示错误。自动检查与真实系统安装仍需人工验收。
 
 ## 自动检查的范围
 
 PR 和 `main` CI 只在 Ubuntu 上运行类型检查与 Go/前端测试，不构建应用或安装包。Release 和手动试跑固定源提交，按完整 SHA 查询本仓库 `ci.yml` 已成功的 push 检查；不复用其他提交、失败、未完成或 PR head 的记录。找不到可复用记录时先补跑同一检查流程，失败则停止发版。之后在原生 macOS ARM64 和 Windows x64 runner 上构建安装包并检查包内运行时，不重复跑整套测试。检查脚本先将整个应用复制到仓库以外的临时目录，再启动包内 Electron 的 Node 模式。这样可以避免漏装依赖时意外使用源码目录中的依赖。检查内容包括 PDF.js 渲染、原生 canvas 和真实 ONNX 推理。随后启动包内 Go 服务，检查 SQLite 初始化、loopback 绑定、API 鉴权和 Web 资源。macOS 还检查签名完整性，正式版要求签名者为固定证书。
 
-这些检查不启动 GUI，也不代替 DMG 挂载、Gatekeeper、Windows 安装/卸载、SmartScreen 以及真实用户文档的人工验收。校验生成脚本检查 DMG 与 EXE 产物的命名、数量、文件头/尾和大小，再计算哈希。
+这些检查不启动 GUI，也不代替 DMG 挂载、Gatekeeper、Windows 安装/卸载、SmartScreen 以及真实用户文档的人工验收。校验生成脚本检查 DMG、zip 与 EXE 产物的命名、数量、文件头/尾和大小，再计算哈希。
 
 ## 相关文件与依据
 

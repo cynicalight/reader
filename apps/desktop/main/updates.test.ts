@@ -66,6 +66,31 @@ describe("release boundaries", () => {
     expect(() => selectRelease(release(), "0.1.0", "win32", "arm64")).toThrow();
     expect(() => selectRelease(release(), "0.1.0", "linux", "x64")).toThrow();
   });
+  it("offers the Mac update archive only when the release has one", () => {
+    const withArchive = release();
+    withArchive.assets.push({
+      name: "Reader-0.2.0-mac-arm64.zip",
+      state: "uploaded",
+      browser_download_url:
+        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-mac-arm64.zip",
+    });
+    const mac = selectRelease(withArchive, "0.1.0", "darwin", "arm64");
+    expect(mac.status === "available" && mac.update.archive).toEqual({
+      installer: "Reader-0.2.0-mac-arm64.zip",
+      downloadURL:
+        "https://github.com/cynicalight/reader/releases/download/v0.2.0/Reader-0.2.0-mac-arm64.zip",
+    });
+    const windows = selectRelease(withArchive, "0.1.0", "win32", "x64");
+    expect(windows.status === "available" && windows.update.archive).toBe(
+      undefined,
+    );
+    const old = selectRelease(release(), "0.1.0", "darwin", "arm64");
+    expect(old.status === "available" && old.update.archive).toBe(undefined);
+    withArchive.assets[3].browser_download_url = "https://example.com/x.zip";
+    expect(() =>
+      selectRelease(withArchive, "0.1.0", "darwin", "arm64"),
+    ).toThrow();
+  });
   it("retries a release whose build assets are not ready", () => {
     expect(
       selectRelease({ ...release(), assets: [] }, "0.1.0", "darwin", "arm64")

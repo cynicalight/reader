@@ -57,6 +57,7 @@ jobs:
           name: reader-${{ matrix.target }}
           path: |
             release/Reader-*-${{ matrix.target }}.dmg
+            release/Reader-*-${{ matrix.target }}.zip
             release/Reader-*-${{ matrix.target }}.exe
           if-no-files-found: error
           compression-level: 0

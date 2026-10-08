@@ -12,6 +12,8 @@ export interface ReleaseUpdate {
   installer: string;
   downloadURL: string;
   checksumURL: string;
+  // macOS app archive for Squirrel.Mac in-place updates. Older releases lack it.
+  archive?: { installer: string; downloadURL: string };
 }
 export type UpdateResult =
   | { status: "current" }
@@ -86,10 +88,19 @@ export function selectRelease(
   const checksumURL = assetURL("SHA256SUMS.txt");
   // Release is published before CI attaches the installers. Retry later.
   if (!downloadURL || !checksumURL) return { status: "pending" };
-  return {
-    status: "available",
-    update: { version, installer, downloadURL, checksumURL },
+  const update: ReleaseUpdate = {
+    version,
+    installer,
+    downloadURL,
+    checksumURL,
   };
+  if (platform === "darwin") {
+    const archive = `Reader-${version}-mac-${arch}.zip`;
+    const archiveURL = assetURL(archive);
+    if (archiveURL)
+      update.archive = { installer: archive, downloadURL: archiveURL };
+  }
+  return { status: "available", update };
 }
 
 export function installerChecksum(text: string, filename: string): string {
