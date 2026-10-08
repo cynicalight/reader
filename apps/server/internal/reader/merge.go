@@ -160,6 +160,19 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Links to the duplicates now point at the version kept.
+	for _, d := range others {
+		for _, rel := range d.Related {
+			if rel == id || seen[rel] {
+				continue
+			}
+			a, b := relationPair(id, rel)
+			if _, err = tx.Exec("INSERT OR IGNORE INTO document_relations VALUES(?,?,?)", a, b, now()); err != nil {
+				fail(w, 500, "合并失败")
+				return
+			}
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		fail(w, 500, "合并失败")
 		return

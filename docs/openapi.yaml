@@ -1682,6 +1682,86 @@
                 },
             },
         },
+      "/api/documents/{id}/related/{other}":
+        {
+          "parameters":
+            [
+              {
+                "in": "path",
+                "name": "id",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+              {
+                "in": "path",
+                "name": "other",
+                "required": true,
+                "schema": { "type": "string" },
+              },
+            ],
+          "put":
+            {
+              "summary": "Link two documents as related (both directions, idempotent, at most 100 per document)",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The document at id",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "delete":
+            {
+              "summary": "Remove the link between two documents",
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "The document at id",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Document" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/merge":
         {
           "post":
@@ -2412,6 +2492,12 @@
                       "type": "number",
                       "description": "Questions without an answer that are not resolved",
                     },
+                  "related":
+                    {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Documents linked as related, in both directions; may include trashed ones",
+                    },
                 },
               "required":
                 [
@@ -2435,6 +2521,7 @@
                   "noteCount",
                   "highlightCount",
                   "openQuestionCount",
+                  "related",
                 ],
             },
           "Annotation":

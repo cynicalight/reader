@@ -54,6 +54,7 @@ import {
 import { paperCategories, statusLabels } from "./model";
 import { PaperMenuItems, type PaperMenuActions } from "./PaperMenu";
 import { CitationMenuItems } from "./CitationMenu";
+import { RelatedPapers } from "./RelatedPapers";
 
 const fieldLabels: Partial<Record<PaperMetadataField, string>> = {
   date: "日期",
@@ -411,6 +412,7 @@ export function PaperDetail({
             </>
           ) : null}
         </section>
+        <RelatedPapers doc={doc} />
       </div>
     </aside>
   );

@@ -19,6 +19,8 @@ vi.mock("@reader/api", () => ({
     saveLibraryPreferences: vi.fn(async (value) => value),
     changeLibraryTag: vi.fn(async () => ({ changed: 1 })),
     mergeDocuments: vi.fn(async () => ({ trashed: [] })),
+    relateDocuments: vi.fn(async () => ({})),
+    unrelateDocuments: vi.fn(async () => ({})),
   },
 }));
 vi.mock("sonner", () => ({
@@ -312,4 +314,23 @@ it("toggles a colored category with its number key", async () => {
     ),
   );
   expect(api.update).toHaveBeenCalledExactlyOnceWith("b", { tags: ["Todo"] });
+});
+
+it("links related papers from the detail panel", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      documents: [{ ...docs[0], related: ["b", "gone"] }, docs[1]],
+    }),
+  );
+  await act(async () => row("Attention Is All You Need").click());
+  const section = host.querySelector(".paper-related")!;
+  expect(section.textContent).toContain("Graph Attention Networks");
+  await act(async () =>
+    section
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="取消关联 Graph Attention Networks"]',
+      )!
+      .click(),
+  );
+  expect(api.unrelateDocuments).toHaveBeenCalledExactlyOnceWith("a", "b");
 });

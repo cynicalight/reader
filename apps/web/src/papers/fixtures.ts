@@ -21,6 +21,7 @@ export const paper = (patch: Partial<Document> = {}): Document => ({
   noteCount: 0,
   highlightCount: 0,
   openQuestionCount: 0,
+  related: [],
   tags: [],
   ...patch,
 });

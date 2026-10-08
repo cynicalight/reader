@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import type { Document, Processing } from "@reader/core";
 import { paper } from "./fixtures";
+import { relatedCandidates } from "./RelatedPapers";
 import {
   authorsShort,
   formatCreators,
@@ -327,4 +328,18 @@ it("keeps up to nine colored categories in key order", () => {
   expect(
     paperColors(paper({ tags: ["c3/x", "c5"] }), colored).map((c) => c.name),
   ).toEqual(["c3", "c5"]);
+});
+
+it("offers unlinked papers matching every term as related candidates", () => {
+  const doc = paper({ id: "a", title: "Attention", related: ["b"] });
+  const docs = [
+    doc,
+    paper({ id: "b", title: "Graph attention" }),
+    paper({ id: "c", title: "Attention maps", metadata: { date: "2020" } }),
+    paper({ id: "d", title: "Attention maps", library: "books" }),
+  ];
+  expect(
+    relatedCandidates(doc, docs, "attention 2020").map((d) => d.id),
+  ).toEqual(["c"]);
+  expect(relatedCandidates(doc, docs, " ")).toEqual([]);
 });

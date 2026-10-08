@@ -134,6 +134,8 @@ export interface Document {
   highlightCount: number;
   /** Questions without an answer that are not resolved. */
   openQuestionCount: number;
+  /** Documents linked as related, in both directions; may include trashed ones. */
+  related: string[];
   id: string;
   type: "epub" | "pdf";
   title: string;

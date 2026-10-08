@@ -172,6 +172,16 @@ export const api = {
     request<Document>(`/api/documents/${encodeURIComponent(id)}/trash`, {
       method: "POST",
     }),
+  relateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "PUT" },
+    ),
+  unrelateDocuments: (id: string, other: string) =>
+    request<Document>(
+      `/api/documents/${encodeURIComponent(id)}/related/${encodeURIComponent(other)}`,
+      { method: "DELETE" },
+    ),
   mergeDocuments: (id: string, from: string[]) =>
     request<{ document: Document; trashed: string[] }>(
       `/api/documents/${encodeURIComponent(id)}/merge`,

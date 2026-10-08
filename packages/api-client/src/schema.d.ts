@@ -1505,6 +1505,89 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/related/{other}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        other: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /** Link two documents as related (both directions, idempotent, at most 100 per document) */
+    put: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          other: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The document at id */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    post?: never;
+    /** Remove the link between two documents */
+    delete: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+          other: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The document at id */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Document"];
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/documents/{id}/merge": {
     parameters: {
       query?: never;
@@ -2060,6 +2143,8 @@ export interface components {
       highlightCount: number;
       /** @description Questions without an answer that are not resolved */
       openQuestionCount: number;
+      /** @description Documents linked as related, in both directions; may include trashed ones */
+      related: string[];
     };
     Annotation: {
       id: string;
