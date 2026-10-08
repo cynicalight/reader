@@ -2,21 +2,22 @@
 
 Reader 使用 GitHub Actions 和 electron-builder，发布 GitHub Release 后自动生成以下文件：
 
-| 文件                             | 运行平台                    |
-| -------------------------------- | --------------------------- |
-| `Reader-<version>-mac-arm64.dmg` | Apple Silicon Mac           |
-| `SHA256SUMS.txt`                 | DMG 安装包的 SHA-256 校验值 |
+| 文件                             | 运行平台                |
+| -------------------------------- | ----------------------- |
+| `Reader-<version>-mac-arm64.dmg` | Apple Silicon Mac       |
+| `Reader-<version>-win-x64.exe`   | Windows x64（NSIS）     |
+| `SHA256SUMS.txt`                 | 安装包的 SHA-256 校验值 |
 
-当前工作流仅提供 Apple Silicon Mac 安装包，不构建 Windows 或 Intel Mac 安装包。
+当前工作流不构建 Intel Mac、Windows ARM64 或 Linux 安装包。
 
-当前没有开发者证书。macOS 应用采用 ad-hoc 签名，不做 Apple 公证。系统可能阻止首次打开。macOS 可在确认下载来源后，在“系统设置 → 隐私与安全性”中允许该应用。组织设备策略可能禁止绕过。无需关闭系统整体安全保护。校验值用于检查文件完整性，不能替代开发者身份签名。
+当前没有开发者证书。macOS 应用采用 ad-hoc 签名，不做 Apple 公证；Windows 安装包没有 Authenticode 签名。系统可能阻止首次打开。macOS 可在确认下载来源后，在“系统设置 → 隐私与安全性”中允许该应用；Windows SmartScreen 可选择“更多信息 → 仍要运行”。组织设备策略可能禁止绕过。无需关闭系统整体安全保护。校验值用于检查文件完整性，不能替代开发者身份签名。
 
 ## 发版步骤
 
 1. 在独立 worktree/分支完成修改，将根目录 `package.json` 和 `apps/desktop/package.json` 的版本同步，例如都改为 `0.2.0`。提交后 merge 到 `main`。
 2. 推送 `main`，等待单个 Linux runner 的类型检查和测试通过。首次启用时，可先从 Actions 手动运行 **Release installers**；它只保存安装包与校验值为 Actions artifacts，不创建或修改 Release。
 3. 在所需提交上创建 tag，例如 `v0.2.0`，并发布该 tag 对应的 GitHub Release。Release 所在提交必须包含本工作流。预发布版本可用 `0.2.0-beta.1` / `v0.2.0-beta.1`。
-4. **Release installers** 将 tag 解析为固定提交，核对版本，在原生 macOS ARM64 runner 上构建。同一源提交已经通过的 `main` CI 会直接复用；没有成功记录时，先调用与日常 CI 相同的检查流程。检查通过后才构建 Mac 安装包，统一上传安装包与校验值到同一个 Release。
+4. **Release installers** 将 tag 解析为固定提交，核对版本，分别在原生 macOS ARM64 和 Windows x64 runner 上构建。同一源提交已经通过的 `main` CI 会直接复用；没有成功记录时，先调用与日常 CI 相同的检查流程。检查通过后才构建安装包，两个平台都成功后统一上传安装包与校验值到同一个 Release。
 5. 下载并做安装后的人工检查：打开应用，导入 EPUB/PDF，确认阅读、笔记保存及重新打开后恢复；退出后检查服务已停止。AI 功能另用已安装并登录的 CLI 检查。
 
 触发事件为 `release: published`，适用于正式版和预发布版。保存草稿、单独推送 tag 或修改 Release 描述不会触发。Release 页面会先发布，安装包稍后上传；任一构建失败时上传任务不会运行。GitHub 资产上传不是事务操作，上传过程中网络失败可能留下部分文件；修复后重新运行工作流会覆盖同名资产。不要移动已发布的 tag；代码修复请发布新版本。
@@ -32,10 +33,10 @@ pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm test
 pnpm package:dir  # 构建未封装应用，并检查包内运行时
-pnpm package      # 构建 DMG，并执行相同检查
+pnpm package      # 构建 DMG 或 NSIS 安装包，并执行相同检查
 ```
 
-产物在根目录 `release/`。脚本不上传任何文件。暂不支持交叉打包、Linux 安装包、Windows ARM64 或重启后自动安装更新。安装包目前使用默认 Electron 图标。
+产物在根目录 `release/`。脚本不上传任何文件。暂不支持交叉打包、Linux 安装包或 Windows ARM64。安装包目前使用默认 Electron 图标。
 
 安装包包含 Electron、Go 服务、Web 资源及 PDF 处理器的生产依赖。终端用户无需安装 Node.js 或 Go。PDF 布局模型仍按现有逻辑在首次处理时下载并缓存；安装包不包含模型。Codex、Claude Code、Kimi Code 仍需用户自行安装及登录。
 
@@ -55,14 +56,14 @@ pnpm package      # 构建 DMG，并执行相同检查
 
 ## 自动检查的范围
 
-PR 和 `main` CI 只在 Ubuntu 上运行类型检查与 Go/前端测试，不构建应用或安装包。Release 和手动试跑固定源提交，按完整 SHA 查询本仓库 `ci.yml` 已成功的 push 检查；不复用其他提交、失败、未完成或 PR head 的记录。找不到可复用记录时先补跑同一检查流程，失败则停止发版。之后在原生 macOS ARM64 runner 上构建安装包并检查包内运行时，不重复跑整套测试。检查脚本先将整个应用复制到仓库以外的临时目录，再启动包内 Electron 的 Node 模式。这样可以避免漏装依赖时意外使用源码目录中的依赖。检查内容包括 PDF.js 渲染、原生 canvas 和真实 ONNX 推理。随后启动包内 Go 服务，检查 SQLite 初始化、loopback 绑定、API 鉴权和 Web 资源。macOS 还检查 ad-hoc 签名完整性。
+PR 和 `main` CI 只在 Ubuntu 上运行类型检查与 Go/前端测试，不构建应用或安装包。Release 和手动试跑固定源提交，按完整 SHA 查询本仓库 `ci.yml` 已成功的 push 检查；不复用其他提交、失败、未完成或 PR head 的记录。找不到可复用记录时先补跑同一检查流程，失败则停止发版。之后在原生 macOS ARM64 和 Windows x64 runner 上构建安装包并检查包内运行时，不重复跑整套测试。检查脚本先将整个应用复制到仓库以外的临时目录，再启动包内 Electron 的 Node 模式。这样可以避免漏装依赖时意外使用源码目录中的依赖。检查内容包括 PDF.js 渲染、原生 canvas 和真实 ONNX 推理。随后启动包内 Go 服务，检查 SQLite 初始化、loopback 绑定、API 鉴权和 Web 资源。macOS 还检查 ad-hoc 签名完整性。
 
-这些检查不启动 GUI，也不代替 DMG 挂载、Gatekeeper 以及真实用户文档的人工验收。校验生成脚本检查 DMG 产物的命名、数量、文件头/尾和大小，再计算哈希。
+这些检查不启动 GUI，也不代替 DMG 挂载、Gatekeeper、Windows 安装/卸载、SmartScreen 以及真实用户文档的人工验收。校验生成脚本检查 DMG 与 EXE 产物的命名、数量、文件头/尾和大小，再计算哈希。
 
 ## 相关文件与依据
 
 - `.github/workflows/ci.yml`：单平台 PR/main 验证，也供发版补跑检查。
-- `.github/workflows/build.yml`：Mac 构建任务。
+- `.github/workflows/build.yml`：Mac 与 Windows 构建任务。
 - `.github/workflows/release.yml`：固定源提交、构建并上传安装包。
 - `apps/desktop/builder.config.cjs`：安装包格式、资源路径和签名策略。
 - `scripts/package.mjs`、`scripts/package-smoke.mjs`、`scripts/processor-smoke.mjs`：资源部署与包内运行验证。
