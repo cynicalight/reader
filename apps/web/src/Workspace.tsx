@@ -412,6 +412,12 @@ export function Workspace({
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
+  const focusAnnotation = (annotation: Annotation) => {
+    const go = adapter?.focusLocation
+      ? adapter.focusLocation(annotation.location)
+      : adapter?.goTo(annotation.location);
+    void go?.catch((e) => toast.error(e.message));
+  };
   useEffect(() => {
     // Follow a reader:// link once the reader and annotations are ready.
     if (linkTarget?.id !== doc.id || !adapter || !annotationsLoaded) return;
@@ -419,7 +425,7 @@ export function Workspace({
     if (linkTarget.annotation) {
       const target = annotations.find((a) => a.id === linkTarget.annotation);
       if (target) {
-        void adapter.goTo(target.location).catch((e) => toast.error(e.message));
+        focusAnnotation(target);
         setRight(true);
         setRightTab("notes");
       } else toast.info("这条批注已不存在，已打开文档");
@@ -1457,7 +1463,7 @@ export function Workspace({
                   messages={chat.messages}
                   deleting={deleting}
                   answering={answering}
-                  onGo={(a) => move(a.location)}
+                  onGo={focusAnnotation}
                   onDelete={(id) => void removeAnnotation(id)}
                   onSave={saveAnnotationText}
                   onAnswer={(a) => void answerQuestion(a)}
