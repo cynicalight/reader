@@ -36,6 +36,7 @@ export function TranslationText({
   translation,
   documentId,
   retry,
+  paused = false,
   linked = [],
   formulaNumber,
   onCitation,
@@ -44,11 +45,13 @@ export function TranslationText({
   translation?: TranslationBlock;
   documentId: string;
   retry: () => void;
+  paused?: boolean;
   linked?: number[];
   formulaNumber?: string;
   onCitation?: (blockId: string, label: string) => void;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
+  const halted = paused && translation?.status === "pending";
   const asset =
     !!block.image || ["table", "chart", "image"].includes(block.label);
   const image = block.image ? (
@@ -93,7 +96,7 @@ export function TranslationText({
                 </Button>
               </>
             ) : (
-              <span>公式转换中…</span>
+              <span>{halted ? "翻译已暂停" : "公式转换中…"}</span>
             )}
           </div>
         )}
@@ -148,7 +151,9 @@ export function TranslationText({
           <span>
             {translation?.status === "failed"
               ? translation.error || "此段翻译失败"
-              : "正在翻译中…"}
+              : halted
+                ? "翻译已暂停"
+                : "正在翻译中…"}
           </span>
           {translation?.status === "failed" && (
             <Button variant="ghost" size="sm" onClick={retry}>

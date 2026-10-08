@@ -772,10 +772,7 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
-      <AssistanceControls
-        documentId={doc.id}
-        processing={processing}
-      />
+      <AssistanceControls documentId={doc.id} processing={processing} />
     </div>
   );
   return (
@@ -1018,6 +1015,7 @@ export function PDFReadingView({
                       translation={translated}
                       documentId={doc.id}
                       retry={() => void translate(block.id)}
+                      paused={processing?.enabled === false}
                       linked={linked?.[block.id] ?? []}
                     />
                     {noteIndexes.length > 0 && (
@@ -1059,6 +1057,7 @@ export function PDFReadingView({
                 translation={activePopup}
                 documentId={doc.id}
                 retry={() => void translate(popup.block.id)}
+                paused={processing?.enabled === false}
               />
               <Button
                 variant="ghost"

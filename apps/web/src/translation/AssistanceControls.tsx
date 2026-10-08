@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Sparkles } from "lucide-react";
+import { Pause, RotateCcw, Sparkles } from "lucide-react";
 import type { Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
@@ -37,7 +37,9 @@ export function AssistanceControls({
     };
   }, [documentId]);
   const complete = job?.status === "complete";
-  const action = job?.enabled ? "pause" : job?.startedAt ? "resume" : "start";
+  const failed = job?.enabled && job.status === "failed";
+  const action =
+    job?.enabled && !failed ? "pause" : job?.startedAt ? "resume" : "start";
   return (
     <div className="assistance-controls">
       <Button
@@ -58,14 +60,22 @@ export function AssistanceControls({
           }
         }}
       >
-        {job?.enabled && !complete ? <Pause /> : <Sparkles />}
+        {failed ? (
+          <RotateCcw />
+        ) : job?.enabled && !complete ? (
+          <Pause />
+        ) : (
+          <Sparkles />
+        )}
         {complete
           ? "翻译完成"
-          : job?.enabled
-            ? "暂停翻译"
-            : job?.startedAt
-              ? "继续翻译"
-              : "开始翻译"}
+          : failed
+            ? "重试翻译"
+            : job?.enabled
+              ? "暂停翻译"
+              : job?.startedAt
+                ? "继续翻译"
+                : "开始翻译"}
       </Button>
     </div>
   );

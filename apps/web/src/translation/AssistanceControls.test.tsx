@@ -26,6 +26,7 @@ const paused: Processing = {
   updatedAt: "2026-10-07T00:00:00Z",
 };
 beforeEach(() => {
+  vi.mocked(api.assistance).mockResolvedValue(undefined as never);
   vi.useFakeTimers();
   host = document.createElement("div");
   document.body.append(host);
@@ -97,4 +98,24 @@ it("uses chronological status ordering for variable timestamp precision", async 
   });
   expect(host.textContent).toContain("翻译完成");
   expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
+});
+
+it("a failed paper job offers a retry", async () => {
+  await render(1, {
+    ...paused,
+    enabled: true,
+    status: "failed",
+    startedAt: "2026-10-07T00:00:01Z",
+  });
+  expect(host.textContent).toContain("重试翻译");
+  vi.mocked(api.setAssistance).mockResolvedValue({
+    ...paused,
+    enabled: true,
+    status: "queued",
+    updatedAt: "2026-10-07T00:00:01Z",
+  });
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(api.setAssistance).toHaveBeenCalledWith("book", "resume");
 });
