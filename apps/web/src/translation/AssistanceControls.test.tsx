@@ -5,10 +5,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Processing } from "@reader/core";
 import { AssistanceControls } from "./AssistanceControls";
 import { api } from "@reader/api";
+import { toast } from "sonner";
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn() }),
+}));
 vi.mock("@reader/api", () => ({
   api: {
     assistance: vi.fn(async () => undefined),
     setAssistance: vi.fn(),
+    translateRange: vi.fn(),
     aiConfig: vi.fn(async () => ({ primary: "codex" })),
   },
 }));
@@ -100,13 +105,49 @@ it("uses chronological status ordering for variable timestamp precision", async 
   expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
 });
 
-it("a failed paper job offers a retry", async () => {
-  await render(1, {
+it("a book translates the current chapter instead of the whole document", async () => {
+  const ready: Processing = {
     ...paused,
     enabled: true,
-    status: "failed",
+    phase: "ready",
+    status: "complete",
     startedAt: "2026-10-07T00:00:01Z",
+  };
+  vi.mocked(api.translateRange).mockResolvedValue({
+    queued: 12,
+    characters: 39000,
+    nextPage: 31,
   });
+  vi.mocked(api.assistance)
+    .mockResolvedValueOnce(ready)
+    .mockResolvedValueOnce({
+      ...ready,
+      phase: "translating",
+      status: "queued",
+      updatedAt: "2026-10-07T00:00:02Z",
+    });
+  await act(async () =>
+    root.render(
+      <AssistanceControls
+        documentId="book"
+        processing={ready}
+        library="books"
+        chapter={() => ({ fromPage: 20, toPage: 45 })}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("翻译本章");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(api.translateRange).toHaveBeenCalledWith("book", 20, 45);
+  expect(api.setAssistance).not.toHaveBeenCalled();
+  expect(toast).toHaveBeenCalledWith(expect.stringContaining("第 31 页"));
+  expect(host.textContent).toContain("暂停翻译");
+});
+
+it("a failed paper job offers a retry", async () => {
+  await render(1, { ...paused, enabled: true, status: "failed" });
   expect(host.textContent).toContain("重试翻译");
   vi.mocked(api.setAssistance).mockResolvedValue({
     ...paused,

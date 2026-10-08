@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, RotateCcw, Sparkles } from "lucide-react";
-import type { Processing } from "@reader/core";
+import type { LibraryMode, Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { toast } from "sonner";
+import type { PageRange } from "./chapters";
 
+type Action = "start" | "pause" | "resume" | "chapter";
+
+/**
+ * Papers translate the whole document with start, pause and resume. Books
+ * translate the current chapter on request; the server caps each request.
+ */
 export function AssistanceControls({
   documentId,
   processing,
+  library = "papers",
+  chapter,
 }: {
   documentId: string;
   processing?: Processing;
+  library?: LibraryMode;
+  /** The chapter at the reading position, read when the button is pressed. */
+  chapter?: () => PageRange | undefined;
 }) {
   const [saved, setSaved] = useState<Processing>();
   const [busy, setBusy] = useState(false);
@@ -37,22 +49,54 @@ export function AssistanceControls({
     };
   }, [documentId]);
   const complete = job?.status === "complete";
-  const failed = job?.enabled && job.status === "failed";
-  const action =
-    job?.enabled && !failed ? "pause" : job?.startedAt ? "resume" : "start";
+  const [action, label]: [Action, string] =
+    job?.enabled && job.status === "failed"
+      ? ["resume", "重试翻译"]
+      : job?.enabled && !complete
+        ? ["pause", "暂停翻译"]
+        : !job?.enabled
+          ? job?.startedAt
+            ? ["resume", "继续翻译"]
+            : ["start", "开始翻译"]
+          : library === "books"
+            ? ["chapter", "翻译本章"]
+            : ["start", "翻译完成"];
+  const finished = complete && action !== "chapter";
+  const run = async () => {
+    if (action !== "chapter") return api.setAssistance(documentId, action);
+    const range = chapter?.();
+    if (!range) return undefined;
+    const result = await api.translateRange(
+      documentId,
+      range.fromPage,
+      range.toPage,
+    );
+    if (!result.queued) toast("本章已翻译");
+    else if (result.nextPage)
+      toast(
+        `本章较长，本次翻译至第 ${result.nextPage} 页，完成后可再次翻译本章`,
+      );
+    return api.assistance(documentId);
+  };
   return (
     <div className="assistance-controls">
       <Button
         variant="ghost"
         size="sm"
-        disabled={busy || !job || complete}
-        title={job?.enabled ? job.detail : "使用当前 AI 连接翻译全文与公式"}
+        disabled={busy || !job || finished}
+        title={
+          action === "chapter"
+            ? "翻译当前章节，单次最多约 4 万字"
+            : job?.enabled
+              ? job.detail
+              : "使用当前 AI 连接翻译全文与公式"
+        }
         onClick={async () => {
           const operation = ++serial.current;
           setBusy(true);
           try {
-            const next = await api.setAssistance(documentId, action);
-            if (operation === serial.current) setSaved(next);
+            const next = await run();
+            if (next && operation === serial.current) setSaved(next);
           } catch (e) {
             if (operation === serial.current) toast.error((e as Error).message);
           } finally {
@@ -60,22 +104,14 @@ export function AssistanceControls({
           }
         }}
       >
-        {failed ? (
-          <RotateCcw />
-        ) : job?.enabled && !complete ? (
+        {action === "pause" ? (
           <Pause />
+        ) : action === "resume" && job?.status === "failed" ? (
+          <RotateCcw />
         ) : (
           <Sparkles />
         )}
-        {complete
-          ? "翻译完成"
-          : failed
-            ? "重试翻译"
-            : job?.enabled
-              ? "暂停翻译"
-              : job?.startedAt
-                ? "继续翻译"
-                : "开始翻译"}
+        {label}
       </Button>
     </div>
   );

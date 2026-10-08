@@ -1424,6 +1424,84 @@
                 },
             },
         },
+      "/api/documents/{id}/translations/range":
+        {
+          "post":
+            {
+              "description": "Queue untranslated paragraphs and formulas in a page range, in reading order, up to 40000 source characters. Also resumes paused processing.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "required": ["fromPage", "toPage"],
+                              "properties":
+                                {
+                                  "fromPage":
+                                    { "type": "integer", "minimum": 1 },
+                                  "toPage": { "type": "integer", "minimum": 1 },
+                                },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Range queued",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required":
+                                    ["queued", "characters", "nextPage"],
+                                  "properties":
+                                    {
+                                      "queued": { "type": "integer" },
+                                      "characters": { "type": "integer" },
+                                      "nextPage":
+                                        {
+                                          "type": "integer",
+                                          "description": "Page where the character limit stopped the request; 0 when the range is fully queued.",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/translations/stream":
         {
           "get":
@@ -3226,7 +3304,11 @@
                   "blockId": { "type": "string" },
                   "sourceHash": { "type": "string" },
                   "status":
-                    { "enum": ["pending", "running", "complete", "failed"] },
+                    {
+                      "enum":
+                        ["idle", "pending", "running", "complete", "failed"],
+                      "description": "idle: a book paragraph that has not been requested.",
+                    },
                   "sentences":
                     {
                       "type": "array",

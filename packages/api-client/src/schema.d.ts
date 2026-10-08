@@ -1206,6 +1206,65 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/documents/{id}/translations/range": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, up to 40000 source characters. Also resumes paused processing. */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            fromPage: number;
+            toPage: number;
+          };
+        };
+      };
+      responses: {
+        /** @description Range queued */
+        202: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              queued: number;
+              characters: number;
+              /** @description Page where the character limit stopped the request; 0 when the range is fully queued. */
+              nextPage: number;
+            };
+          };
+        };
+        /** @description Error */
+        default: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["Error"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/documents/{id}/translations/stream": {
     parameters: {
       query?: never;
@@ -2500,8 +2559,11 @@ export interface components {
     TranslationBlock: {
       blockId: string;
       sourceHash: string;
-      /** @enum {unknown} */
-      status: "pending" | "running" | "complete" | "failed";
+      /**
+       * @description idle: a book paragraph that has not been requested.
+       * @enum {unknown}
+       */
+      status: "idle" | "pending" | "running" | "complete" | "failed";
       sentences: components["schemas"]["TranslationSentence"][];
       /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
       formulaMarkdown?: string;

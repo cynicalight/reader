@@ -315,7 +315,7 @@ export function Settings({
                 <span>
                   导入后自动翻译
                   <span className="block text-xs text-muted-foreground">
-                    开启后，新导入的 PDF 会自动翻译全文。
+                    开启后，新导入的文献会自动翻译全文。
                   </span>
                 </span>
               </label>

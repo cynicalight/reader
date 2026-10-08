@@ -44,6 +44,7 @@ import { numberedReference } from "../readers/pdf-citations";
 import "./translation.css";
 
 import { AssistanceControls } from "./AssistanceControls";
+import { chapterRange } from "./chapters";
 
 type Mode = "source" | "parallel" | "translation";
 export function PDFReadingView({
@@ -363,6 +364,7 @@ export function PDFReadingView({
   };
   // Keep the public adapter usable by TOC, notes and page navigation in all modes.
   const facade = useRef<ReaderAdapter | undefined>(undefined);
+  const outline = useRef<TOCItem[]>([]);
   const actions = useRef({ go });
   actions.current = { go };
   useEffect(() => {
@@ -391,6 +393,7 @@ export function PDFReadingView({
     }
   };
   const ready = (adapter: ReaderAdapter, toc: TOCItem[]) => {
+    outline.current = toc;
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
       get(target, key) {
@@ -772,7 +775,21 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
-      <AssistanceControls documentId={doc.id} processing={processing} />
+      <AssistanceControls
+        documentId={doc.id}
+        processing={processing}
+        library={doc.library}
+        chapter={() => {
+          const location = facade.current?.getLocation();
+          if (location?.type !== "pdf") return undefined;
+          return chapterRange(
+            outline.current,
+            location.page,
+            engine?.getPageCount?.() ||
+              Math.max(1, ...blocks.map((b) => b.page)),
+          );
+        }}
+      />
     </div>
   );
   return (

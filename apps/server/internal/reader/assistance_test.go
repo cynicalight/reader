@@ -13,6 +13,18 @@ import (
 	"time"
 )
 
+func paperDoc(t *testing.T, s *Server, data []byte) Document {
+	t.Helper()
+	w := uploadTo(t, s, "papers", "paper.pdf", data)
+	if w.Code != 201 {
+		t.Fatal(w.Body.String())
+	}
+	var d Document
+	if err := json.Unmarshal(w.Body.Bytes(), &d); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
 func assistanceRequest(t *testing.T, s *Server, action string) Processing {
 	t.Helper()
 	s.Token = "test-secret"
@@ -129,7 +141,7 @@ func TestImportWithAutoTranslationDisabledDoesNotStartBackgroundAI(t *testing.T)
 	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":false}`)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
-	d := organizationDoc(t, s)
+	d := paperDoc(t, s, sample(t, "reading-notes.pdf"))
 	p, e := s.Store.processing(d.ID)
 	if e != nil || p.Enabled || p.Status != "paused" {
 		t.Fatalf("import processing: %+v %v", p, e)
@@ -166,7 +178,7 @@ func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
 	if w := request(t, s, "PUT", "/api/settings", strings.NewReader(`{"autoTranslatePDF":false}`)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
-	first := organizationDoc(t, s)
+	first := paperDoc(t, s, sample(t, "reading-notes.pdf"))
 	for _, enabled := range []bool{true, false} {
 		body, _ := json.Marshal(map[string]any{"autoTranslatePDF": enabled, "appearance": "dark"})
 		w := request(t, s, "PUT", "/api/settings", strings.NewReader(string(body)))
@@ -179,14 +191,7 @@ func TestImportAutoTranslationPreferenceOnlyAffectsNewDocuments(t *testing.T) {
 			t.Fatalf("settings not persisted: %s", settings.Body.String())
 		}
 		content := append(sample(t, "reading-notes.pdf"), []byte("\n% preference "+string(body))...)
-		imported := upload(t, s, "preference.pdf", content)
-		if imported.Code != 201 {
-			t.Fatal(imported.Body.String())
-		}
-		var next Document
-		if err := json.Unmarshal(imported.Body.Bytes(), &next); err != nil {
-			t.Fatal(err)
-		}
+		next := paperDoc(t, s, content)
 		p, err := s.Store.processing(next.ID)
 		if err != nil || p.Enabled != enabled || (enabled && p.Status != "queued") || (!enabled && p.Status != "paused") {
 			t.Fatalf("preference ignored: %+v %v", p, err)
@@ -232,7 +237,7 @@ func TestImportDefaultsToAutomaticTranslation(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			d := organizationDoc(t, s)
+			d := paperDoc(t, s, sample(t, "reading-notes.pdf"))
 			p, err := s.Store.processing(d.ID)
 			if err != nil || !p.Enabled || p.Status != "queued" {
 				t.Fatalf("default did not queue translation: %+v %v", p, err)

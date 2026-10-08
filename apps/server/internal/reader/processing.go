@@ -31,6 +31,7 @@ type Processing struct {
 	wakeStages        bool
 	recoverStages     bool
 	queueTranslation  bool
+	enable            bool
 	UsageTracked      bool   `json:"usageTracked,omitempty"`
 	StartedAt         string `json:"startedAt,omitempty"`
 	CompletedAt       string `json:"completedAt,omitempty"`
@@ -83,7 +84,7 @@ func (s *Store) processing(id string) (Processing, error) {
 func (s *Store) saveProcessing(p Processing) error {
 	s.processingWriteMu.Lock()
 	defer s.processingWriteMu.Unlock()
-	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation {
+	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation || p.enable {
 		current, err := s.processing(p.DocumentID)
 		if err != nil {
 			return err
@@ -110,12 +111,13 @@ func (s *Store) enableLegacyProcessing() error {
 }
 
 // Only document creation reads this preference; updating settings never wakes a job.
-func importedProcessing(id, value string) Processing {
+// Books always run the local layout pass; their paragraphs translate on request.
+func importedProcessing(id, library, value string) Processing {
 	p := initialProcessing(id)
 	var settings struct {
 		AutoTranslatePDF *bool `json:"autoTranslatePDF"`
 	}
-	if (value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF) {
+	if library == "books" || ((value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF)) {
 		p.Enabled, p.Status, p.Detail = true, "queued", "等待解析 PDF"
 	}
 	return p
@@ -126,7 +128,7 @@ func (s *Store) enqueuePDF(d Document) error {
 	}
 	var value string
 	_ = s.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
-	p := importedProcessing(d.ID, value)
+	p := importedProcessing(d.ID, d.Library, value)
 	b, _ := json.Marshal(p)
 	_, e := s.DB.Exec("INSERT OR IGNORE INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	return e
@@ -478,14 +480,13 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		p.Warning = strings.Join(m.Warnings, " ")
 	}
 	p.Incomplete = len(m.IncompletePages) > 0 || strings.Contains(p.Warning, "无可提取文字")
-	p.TranslationsTotal = 0
-	for _, b := range m.Blocks {
-		if needsTranslation(b) {
-			p.TranslationsTotal++
-		}
+	items, e := s.translations(d.ID, m)
+	if e != nil {
+		return e
 	}
+	p.TranslationsDone, p.TranslationsTotal = translationCounts(items)
 	p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文与公式"}
-	if p.TranslationsTotal == 0 {
+	if p.TranslationsDone == p.TranslationsTotal {
 		p.Translating.Status = "complete"
 	}
 	aggregateProcessing(p)

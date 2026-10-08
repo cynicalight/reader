@@ -358,12 +358,20 @@ func (s *Server) refreshTranslationCounts(p *Processing, m layoutManifest) error
 	if err != nil {
 		return err
 	}
-	p.TranslationsTotal = len(items)
-	p.TranslationsDone = 0
+	p.TranslationsDone, p.TranslationsTotal = translationCounts(items)
+	return nil
+}
+
+// Idle paragraphs were never requested and do not count toward progress.
+func translationCounts(items []TranslationBlock) (done, total int) {
 	for _, item := range items {
+		if item.Status == "idle" {
+			continue
+		}
+		total++
 		if item.Status == "complete" {
-			p.TranslationsDone++
+			done++
 		}
 	}
-	return nil
+	return done, total
 }

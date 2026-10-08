@@ -49,7 +49,12 @@ func newTranslation(b PDFBlock) TranslationBlock {
 	}
 	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
+// Book paragraphs stay idle until a reader requests them; papers translate in full.
 func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+	d, err := s.Store.Document(documentID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.Store.DB.Query("SELECT body FROM translations WHERE document_id=?", documentID)
 	if err != nil {
 		return nil, err
@@ -81,6 +86,8 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 		t := newTranslation(b)
 		if value, ok := saved[t.BlockID+":"+t.SourceHash]; ok {
 			t = value
+		} else if d.Library == "books" {
+			t.Status = "idle"
 		}
 		result = append(result, t)
 	}
@@ -152,6 +159,10 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		BlockID string `json:"blockId"`
 	}
 	if !decode(w, r, &req) {
+		return
+	}
+	if req.BlockID == "" && d.Library == "books" {
+		fail(w, 400, "图书请按章节翻译")
 		return
 	}
 	m, err := s.readLayout(d.ID)

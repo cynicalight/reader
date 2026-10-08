@@ -427,7 +427,8 @@ export interface TranslationSentence {
 export interface TranslationBlock {
   blockId: string;
   sourceHash: string;
-  status: "pending" | "running" | "complete" | "failed";
+  /** idle: a book paragraph nobody has requested yet. */
+  status: "idle" | "pending" | "running" | "complete" | "failed";
   sentences: TranslationSentence[];
   formulaMarkdown?: string;
   error?: string;

@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/assistance", s.getAssistance)
 	mux.HandleFunc("POST /api/documents/{id}/assistance", s.setAssistance)
+	mux.HandleFunc("POST /api/documents/{id}/translations/range", s.requestTranslationRange)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
@@ -357,7 +358,7 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 	if err == nil && kind == "pdf" {
 		var settings string
 		_ = tx.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&settings)
-		p := importedProcessing(d.ID, settings)
+		p := importedProcessing(d.ID, library, settings)
 		b, _ := json.Marshal(p)
 		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}

@@ -50,7 +50,7 @@ func (s *Server) convertFormulas(ctx context.Context, documentID string, m layou
 			continue
 		}
 		t := saved[b.ID]
-		if t.Status == "complete" {
+		if t.Status == "complete" || t.Status == "idle" {
 			continue
 		}
 		if t.Status == "failed" {
@@ -121,12 +121,6 @@ func (s *Server) translatePDFContent(ctx context.Context, p *Processing, m layou
 	}
 	formulaErr := <-result
 	items, readErr := s.translations(p.DocumentID, m)
-	p.TranslationsTotal = len(items)
-	p.TranslationsDone = 0
-	for _, t := range items {
-		if t.Status == "complete" {
-			p.TranslationsDone++
-		}
-	}
+	p.TranslationsDone, p.TranslationsTotal = translationCounts(items)
 	return errors.Join(textErr, formulaErr, readErr)
 }
