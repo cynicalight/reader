@@ -2,11 +2,43 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { PDFBlock, PDFLocation } from "@reader/core";
 import { destinationPoint } from "./pdf-link-preview";
 
+// TextContent can merge differently colored links into an entire line. Use the
+// PDF's glyph advances, distributing the line's remaining width over its spaces.
+function characterWidths(
+  item: { str: string; width: number; transform: number[] },
+  font?: Map<string, number>,
+) {
+  const scale = Math.hypot(item.transform[0], item.transform[1]) / 1000;
+  const ligatures = [...(font?.keys() ?? [])]
+    .filter((key) => key.length > 1)
+    .sort((a, b) => b.length - a.length);
+  const chars: { text: string; width: number }[] = [];
+  for (let i = 0; i < item.str.length;) {
+    const text =
+      ligatures.find((key) => item.str.startsWith(key, i)) ??
+      String.fromCodePoint(item.str.codePointAt(i)!);
+    chars.push({
+      text,
+      width: /\s/.test(text) ? 0 : (font?.get(text) ?? 500) * scale,
+    });
+    i += text.length;
+  }
+  const spaces = chars.filter((char) => /\s/.test(char.text)).length;
+  const sum = chars.reduce((total, char) => total + char.width, 0);
+  for (const char of chars) {
+    if (/\s/.test(char.text))
+      char.width = Math.max(0, (item.width - sum) / (spaces || 1));
+    else if (!spaces || !font) char.width *= item.width / (sum || 1);
+  }
+  return chars;
+}
+
 /** Resolve a translated citation against the original PDF's link annotation. */
 export async function resolvePDFCitation(
   pdf: PDFDocumentProxy,
   block: PDFBlock,
   label: string,
+  operators?: Record<string, number>,
 ): Promise<PDFLocation | undefined> {
   const page = await pdf.getPage(block.page);
   const view = page.getViewport({ scale: 1 });
@@ -14,6 +46,28 @@ export async function resolvePDFCitation(
     page.getAnnotations(),
     page.getTextContent(),
   ]);
+  const fonts = new Map<string, Map<string, number>>();
+  if (operators) {
+    const list = await page.getOperatorList();
+    let font = "";
+    const stack: string[] = [];
+    for (let i = 0; i < list.fnArray.length; i++) {
+      const op = list.fnArray[i],
+        args = list.argsArray[i];
+      if (op === operators.save) stack.push(font);
+      else if (op === operators.restore) font = stack.pop() ?? font;
+      else if (op === operators.setFont) font = args[0];
+      else if (op === operators.showText) {
+        let widths = fonts.get(font);
+        if (!widths) fonts.set(font, (widths = new Map()));
+        for (const glyph of args[0] as (
+          number | { unicode: string; width: number }
+        )[])
+          if (typeof glyph !== "number" && glyph.unicode)
+            widths.set(glyph.unicode, glyph.width);
+      }
+    }
+  }
   for (const annotation of annotations) {
     if (annotation.subtype !== "Link" || !annotation.dest || !annotation.rect)
       continue;
@@ -39,25 +93,19 @@ export async function resolvePDFCitation(
           item.transform[4],
           item.transform[5],
         );
-        if (
-          y - item.height > bottom ||
-          y < top ||
-          x + item.width < left ||
-          x > right
-        )
+        if (y > bottom + 1 || y < top - 1 || x + item.width < left || x > right)
           return "";
-        const start = Math.max(
-          0,
-          Math.floor(((left - x) / (item.width || 1)) * item.str.length),
-        );
-        const end = Math.min(
-          item.str.length,
-          Math.ceil(((right - x) / (item.width || 1)) * item.str.length),
-        );
-        return item.str.slice(start, end);
+        let cursor = x;
+        return characterWidths(item, fonts.get(item.fontName))
+          .map((char) => {
+            const center = cursor + char.width / 2;
+            cursor += char.width;
+            return center >= left - 1 && center <= right + 1 ? char.text : "";
+          })
+          .join("");
       })
       .join("")
-      .replace(/[\s\[\]]/g, "");
+      .replace(/[\s\[\],，]/g, "");
     if (text !== label) continue;
     const dest =
       typeof annotation.dest === "string"

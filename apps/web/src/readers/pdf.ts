@@ -510,7 +510,8 @@ export class PDFReaderAdapter implements ReaderAdapter {
   }
   async resolveCitation(blockId: string, label: string) {
     const block = this.blockData.find((b) => b.id === blockId);
-    if (this.pdf && block) return resolvePDFCitation(this.pdf, block, label);
+    if (this.pdf && block)
+      return resolvePDFCitation(this.pdf, block, label, pdfjs.OPS);
   }
   focusSentences(blockId: string, sources: string[], scroll = false) {
     return this.navigation.focusSentences(blockId, sources, scroll);
