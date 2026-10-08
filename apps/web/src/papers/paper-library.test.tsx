@@ -22,6 +22,7 @@ vi.mock("@reader/api", () => ({
     mergeDocuments: vi.fn(async () => ({ trashed: [] })),
     relateDocuments: vi.fn(async () => ({})),
     unrelateDocuments: vi.fn(async () => ({})),
+    process: vi.fn(async () => ({})),
   },
 }));
 vi.mock("sonner", () => ({
@@ -467,32 +468,87 @@ it("puts reading and paper actions under the title, the remark first", async () 
   );
 });
 
-
 it.each([
   { phase: "learning" as const, label: "解析中", percent: 15 },
   { phase: "translating" as const, label: "翻译中", percent: 25 },
-])("shows $label progress beside the table title without the notes column", async ({ phase, label, percent }) => {
-  jobs = new Map([["a", {
-    documentId: "a", phase, status: "running",
-    pagesDone: 3, pagesTotal: 20,
-    translationsDone: 5, translationsTotal: 20,
-    detail: "", updatedAt: "2026-10-08T00:00:00Z",
-  }]]);
-  await act(async () => {
-    useReaderStore.setState({
-      libraryPreferences: {
-        mode: "papers",
-        papers: { layout: "table", columns: ["year"] },
-      },
+])(
+  "shows $label progress beside the table title without the notes column",
+  async ({ phase, label, percent }) => {
+    jobs = new Map([
+      [
+        "a",
+        {
+          documentId: "a",
+          phase,
+          status: "running",
+          pagesDone: 3,
+          pagesTotal: 20,
+          translationsDone: 5,
+          translationsTotal: 20,
+          detail: "",
+          updatedAt: "2026-10-08T00:00:00Z",
+        },
+      ],
+    ]);
+    await act(async () => {
+      useReaderStore.setState({
+        libraryPreferences: {
+          mode: "papers",
+          papers: { layout: "table", columns: ["year"] },
+        },
+      });
+      root.render(<Harness />);
     });
-    root.render(<Harness />);
-  });
-  const paperRow = row("Attention Is All You Need");
-  const progress = paperRow.querySelector('[role="progressbar"]');
-  expect(progress).not.toBeNull();
-  expect(progress!.closest(".paper-table-title")).not.toBeNull();
-  expect(progress!.getAttribute("aria-valuenow")).toBe(String(percent));
-  expect(paperRow.textContent).toContain(label);
-  expect(paperRow.textContent).not.toMatch(/3\s*\/\s*20|5\s*\/\s*20/);
-  expect(paperRow.querySelector('[data-column="notes"]')).toBeNull();
-});
+    const paperRow = row("Attention Is All You Need");
+    const progress = paperRow.querySelector('[role="progressbar"]');
+    expect(progress).not.toBeNull();
+    expect(progress!.closest(".paper-table-title")).not.toBeNull();
+    expect(progress!.getAttribute("aria-valuenow")).toBe(String(percent));
+    expect(paperRow.textContent).toContain(label);
+    expect(paperRow.textContent).not.toMatch(/3\s*\/\s*20|5\s*\/\s*20/);
+    expect(paperRow.querySelector('[data-column="notes"]')).toBeNull();
+  },
+);
+
+it.each(["list", "table"] as const)(
+  "retries a failed translation in %s view without opening the paper or posting twice",
+  async (layout) => {
+    jobs = new Map([
+      [
+        "a",
+        {
+          documentId: "a",
+          phase: "translating",
+          status: "failed",
+          pagesDone: 20,
+          pagesTotal: 20,
+          translationsDone: 5,
+          translationsTotal: 20,
+          detail: "翻译失败",
+          updatedAt: "2026-10-08T00:00:00Z",
+        },
+      ],
+    ]);
+    await act(async () => {
+      useReaderStore.setState({
+        libraryPreferences: {
+          mode: "papers",
+          papers: { layout, columns: ["year"] },
+        },
+      });
+      root.render(<Harness />);
+    });
+    const retry = row(
+      "Attention Is All You Need",
+    ).querySelector<HTMLButtonElement>('[aria-label="重试翻译"]')!;
+    expect(retry).not.toBeNull();
+    await act(async () => {
+      retry.click();
+      retry.click();
+    });
+    expect(api.process).toHaveBeenCalledExactlyOnceWith("a");
+    expect(retry.disabled).toBe(true);
+    expect(usePaperUI.getState().selectedId).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  },
+);

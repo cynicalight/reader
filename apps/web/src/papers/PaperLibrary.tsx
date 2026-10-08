@@ -20,8 +20,10 @@ import {
   Highlighter,
   CircleHelp,
   Quote,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
+import { api } from "@reader/api";
 import type {
   Document,
   PaperColumn,
@@ -859,6 +861,12 @@ export function PaperLibrary({
 }
 
 function PaperProcessing({ job }: { job?: Processing }) {
+  const [retrying, setRetrying] = useState(false);
+  const retryLock = useRef(false);
+  useEffect(() => {
+    retryLock.current = false;
+    setRetrying(false);
+  }, [job?.updatedAt]);
   if (!job || job.phase === "ready" || job.status === "complete") return null;
   const parsing = job.phase === "learning";
   const status = parsing ? job.status : (job.translating?.status ?? job.status);
@@ -873,7 +881,21 @@ function PaperProcessing({ job }: { job?: Processing }) {
           : `${name}中`;
   const done = parsing ? job.pagesDone : job.translationsDone;
   const total = parsing ? job.pagesTotal : job.translationsTotal;
-  const value = total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : null;
+  const value =
+    total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : null;
+  const retry = async () => {
+    if (retryLock.current) return;
+    retryLock.current = true;
+    setRetrying(true);
+    try {
+      await api.process(job.documentId);
+      // Keep disabled until polling receives the updated task.
+    } catch (error) {
+      retryLock.current = false;
+      setRetrying(false);
+      toast.error((error as Error).message);
+    }
+  };
   return (
     <span className="paper-title-processing" role="status">
       <span>{label}</span>
@@ -882,6 +904,22 @@ function PaperProcessing({ job }: { job?: Processing }) {
         value={value}
         className="processing-progress"
       />
+      {status === "failed" && (
+        <Button
+          size="xs"
+          variant="ghost"
+          aria-label={`重试${name}`}
+          data-row-action
+          disabled={retrying}
+          onClick={(event) => {
+            event.stopPropagation();
+            void retry();
+          }}
+        >
+          <RefreshCw className="size-3" />
+          {retrying ? "重试中" : "重试"}
+        </Button>
+      )}
     </span>
   );
 }
@@ -958,12 +996,7 @@ function PaperRow({
   );
   const counts = (
     <>
-      {!columns && busy(job) && (
-        <span className="paper-row-job" title={job!.detail}>
-          <Loader2 className="size-3 animate-spin" />
-          解析中
-        </span>
-      )}
+      {!columns && <PaperProcessing job={job} />}
       {doc.noteCount > 0 && (
         <span title={`${doc.noteCount} 条批注`}>
           <StickyNote className="size-3" />
