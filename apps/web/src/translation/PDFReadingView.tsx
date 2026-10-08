@@ -465,11 +465,26 @@ export function PDFReadingView({
       );
       enteringParallel.current = undefined;
       if (block) {
-        focusBlock(
-          block,
-          previous === "translation" ? "translation" : "source",
-        );
-        return () => engine.hoverBlock?.(null);
+        // Panel resize commits and ResizeObserver callbacks can follow this effect.
+        // Keep the selected block fixed until both panes have their new geometry.
+        const motion = explicitFocus.current;
+        const operation = motion.operation;
+        motion.moving = true;
+        let frame = requestAnimationFrame(() => {
+          frame = requestAnimationFrame(() => {
+            if (cancelled || operation !== motion.operation) return;
+            focusBlock(
+              block,
+              previous === "translation" ? "translation" : "source",
+            );
+          });
+        });
+        return () => {
+          cancelled = true;
+          cancelAnimationFrame(frame);
+          if (operation === motion.operation) motion.moving = false;
+          engine.hoverBlock?.(null);
+        };
       }
     }
     const restore = async () => {
