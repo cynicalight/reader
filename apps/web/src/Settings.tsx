@@ -163,11 +163,15 @@ export function Settings({
         <DialogHeader>
           <DialogTitle>设置</DialogTitle>
           <DialogDescription className="sr-only">
-            显示、阅读、文献库与 Agent 连接
+            Agent 连接、显示、阅读与文献库
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="display" className="settings-tabs">
+        <Tabs defaultValue="agent" className="settings-tabs">
           <TabsList aria-label="设置分类" className="settings-nav">
+            <TabsTrigger value="agent">
+              <Bot />
+              Agent
+            </TabsTrigger>
             <TabsTrigger value="display">
               <Monitor />
               显示
@@ -179,10 +183,6 @@ export function Settings({
             <TabsTrigger value="papers">
               <Library />
               文献库
-            </TabsTrigger>
-            <TabsTrigger value="agent">
-              <Bot />
-              Agent
             </TabsTrigger>
           </TabsList>
           <TabsContent value="display" className="settings-panel" keepMounted>
