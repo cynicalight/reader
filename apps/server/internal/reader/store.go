@@ -46,6 +46,8 @@ type Annotation struct {
 	// AnswerID links a question to the chat message that answers it.
 	AnswerID string `json:"answerId,omitempty"`
 	Resolved bool   `json:"resolved,omitempty"`
+	// Tags are the reader's own labels for filtering annotations.
+	Tags []string `json:"tags,omitempty"`
 }
 type Message struct {
 	Attachments []ImageAttachment `json:"attachments,omitempty"`

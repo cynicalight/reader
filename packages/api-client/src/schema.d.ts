@@ -417,6 +417,8 @@ export interface paths {
             answerId?: string;
             resolved?: boolean;
             color?: string;
+            /** @description Replaces the tags; trimmed and de-duplicated without regard to case */
+            tags?: string[];
           };
         };
       };
@@ -2073,6 +2075,7 @@ export interface components {
       answerId?: string;
       /** @description A question closed without an answer */
       resolved?: boolean;
+      tags?: string[];
     };
     SavedAnnotation: components["schemas"]["Annotation"] & {
       /** @description IDs removed when overlapping underlines were merged into the returned annotation. */

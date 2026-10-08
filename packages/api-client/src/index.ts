@@ -239,6 +239,7 @@ export const api = {
       answerId?: string;
       resolved?: boolean;
       color?: string;
+      tags?: string[];
     },
   ) =>
     request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {

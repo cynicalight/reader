@@ -498,8 +498,15 @@
                                       "type": "string",
                                       "pattern": "^#[0-9a-fA-F]{6}$",
                                     },
+                                  "tags":
+                                    {
+                                      "type": "array",
+                                      "items": { "type": "string" },
+                                      "maxItems": 10,
+                                      "description": "Replaces the tags; trimmed and de-duplicated without regard to case",
+                                    },
                                 },
-                              "description": "At least one of note, answerId, resolved or color",
+                              "description": "At least one of note, answerId, resolved, color or tags",
                             },
                         },
                     },
@@ -2464,6 +2471,7 @@
                       "type": "boolean",
                       "description": "A question closed without an answer",
                     },
+                  "tags": { "type": "array", "items": { "type": "string" } },
                 },
               "required":
                 [

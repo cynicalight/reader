@@ -524,11 +524,12 @@ export function Workspace({
     adapter?.clearSelection();
     requestAnimationFrame(() => composeInput.current?.focus());
   };
-  const saveAnnotationText = async (annotation: Annotation, text: string) => {
+  const saveAnnotationText = async (
+    annotation: Annotation,
+    patch: { note: string; tags: string[] },
+  ) => {
     try {
-      const saved = await api.updateAnnotation(doc.id, annotation.id, {
-        note: text,
-      });
+      const saved = await api.updateAnnotation(doc.id, annotation.id, patch);
       setAnnotations((items) => applySavedAnnotation(items, saved));
       return true;
     } catch (e) {

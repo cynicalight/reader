@@ -90,6 +90,7 @@ export function notesMarkdown(
         if (answer) block.push(`**AI 答：**\n\n${answer.content.trim()}`);
         else if (a.resolved) block.push("（已解决）");
       } else if (a.note.trim()) block.push(a.note.trim());
+      if (a.tags?.length) block.push(a.tags.map((tag) => `#${tag}`).join(" "));
       out.push(block.join("\n\n"));
     }
   }

@@ -13,10 +13,11 @@ var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func (s *Server) updateAnnotationNote(w http.ResponseWriter, r *http.Request) {
 	var patch struct {
-		Note     *string `json:"note"`
-		AnswerID *string `json:"answerId"`
-		Resolved *bool   `json:"resolved"`
-		Color    *string `json:"color"`
+		Note     *string         `json:"note"`
+		AnswerID *string         `json:"answerId"`
+		Resolved *bool           `json:"resolved"`
+		Color    *string         `json:"color"`
+		Tags     json.RawMessage `json:"tags"`
 	}
 	if !decode(w, r, &patch) {
 		return
@@ -25,7 +26,18 @@ func (s *Server) updateAnnotationNote(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "颜色须为 #rrggbb")
 		return
 	}
-	if patch.Note == nil && patch.AnswerID == nil && patch.Resolved == nil && patch.Color == nil {
+	var tags *string
+	if len(patch.Tags) > 0 && string(patch.Tags) != "null" {
+		normalized, err := normalizeTags(patch.Tags)
+		if err != nil || len(normalized) > 10 {
+			fail(w, 400, "批注标签最多 10 个，每个 1–40 个字符")
+			return
+		}
+		b, _ := json.Marshal(normalized)
+		text := string(b)
+		tags = &text
+	}
+	if patch.Note == nil && patch.AnswerID == nil && patch.Resolved == nil && patch.Color == nil && tags == nil {
 		fail(w, 400, "缺少笔记内容")
 		return
 	}
@@ -44,8 +56,9 @@ func (s *Server) updateAnnotationNote(w http.ResponseWriter, r *http.Request) {
   '$.note',COALESCE(?,json_extract(body,'$.note')),
   '$.color',COALESCE(?,json_extract(body,'$.color')),
   '$.answerId',COALESCE(?,json_extract(body,'$.answerId'),''),
-  '$.resolved',json(CASE WHEN ? IS NULL THEN (CASE WHEN json_extract(body,'$.resolved') THEN 'true' ELSE 'false' END) WHEN ? THEN 'true' ELSE 'false' END))
-  WHERE id=? AND document_id=? RETURNING body`, patch.Note, patch.Color, patch.AnswerID, patch.Resolved, patch.Resolved, r.PathValue("annotation"), documentID).Scan(&body)
+  '$.resolved',json(CASE WHEN ? IS NULL THEN (CASE WHEN json_extract(body,'$.resolved') THEN 'true' ELSE 'false' END) WHEN ? THEN 'true' ELSE 'false' END),
+  '$.tags',json(COALESCE(?,json_extract(body,'$.tags'),'[]')))
+  WHERE id=? AND document_id=? RETURNING body`, patch.Note, patch.Color, patch.AnswerID, patch.Resolved, patch.Resolved, tags, r.PathValue("annotation"), documentID).Scan(&body)
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 404, "标注不存在，请重新选择原文")
 		return

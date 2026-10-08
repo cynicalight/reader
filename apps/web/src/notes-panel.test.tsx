@@ -155,8 +155,19 @@ it("edits a note in place", async () => {
   await act(async () => button("编辑笔记").click());
   const field = host.querySelector<HTMLTextAreaElement>('[aria-label="笔记"]')!;
   await act(async () => type(field, "Checked twice"));
+  const tags = host.querySelector<HTMLInputElement>('[aria-label="标签"]')!;
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(tags, "#method, proof method");
+  await act(async () =>
+    tags.dispatchEvent(new Event("input", { bubbles: true })),
+  );
   await act(async () => button("保存").click());
-  expect(handlers.onSave).toHaveBeenCalledWith(annotations[3], "Checked twice");
+  expect(handlers.onSave).toHaveBeenCalledWith(annotations[3], {
+    note: "Checked twice",
+    tags: ["method", "proof"],
+  });
   expect(host.querySelector('[aria-label="笔记"]')).toBeNull();
 });
 
@@ -173,4 +184,34 @@ it("saves the paper note after typing stops", async () => {
     "Main contribution",
   );
   expect(host.textContent).toContain("已保存");
+});
+
+it("filters by color and tag", async () => {
+  await act(async () =>
+    root.render(
+      <NotesPanel
+        document={paper({ id: "p" })}
+        annotations={[
+          ...annotations,
+          mark({
+            id: "red",
+            quote: "red mark",
+            color: "#e8746b",
+            tags: ["proof"],
+            location: { type: "pdf", page: 3 },
+          }),
+        ]}
+        messages={messages}
+        deleting={new Set()}
+        answering={new Set()}
+        {...handlers}
+      />,
+    ),
+  );
+  await act(async () => button("只看红色").click());
+  expect(cards()).toEqual(["red mark"]);
+  await act(async () => button("只看红色").click());
+  expect(cards()).toHaveLength(5);
+  await act(async () => button("只看标签 proof").click());
+  expect(cards()).toEqual(["red mark"]);
 });

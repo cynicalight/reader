@@ -165,6 +165,8 @@ export interface Annotation {
   answerId?: string;
   /** A question closed without an answer. */
   resolved?: boolean;
+  /** The reader's labels for filtering annotations. */
+  tags?: string[];
 }
 export interface SearchResult {
   id: string;
