@@ -41,9 +41,19 @@ export function stepTranslationSize(size: number, by: -1 | 1) {
   );
 }
 
-/** Font stacks for translated text. */
-export const translationFonts = {
-  serif:
-    '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", ui-serif, serif',
-  "sans-serif": "inherit",
-} as const;
+const serifStack =
+  '"Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", ui-serif, serif';
+
+/** CSS font-family for translated text; installed fonts fall back to sans. */
+export function translationFont(family = "sans-serif") {
+  if (family === "sans-serif") return "inherit";
+  if (family === "serif") return serifStack;
+  return `"${family.replace(/["\\]/g, "")}", system-ui, sans-serif`;
+}
+
+export const translationFontLabel = (family = "sans-serif") =>
+  family === "sans-serif"
+    ? "黑体 / 无衬线"
+    : family === "serif"
+      ? "宋体 / 衬线"
+      : family;

@@ -116,6 +116,7 @@ import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
 import { stepTranslationSize } from "./appearance";
+import { TranslationFontControls } from "./TranslationFontControls";
 function IconButton({
   label,
   children,
@@ -1036,25 +1037,10 @@ export function Workspace({
                         +
                       </Button>
                     </div>
-                    <div className="setting-row">
-                      <span>译文字体</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setTheme({
-                            translationFontFamily:
-                              theme.translationFontFamily === "serif"
-                                ? "sans-serif"
-                                : "serif",
-                          })
-                        }
-                      >
-                        {theme.translationFontFamily === "serif"
-                          ? "宋体 / 衬线"
-                          : "黑体 / 无衬线"}
-                      </Button>
-                    </div>
+                    <TranslationFontControls
+                      theme={theme}
+                      setTheme={setTheme}
+                    />
                   </>
                 )}
               </div>

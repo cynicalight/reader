@@ -230,7 +230,9 @@ export interface ReaderTheme {
   zoom: number | "width";
   /** Translated text size in rem; smaller than the source by default. */
   translationFontSize?: number;
-  translationFontFamily?: "serif" | "sans-serif";
+  /** "sans-serif", "serif" or an installed font family name. */
+  translationFontFamily?: string;
+  translationFontWeight?: "normal" | "bold";
 }
 export const defaultTheme: ReaderTheme = {
   appearance: "system",

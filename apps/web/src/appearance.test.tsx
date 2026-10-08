@@ -6,6 +6,7 @@ import { defaultTheme, type ReaderTheme } from "@reader/core";
 import {
   resolveTheme,
   stepTranslationSize,
+  translationFont,
   useResolvedTheme,
 } from "./appearance";
 let root: Root | undefined;
@@ -65,4 +66,12 @@ it("follows live system changes and unsubscribes on unmount", () => {
   act(() => root!.unmount());
   root = undefined;
   expect(listeners.size).toBe(0);
+});
+
+it("builds translated text fonts, falling back for installed ones", () => {
+  expect(translationFont()).toBe("inherit");
+  expect(translationFont("serif")).toContain("Songti SC");
+  expect(translationFont('LXGW "WenKai"')).toBe(
+    '"LXGW WenKai", system-ui, sans-serif',
+  );
 });

@@ -204,7 +204,21 @@ app
     else app.setAsDefaultProtocolClient(READER_SCHEME);
     const url = await startServer();
     session.defaultSession.setPermissionRequestHandler(
-      (_contents, _permission, callback) => callback(false),
+      (contents, permission, callback, details) => {
+        // Only Reader's own page may list installed fonts, for the
+        // translation font picker; every other request stays denied.
+        let origin = "";
+        try {
+          origin = new URL(details.requestingUrl).origin;
+        } catch {
+          /* not a URL */
+        }
+        callback(
+          permission === "local-fonts" &&
+            contents === window?.webContents &&
+            origin === new URL(url).origin,
+        );
+      },
     );
     const preferences: unknown = await fetch(`${url}/api/settings`, {
       headers: { Authorization: `Bearer ${serverToken}` },
