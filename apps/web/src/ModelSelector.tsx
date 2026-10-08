@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@reader/api";
-import type { AgentModel, ReasoningEffort } from "@reader/core";
+import type { AgentModel, ModelTask, ReasoningEffort } from "@reader/core";
 import { RotateCcw, Zap } from "lucide-react";
 import {
   Popover,
@@ -21,22 +21,27 @@ import { useReaderStore } from "./store";
 import { ProviderIcon } from "./ProviderIdentity";
 import { toast } from "sonner";
 
-const efforts: ReasoningEffort[] = ["low", "medium", "high", "max"];
+export const efforts: ReasoningEffort[] = ["low", "medium", "high", "max"];
 // Base UI emits a scalar for a single-thumb pointer interaction, even when
 // the controlled value is a one-element array. Keyboard input can emit an array.
 const effortFromSlider = (value: number | readonly number[]) =>
   efforts[typeof value === "number" ? value : value[0]!]!;
-const effortLabel = (value: ReasoningEffort) =>
+export const effortLabel = (value: ReasoningEffort) =>
   value[0]!.toUpperCase() + value.slice(1);
 // Use the same GPT label before and after the SDK catalog arrives.
-const modelDisplayName = (id: string, name = id) =>
+export const modelDisplayName = (id: string, name = id) =>
   /^gpt-\d/i.test(id)
     ? id
         .replace(/^gpt-/i, "GPT-")
         .replace(/-([a-z])/g, (_, letter: string) => `-${letter.toUpperCase()}`)
     : name;
 
-export function selectedAgentModel(models: AgentModel[], configured: string) {
+// Unset choices follow the server's per-task recommendation, then the CLI default.
+export function selectedAgentModel(
+  models: AgentModel[],
+  configured: string,
+  task: ModelTask = "chat",
+) {
   return configured
     ? (models.find(
         (model) =>
@@ -47,7 +52,8 @@ export function selectedAgentModel(models: AgentModel[], configured: string) {
         description: "",
         isDefault: false,
       })
-    : models.find((model) => model.isDefault);
+    : (models.find((model) => model.recommendedFor?.includes(task)) ??
+        models.find((model) => model.isDefault));
 }
 
 export function ModelSelector({

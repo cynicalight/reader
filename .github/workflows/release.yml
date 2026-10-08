@@ -59,6 +59,7 @@ jobs:
     needs: [prepare, checks]
     if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') }}
     uses: ./.github/workflows/build.yml
+    secrets: inherit
     with:
       ref: ${{ needs.prepare.outputs.sha }}
       release-tag: ${{ github.event.release.tag_name || '' }}

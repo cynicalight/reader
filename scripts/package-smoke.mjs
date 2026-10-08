@@ -38,7 +38,18 @@ try {
       { stdio: "inherit" },
     );
     if (signature.error) throw signature.error;
-    assert.equal(signature.status, 0, "Packaged ad-hoc signature is invalid");
+    assert.equal(signature.status, 0, "Packaged signature is invalid");
+    if (process.env.RELEASE_TAG) {
+      const details = spawnSync("codesign", ["-dvv", dirname(app)], {
+        encoding: "utf8",
+      });
+      assert.equal(details.status, 0, details.stderr);
+      assert.match(
+        details.stderr,
+        /^Authority=Reader Self-Signed$/m,
+        "Release must be signed with the fixed Reader certificate",
+      );
+    }
   }
   const native = spawnSync(electron, [join(resources, "processor/smoke.mjs")], {
     cwd: temporary,

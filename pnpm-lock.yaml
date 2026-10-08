@@ -38,6 +38,9 @@ importers:
 
   apps/desktop:
     devDependencies:
+      '@electron/osx-sign':
+        specifier: 1.3.3
+        version: 1.3.3
       electron:
         specifier: 44.5.1
         version: 44.5.1

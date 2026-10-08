@@ -6,14 +6,18 @@ import { spawnSync } from "node:child_process";
 const { version } = JSON.parse(
   await readFile("apps/desktop/package.json", "utf8"),
 );
-const expected = [`Reader-${version}-mac-arm64.dmg`];
+const expected = [
+  `Reader-${version}-mac-arm64.dmg`,
+  `Reader-${version}-mac-arm64.zip`,
+  `Reader-${version}-win-x64.exe`,
+].sort();
 const actual = (await readdir("release"))
   .filter((file) => file !== "SHA256SUMS.txt")
   .sort();
 assert.deepEqual(
   actual,
   expected,
-  "Release must contain exactly the Apple Silicon Mac installer",
+  "Release must contain exactly the Apple Silicon Mac installer and update archive and the Windows x64 installer",
 );
 const checksums = [];
 for (const file of expected) {
@@ -22,12 +26,14 @@ for (const file of expected) {
     bytes.length > 1024 * 1024,
     `Installer is unexpectedly small: ${file}`,
   );
-  const mac = file.endsWith(".dmg");
+  const [header, magic] = file.endsWith(".dmg")
+    ? [bytes.subarray(-512, -508), "koly"]
+    : file.endsWith(".zip")
+      ? [bytes.subarray(0, 4), "PK\u0003\u0004"]
+      : [bytes.subarray(0, 2), "MZ"];
   assert.equal(
-    mac
-      ? bytes.subarray(-512, -508).toString()
-      : bytes.subarray(0, 2).toString(),
-    mac ? "koly" : "MZ",
+    header.toString(),
+    magic,
     `Invalid installer format: ${file}`,
   );
   checksums.push(
