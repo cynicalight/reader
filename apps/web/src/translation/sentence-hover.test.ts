@@ -1,88 +1,93 @@
 // @vitest-environment jsdom
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { SentenceHover } from "./sentence-hover";
-let host: HTMLDivElement,
-  hover: SentenceHover,
-  registry: Map<string, Highlight>;
+let host: HTMLDivElement, hover: SentenceHover;
+const animations: { finish: () => void; cancel: ReturnType<typeof vi.fn> }[] =
+  [];
 const range = () => {
   const r = document.createRange();
-  r.selectNodeContents(host);
+  r.selectNodeContents(host.firstChild!);
   return r;
 };
 beforeEach(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal(
-    "Highlight",
-    class extends Set<Range> {
-      constructor(...ranges: Range[]) {
-        super(ranges);
-      }
-    },
-  );
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
-    setTimeout(() => cb(performance.now()), 16),
-  );
-  vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
   host = document.createElement("div");
   host.textContent = "sentence";
-  registry = new Map();
-  hover = new SentenceHover(
-    host,
-    "test",
-    registry as unknown as HighlightRegistry,
-  );
+  document.body.append(host);
+  host.getBoundingClientRect = () => new DOMRect(0, 0, 300, 100);
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    configurable: true,
+    value: vi.fn(() => [new DOMRect(10, 10, 120, 20)]),
+  });
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    value: vi.fn(() => {
+      let finish!: () => void;
+      const cancel = vi.fn(),
+        finished = new Promise<void>((r) => {
+          finish = r;
+        });
+      animations.push({ finish, cancel });
+      return { finished, cancel };
+    }),
+  });
+  hover = new SentenceHover(host);
 });
 afterEach(() => {
   hover.destroy();
-  vi.useRealTimers();
+  host.remove();
+  animations.length = 0;
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  delete (Element.prototype as Partial<Element>).animate;
 });
-const alpha = () => Number(host.style.getPropertyValue("--test-hover"));
-it("fades in, remains while stationary, then fades out before removing the range", () => {
+const layers = () => document.querySelectorAll(".reader-sentence-hover-layer");
+it("uses compositor opacity without ancestor style writes or JS animation frames", async () => {
+  const writes = vi.spyOn(host.style, "setProperty");
+  const frames = vi.spyOn(window, "requestAnimationFrame");
   hover.show("first", [range()]);
-  expect(alpha()).toBe(0);
-  vi.advanceTimersByTime(80);
-  expect(alpha()).toBeGreaterThan(0);
-  expect(alpha()).toBeLessThan(1);
-  vi.advanceTimersByTime(100);
-  expect(alpha()).toBe(1);
-  vi.advanceTimersByTime(5000);
-  expect(registry.has("test-hover")).toBe(true);
+  expect(Element.prototype.animate).toHaveBeenCalledWith(
+    [{ opacity: "0" }, { opacity: 1 }],
+    expect.objectContaining({ duration: 160 }),
+  );
+  expect(layers()).toHaveLength(1);
+  expect(layers()[0].parentElement).toBe(document.body);
+  expect(writes).not.toHaveBeenCalled();
+  expect(frames).not.toHaveBeenCalled();
+  animations[0].finish();
+  await Promise.resolve();
+  expect(layers()).toHaveLength(1);
   hover.clear();
-  vi.advanceTimersByTime(80);
-  expect(alpha()).toBeGreaterThan(0);
-  expect(alpha()).toBeLessThan(1);
-  expect(registry.has("test-hover")).toBe(true);
-  vi.advanceTimersByTime(100);
-  expect(registry.has("test-hover")).toBe(false);
+  expect(layers()).toHaveLength(1);
+  animations.at(-1)!.finish();
+  await Promise.resolve();
+  expect(layers()).toHaveLength(0);
 });
-it("refreshes geometry without restarting the fade, and crossfades a different sentence", () => {
+it("reuses a stationary sentence without geometry reads and crossfades a new sentence", async () => {
   hover.show("first", [range()]);
-  vi.advanceTimersByTime(200);
-  const refreshed = range();
-  hover.show("first", [refreshed]);
-  expect(alpha()).toBe(1);
-  expect(registry.get("test-hover")?.has(refreshed)).toBe(true);
+  const reads = Range.prototype.getClientRects as ReturnType<typeof vi.fn>;
+  reads.mockClear();
+  for (let i = 0; i < 30; i++) hover.show("first", [range()]);
+  expect(reads).not.toHaveBeenCalled();
   hover.show("second", [range()]);
-  expect(registry.has("test-hover-out")).toBe(true);
-  expect(alpha()).toBe(0);
-  vi.advanceTimersByTime(200);
-  expect(registry.has("test-hover-out")).toBe(false);
-  expect(alpha()).toBe(1);
+  expect(layers()).toHaveLength(2);
+  animations[1].finish();
+  await Promise.resolve();
+  expect(layers()).toHaveLength(1);
+  hover.invalidate();
+  hover.show("second", [range()]);
+  expect(layers()).toHaveLength(1);
   hover.clear(true);
-  expect(registry.size).toBe(0);
+  expect(layers()).toHaveLength(0);
 });
-it("honors reduced motion and cleans up animation work on destruction", () => {
+it("clips highlights to the visible reader, honors reduced motion, and cleans up", () => {
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  vi.mocked(Range.prototype.getClientRects).mockReturnValue([
+    new DOMRect(280, 10, 100, 20),
+  ] as unknown as DOMRectList);
   hover.show("first", [range()]);
-  expect(alpha()).toBe(1);
-  expect(vi.getTimerCount()).toBe(0);
-  hover.clear();
-  expect(registry.size).toBe(0);
-  vi.stubGlobal("matchMedia", () => ({ matches: false }));
-  hover.show("second", [range()]);
+  expect((layers()[0] as HTMLElement).style.width).toBe("20px");
+  expect(Element.prototype.animate).not.toHaveBeenCalled();
   hover.destroy();
-  expect(vi.getTimerCount()).toBe(0);
-  expect(host.style.getPropertyValue("--test-hover")).toBe("");
+  expect(layers()).toHaveLength(0);
 });

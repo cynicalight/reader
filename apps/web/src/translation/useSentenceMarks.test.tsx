@@ -8,6 +8,21 @@ import type {
   ReaderAdapter,
   TranslationBlock,
 } from "@reader/core";
+// Geometry/lifecycle assertions are independent of the composited hover renderer.
+vi.mock("./sentence-hover", () => ({
+  SentenceHover: class {
+    invalidate() {}
+    show(_key: string, ranges: Range[]) {
+      CSS.highlights.set("test-hover", new Highlight(...ranges));
+    }
+    clear() {
+      CSS.highlights.delete("test-hover");
+    }
+    destroy() {
+      this.clear();
+    }
+  },
+}));
 import { useSentenceMarks } from "./useSentenceMarks";
 import { sentenceLink } from "./sentence-links";
 const t: TranslationBlock = {
@@ -53,7 +68,9 @@ function App({
   return (
     <div ref={ref}>
       <div className="page" data-page-number="1">
-        <span data-source>Original sentence.</span>
+        <div className="textLayer">
+          <span data-source>Original sentence.</span>
+        </div>
       </div>
       <section data-translation-block="p1-b1">
         <div data-sentence="0">翻译句子。</div>
@@ -129,6 +146,7 @@ async function pointer(selector: string, type: string, x: number, buttons = 0) {
         button: 0,
       }),
     );
+    await new Promise((resolve) => setTimeout(resolve, 25));
   });
 }
 it("highlights both sentence texts in either direction, clears on drag, and keeps native selection untouched", async () => {
@@ -234,5 +252,42 @@ it("keeps a stationary hover after a child mutation and a parent render", async 
   });
   expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
   await act(async () => root.render(<App translations={[{ ...t }]} />));
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+});
+
+it("coalesces pointer bursts and ignores block-overlay mutations without rematching PDF text", async () => {
+  const matching = vi.spyOn(engine, "sentenceRanges");
+  const reads = vi.spyOn(Range.prototype, "getClientRects");
+  await act(async () => root.render(<App />));
+  await pointer("[data-sentence]", "pointermove", 210);
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 40));
+  });
+  const before = matching.mock.calls.length;
+  reads.mockClear();
+  await act(async () => {
+    for (let i = 0; i < 30; i++)
+      host.querySelector("[data-sentence]")!.dispatchEvent(
+        new MouseEvent("pointermove", {
+          bubbles: true,
+          clientX: 210 + i / 100,
+          clientY: 5,
+        }),
+      );
+    await new Promise((r) => setTimeout(r, 40));
+  });
+  expect(reads).not.toHaveBeenCalled();
+  await act(async () => {
+    const overlay = document.createElement("div");
+    overlay.className = "reader-block-hover";
+    host.querySelector(".page")!.append(overlay);
+    await new Promise((r) => setTimeout(r, 40));
+  });
+  expect(matching.mock.calls.length).toBe(before);
+  await act(async () => {
+    host.querySelector("[data-source]")!.textContent = "Original sentence.";
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  });
+  expect(matching.mock.calls.length).toBe(before + 1);
   expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
 });

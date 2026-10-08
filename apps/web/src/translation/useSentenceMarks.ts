@@ -56,24 +56,57 @@ export function useSentenceMarks(
       names: string[] = [],
       frame = 0;
     const cache = new Map<string, Range[]>();
+    let geometry = new WeakMap<Range, DOMRect[]>();
+    const containsPoint = (range: Range, x: number, y: number) => {
+      let rects = geometry.get(range);
+      if (!rects) {
+        rects = Array.from(range.getClientRects());
+        geometry.set(range, rects);
+      }
+      return rects.some(
+        (r) =>
+          r.width &&
+          r.height &&
+          x >= r.left &&
+          x <= r.right &&
+          y >= r.top &&
+          y <= r.bottom,
+      );
+    };
     const sourceRanges = (t: TranslationBlock, i: number) => {
       const key = `${t.blockId}:${i}`;
       if (!cache.has(key))
         cache.set(key, engine.sentenceRanges?.([sourcePassage(t, i)]) ?? []);
       return cache.get(key)!;
     };
-    const hover = new SentenceHover(host, prefix, registry);
+    const hover = new SentenceHover(host);
+    let hoverFrame = 0;
     const clearHover = () => {
       pointer.current = undefined;
+      cancelAnimationFrame(hoverFrame);
+      hoverFrame = 0;
       hover.clear();
     };
     const interruptHover = () => {
+      geometry = new WeakMap();
       pointer.current = undefined;
+      cancelAnimationFrame(hoverFrame);
+      hoverFrame = 0;
       hover.clear(true);
+    };
+    const targetCache = new Map<string, Range[]>();
+    const targetRanges = (blockId: string, index: number) => {
+      const key = `${blockId}:${index}`;
+      if (!targetCache.has(key))
+        targetCache.set(key, translatedSentenceRanges(host, blockId, index));
+      return targetCache.get(key)!;
     };
     const paint = () => {
       frame = 0;
       cache.clear();
+      geometry = new WeakMap();
+      targetCache.clear();
+      hover.invalidate();
       const { annotations, translations } = latest.current;
       names.forEach((name) => registry.delete(name));
       names = [];
@@ -102,7 +135,7 @@ export function useSentenceMarks(
           }
         }
       const groups = new Map<string, Range[]>();
-      const rules = [hover.css];
+      const rules: string[] = [];
       for (const mark of marks) {
         const color = /^#[\da-f]{6}$/i.test(mark.annotation.color)
           ? mark.annotation.color.toLowerCase()
@@ -119,7 +152,8 @@ export function useSentenceMarks(
         }
         groups.get(name)!.push(mark.range);
       }
-      style.textContent = rules.join("\n");
+      const css = rules.join("\n");
+      if (style.textContent !== css) style.textContent = css;
       for (const [name, ranges] of groups) {
         const highlight = new Highlight(...ranges);
         highlight.priority = 1;
@@ -160,8 +194,8 @@ export function useSentenceMarks(
         fromTranslation = true;
         // The full-width sentence container includes whitespace outside the text.
         if (
-          !translatedSentenceRanges(host, blockId ?? "", index).some((r) =>
-            hit(r, event.clientX, event.clientY),
+          !targetRanges(blockId ?? "", index).some((r) =>
+            containsPoint(r, event.clientX, event.clientY),
           )
         ) {
           hover.clear();
@@ -203,7 +237,7 @@ export function useSentenceMarks(
         if (t)
           index = t.sentences.findIndex((_, i) =>
             sourceRanges(t!, i).some((r) =>
-              hit(r, event.clientX, event.clientY),
+              containsPoint(r, event.clientX, event.clientY),
             ),
           );
       }
@@ -213,9 +247,7 @@ export function useSentenceMarks(
       }
       const ranges = [
         ...(!fromTranslation || linked ? sourceRanges(t, index) : []),
-        ...(fromTranslation || linked
-          ? translatedSentenceRanges(host, t.blockId, index)
-          : []),
+        ...(fromTranslation || linked ? targetRanges(t.blockId, index) : []),
       ];
       hover.show(`${t.blockId}:${index}:${fromTranslation}`, ranges);
     };
@@ -233,7 +265,11 @@ export function useSentenceMarks(
         x: event.clientX,
         y: event.clientY,
       };
-      resolveHover(pointer.current);
+      if (!hoverFrame)
+        hoverFrame = requestAnimationFrame(() => {
+          hoverFrame = 0;
+          if (pointer.current) resolveHover(pointer.current);
+        });
     };
     let pressed: { x: number; y: number } | undefined;
     const down = (event: PointerEvent) => {
@@ -265,7 +301,27 @@ export function useSentenceMarks(
         anchor: { x: event.clientX, top: rect.top, bottom: rect.bottom },
       });
     };
-    const observer = new MutationObserver(schedule);
+    const textSelector = ".textLayer, [data-translation-block]";
+    const containsText = (node: Node) =>
+      node instanceof Element &&
+      (node.matches(textSelector) || !!node.querySelector(textSelector));
+    const observer = new MutationObserver((records) => {
+      // Positioning and action overlays change frequently while scrolling. Only
+      // text-layer replacement/content changes invalidate sentence ranges.
+      if (
+        records.some((record) => {
+          const element =
+            record.target instanceof Element
+              ? record.target
+              : record.target.parentElement;
+          if (element?.closest(textSelector)) return true;
+          return [...record.addedNodes, ...record.removedNodes].some(
+            containsText,
+          );
+        })
+      )
+        schedule();
+    });
     observer.observe(host, {
       childList: true,
       subtree: true,
@@ -284,6 +340,7 @@ export function useSentenceMarks(
       observer.disconnect();
       resize.disconnect();
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(hoverFrame);
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerleave", clearHover);
       host.removeEventListener("pointerdown", down, true);

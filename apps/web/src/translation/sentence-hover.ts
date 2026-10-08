@@ -1,87 +1,134 @@
-/** Two highlight layers crossfade without changing the browser selection. */
+/** Hover uses small composited layers; never animate inherited reader styles. */
 export class SentenceHover {
   private key = "";
-  private current: Highlight | undefined;
-  private animations = new Map<string, number>();
-  private opacity = new Map<string, number>();
-  readonly name: string;
-  readonly outgoing: string;
-  constructor(
-    private host: HTMLElement,
-    prefix: string,
-    private registry: HighlightRegistry,
-  ) {
-    this.name = `${prefix}-hover`;
-    this.outgoing = `${prefix}-hover-out`;
+  private current?: HTMLDivElement;
+  private outgoing?: HTMLDivElement;
+  private animations = new Map<HTMLElement, Animation>();
+  private dirty = false;
+  constructor(private host: HTMLElement) {}
+  invalidate() {
+    this.dirty = true;
   }
-  get css() {
-    return [this.name, this.outgoing]
-      .map(
-        (name) =>
-          `::highlight(${name}) { background-color: rgb(128 128 128 / calc(var(--${name}, 0) * 0.22)); } .textLayer ::highlight(${name}) { color: transparent; }`,
-      )
-      .join("\n");
+  private remove(layer?: HTMLDivElement) {
+    if (!layer) return;
+    this.animations.get(layer)?.cancel();
+    this.animations.delete(layer);
+    layer.remove();
   }
-  private reduced() {
-    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  }
-  private set(name: string, value: number) {
-    this.opacity.set(name, value);
-    this.host.style.setProperty(`--${name}`, String(value));
-  }
-  private animate(name: string, to: number, done?: () => void) {
-    cancelAnimationFrame(this.animations.get(name) ?? 0);
-    const from = this.opacity.get(name) ?? 0,
-      started = performance.now();
-    const step = (time: number) => {
-      const progress = this.reduced()
-        ? 1
-        : Math.min(1, Math.max(0, (time - started) / 160));
-      this.set(name, from + (to - from) * (1 - Math.pow(1 - progress, 3)));
-      if (progress < 1) this.animations.set(name, requestAnimationFrame(step));
-      else {
-        this.animations.delete(name);
-        done?.();
-      }
-    };
-    step(started);
+  private fade(layer: HTMLDivElement, entering: boolean) {
+    if (
+      !layer.animate ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      if (!entering) this.remove(layer);
+      return;
+    }
+    const from = entering ? "0" : getComputedStyle(layer).opacity;
+    this.animations.get(layer)?.cancel();
+    const animation = layer.animate(
+      [{ opacity: from }, { opacity: entering ? 1 : 0 }],
+      { duration: 160, easing: "ease-out", fill: "forwards" },
+    );
+    this.animations.set(layer, animation);
+    void animation.finished
+      .then(() => {
+        if (this.animations.get(layer) !== animation) return;
+        this.animations.delete(layer);
+        if (!entering) layer.remove();
+        animation.cancel();
+      })
+      .catch(() => {});
   }
   show(key: string, ranges: Range[]) {
-    if (!ranges.length) {
+    if (key === this.key && this.current && !this.dirty) return;
+    this.dirty = false;
+    // Read all geometry before adding any DOM or starting animations.
+    const hostBounds = this.host.getBoundingClientRect();
+    const clips = new Map<Element, DOMRect>();
+    const boxes = ranges.flatMap((range) => {
+      const element =
+        range.startContainer.nodeType === Node.TEXT_NODE
+          ? range.startContainer.parentElement
+          : (range.startContainer as Element);
+      if (element?.closest("[inert]")) return [];
+      const pane =
+        element?.closest(".pdf-container, .translation-document") ?? this.host;
+      if (!clips.has(pane)) clips.set(pane, pane.getBoundingClientRect());
+      const clip = clips.get(pane)!;
+      return Array.from(range.getClientRects()).flatMap((rect) => {
+        const left = Math.max(rect.left, clip.left, hostBounds.left),
+          top = Math.max(rect.top, clip.top, hostBounds.top);
+        const right = Math.min(rect.right, clip.right, hostBounds.right),
+          bottom = Math.min(rect.bottom, clip.bottom, hostBounds.bottom);
+        return right > left && bottom > top
+          ? [{ left, top, width: right - left, height: bottom - top }]
+          : [];
+      });
+    });
+    if (!boxes.length) {
       this.clear();
       return;
     }
-    if (key === this.key && this.current) {
-      this.current.clear();
-      ranges.forEach((r) => this.current!.add(r));
-      return;
+    const layer = document.createElement("div");
+    layer.className = "reader-sentence-hover-layer";
+    layer.setAttribute("aria-hidden", "true");
+    const left = Math.min(...boxes.map((b) => b.left)),
+      top = Math.min(...boxes.map((b) => b.top));
+    const right = Math.max(...boxes.map((b) => b.left + b.width)),
+      bottom = Math.max(...boxes.map((b) => b.top + b.height));
+    Object.assign(layer.style, {
+      position: "fixed",
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${right - left}px`,
+      height: `${bottom - top}px`,
+      pointerEvents: "none",
+      zIndex: "7",
+      contain: "strict",
+      willChange: "opacity",
+      mixBlendMode: this.host.dataset.theme === "dark" ? "screen" : "multiply",
+    });
+    for (const box of boxes) {
+      const mark = document.createElement("div");
+      Object.assign(mark.style, {
+        position: "absolute",
+        left: `${box.left - left}px`,
+        top: `${box.top - top}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
+        background: "rgb(128 128 128 / 22%)",
+      });
+      layer.append(mark);
     }
-    if (this.current) {
-      this.registry.set(this.outgoing, this.current);
-      this.set(this.outgoing, this.opacity.get(this.name) ?? 0);
-      this.animate(this.outgoing, 0, () => this.registry.delete(this.outgoing));
+    const same = key === this.key;
+    this.remove(this.outgoing);
+    if (same) this.remove(this.current);
+    else if (this.current) {
+      this.outgoing = this.current;
+      this.fade(this.outgoing, false);
     }
     this.key = key;
-    this.current = new Highlight(...ranges);
-    this.registry.set(this.name, this.current);
-    this.set(this.name, 0);
-    this.animate(this.name, 1);
+    this.current = layer;
+    document.body.append(layer);
+    if (!same) this.fade(layer, true);
   }
   clear(immediate = false) {
     this.key = "";
-    this.current = undefined;
-    if (immediate || this.reduced()) {
-      this.animations.forEach(cancelAnimationFrame);
-      this.animations.clear();
-      this.registry.delete(this.name);
-      this.registry.delete(this.outgoing);
-      this.set(this.name, 0);
-      this.set(this.outgoing, 0);
-    } else this.animate(this.name, 0, () => this.registry.delete(this.name));
+    if (immediate) {
+      this.remove(this.current);
+      this.remove(this.outgoing);
+      this.current = undefined;
+      this.outgoing = undefined;
+      return;
+    }
+    if (this.current) {
+      this.remove(this.outgoing);
+      this.outgoing = this.current;
+      this.current = undefined;
+      this.fade(this.outgoing, false);
+    }
   }
   destroy() {
     this.clear(true);
-    this.host.style.removeProperty(`--${this.name}`);
-    this.host.style.removeProperty(`--${this.outgoing}`);
   }
 }
