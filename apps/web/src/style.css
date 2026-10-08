@@ -2268,6 +2268,7 @@ kbd {
 .paper-library .library-topbar {
   flex-shrink: 0;
   gap: 16px;
+  border-bottom: none;
 }
 .paper-library .library-content {
   width: 100%;
