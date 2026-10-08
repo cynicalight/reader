@@ -435,7 +435,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     this.clearSelection();
     const palette = {
       light: ["#ffffff", "#27272a"],
-      sepia: ["#faf9f5", "#1f1e1d"],
+      sepia: ["#f7f6f2", "#1f1e1d"],
       dark: ["#202020", "#dededb"],
     }[theme.mode];
     await this.navigator?.submitPreferences(

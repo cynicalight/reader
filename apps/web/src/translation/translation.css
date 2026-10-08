@@ -174,7 +174,7 @@
   background: transparent;
 }
 .pdf-reading[data-theme="sepia"] .pdf-page-navigation {
-  background: #faf9f5;
+  background: #f7f6f2;
   color: #1f1e1d;
 }
 
@@ -201,7 +201,7 @@
   }
 }
 .pdf-reading[data-theme="sepia"] .translation-document {
-  background: #faf9f5;
+  background: #f7f6f2;
   color: #1f1e1d;
 }
 ::highlight(reader-translation-marks) {
