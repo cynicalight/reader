@@ -265,3 +265,53 @@ it("focuses text and image clicks without attaching images, and leaves drags and
   expect(focus).toHaveBeenCalledTimes(2);
   layer.destroy();
 });
+
+it("keeps the block during fade-out and cancels stale removal when the pointer returns", async () => {
+  const host = document.createElement("div");
+  host.innerHTML =
+    '<div class="page" data-page-number="2"><span>text</span></div>';
+  const page = host.firstElementChild as HTMLElement;
+  page.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 1000);
+  const layer = new PDFBlockOverlay(host);
+  layer.setBlocks([block]);
+  const move = () =>
+    page.firstElementChild!.dispatchEvent(
+      new MouseEvent("pointermove", {
+        bubbles: true,
+        clientX: 200,
+        clientY: 300,
+      }),
+    );
+  await act(async () => {
+    move();
+  });
+  const overlay = page.querySelector<HTMLElement>(".reader-block-hover")!;
+  let finish!: () => void;
+  const cancel = vi.fn();
+  overlay.animate = vi.fn(() => ({
+    finished: new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+    cancel,
+  })) as unknown as typeof overlay.animate;
+  host.dispatchEvent(new Event("pointerleave"));
+  expect(page.contains(overlay)).toBe(true);
+  expect(overlay.inert).toBe(true);
+  await act(async () => {
+    move();
+    finish();
+    await Promise.resolve();
+  });
+  expect(cancel).toHaveBeenCalled();
+  expect(page.contains(overlay)).toBe(true);
+  expect(overlay.inert).toBe(false);
+  layer.setBlocks([{ ...block }]);
+  expect(page.contains(overlay)).toBe(true);
+  host.dispatchEvent(new Event("pointerleave"));
+  await act(async () => {
+    finish();
+    await Promise.resolve();
+  });
+  expect(page.contains(overlay)).toBe(false);
+  await act(async () => layer.destroy());
+});

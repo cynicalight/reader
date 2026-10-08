@@ -291,14 +291,36 @@ export class PDFReadingNavigation {
     return passages.flatMap((passage) => {
       const block = this.blocks().find((b) => b.id === passage.blockId);
       const node = block && this.pageNode(block.page);
-      return block && node
-        ? this.domSentenceRanges(
-            node,
-            block,
-            passage.sources,
-            passage.sourceOffset,
-          )
-        : [];
+      if (!block || !node) return [];
+      return this.domSentenceRanges(
+        node,
+        block,
+        passage.sources,
+        passage.sourceOffset,
+      ).flatMap((range) => {
+        // A cross-node Range includes PDF.js <br> nodes, whose highlight can
+        // extend to the text-layer edge. Restrict every fragment to one text run.
+        const walker = document.createTreeWalker(
+          node.querySelector(".textLayer")!,
+          NodeFilter.SHOW_TEXT,
+        );
+        const fragments: Range[] = [];
+        let text: Node | null;
+        while ((text = walker.nextNode())) {
+          if (!range.intersectsNode(text)) continue;
+          const start = text === range.startContainer ? range.startOffset : 0;
+          const end =
+            text === range.endContainer
+              ? range.endOffset
+              : (text.textContent?.length ?? 0);
+          if (end <= start) continue;
+          const fragment = document.createRange();
+          fragment.setStart(text, start);
+          fragment.setEnd(text, end);
+          fragments.push(fragment);
+        }
+        return fragments;
+      });
     });
   }
   private clearLinkedRanges() {

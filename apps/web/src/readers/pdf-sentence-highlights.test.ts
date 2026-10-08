@@ -261,3 +261,17 @@ it("matches the three Oze sentences across PDF line fragments, italic code and a
   const normalized = (s: string) => s.replace(/\s/g, "");
   expect(markedText().map(normalized)).toEqual(sentences.map(normalized));
 });
+
+it("returns text-node fragments so sentence hover never selects PDF line breaks", () => {
+  const layer = page.querySelector(".textLayer")!;
+  layer.insertBefore(document.createElement("br"), layer.children[1]);
+  const ranges = nav.sentenceRanges([
+    { blockId: block.id, sources: [sources[1]] },
+  ]);
+  expect(ranges.map((r) => r.toString()).join("")).toBe(sources[1]);
+  expect(ranges.length).toBeGreaterThan(1);
+  for (const range of ranges) {
+    expect(range.startContainer.nodeType).toBe(Node.TEXT_NODE);
+    expect(range.endContainer).toBe(range.startContainer);
+  }
+});

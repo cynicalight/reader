@@ -120,17 +120,15 @@ const texts = (ranges: Set<Range> | undefined) =>
   [...(ranges ?? [])].map((r) => r.toString());
 async function pointer(selector: string, type: string, x: number, buttons = 0) {
   await act(async () => {
-    host
-      .querySelector(selector)!
-      .dispatchEvent(
-        new MouseEvent(type, {
-          bubbles: true,
-          clientX: x,
-          clientY: 5,
-          buttons,
-          button: 0,
-        }),
-      );
+    host.querySelector(selector)!.dispatchEvent(
+      new MouseEvent(type, {
+        bubbles: true,
+        clientX: x,
+        clientY: 5,
+        buttons,
+        button: 0,
+      }),
+    );
   });
 }
 it("highlights both sentence texts in either direction, clears on drag, and keeps native selection untouched", async () => {
@@ -224,4 +222,17 @@ it("projects a source note onto the complete translated sentence and removes sta
     ),
   );
   expect(registry.size).toBe(0);
+});
+
+it("keeps a stationary hover after a child mutation and a parent render", async () => {
+  await act(async () => root.render(<App />));
+  await pointer("[data-sentence]", "pointermove", 210);
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+  await act(async () => {
+    host.querySelector(".page")!.append(document.createElement("i"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
+  await act(async () => root.render(<App translations={[{ ...t }]} />));
+  expect(texts(hover())).toEqual(["Original sentence.", "翻译句子。"]);
 });

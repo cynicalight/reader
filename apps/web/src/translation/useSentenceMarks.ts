@@ -1,4 +1,5 @@
-import { useEffect, useId } from "react";
+import { SentenceHover } from "./sentence-hover";
+import { useEffect, useId, useRef } from "react";
 import type { RefObject } from "react";
 import type {
   Annotation,
@@ -38,6 +39,12 @@ export function useSentenceMarks(
   events: ReaderEvents,
 ) {
   const prefix = `reader-sentences-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const latest = useRef({ blocks, translations, annotations, events });
+  latest.current = { blocks, translations, annotations, events };
+  const repaint = useRef<(() => void) | undefined>(undefined);
+  const pointer = useRef<{ target: Element; x: number; y: number } | undefined>(
+    undefined,
+  );
   useEffect(() => {
     const host = root.current;
     if (!host || !engine || typeof Highlight === "undefined" || !CSS.highlights)
@@ -55,12 +62,19 @@ export function useSentenceMarks(
         cache.set(key, engine.sentenceRanges?.([sourcePassage(t, i)]) ?? []);
       return cache.get(key)!;
     };
-    const hoverName = `${prefix}-hover`;
-    const clearHover = () => registry.delete(hoverName);
+    const hover = new SentenceHover(host, prefix, registry);
+    const clearHover = () => {
+      pointer.current = undefined;
+      hover.clear();
+    };
+    const interruptHover = () => {
+      pointer.current = undefined;
+      hover.clear(true);
+    };
     const paint = () => {
       frame = 0;
       cache.clear();
-      clearHover();
+      const { annotations, translations } = latest.current;
       names.forEach((name) => registry.delete(name));
       names = [];
       marks = translatedAnnotationRanges(host, annotations, translations);
@@ -88,10 +102,7 @@ export function useSentenceMarks(
           }
         }
       const groups = new Map<string, Range[]>();
-      const rules = [
-        `::highlight(${hoverName}) { background-color: rgb(128 128 128 / 22%); }`,
-        `.textLayer ::highlight(${hoverName}) { color: transparent; }`,
-      ];
+      const rules = [hover.css];
       for (const mark of marks) {
         const color = /^#[\da-f]{6}$/i.test(mark.annotation.color)
           ? mark.annotation.color.toLowerCase()
@@ -115,20 +126,25 @@ export function useSentenceMarks(
         registry.set(name, highlight);
         names.push(name);
       }
+      if (pointer.current) resolveHover(pointer.current);
     };
     const schedule = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(paint);
     };
-    const move = (event: PointerEvent) => {
-      clearHover();
-      if (event.buttons || window.getSelection()?.toString().trim()) return;
-      const target = event.target instanceof Element ? event.target : undefined;
+    const resolveHover = (point: { target: Element; x: number; y: number }) => {
+      const { blocks, translations } = latest.current;
+      const target =
+        document.elementFromPoint?.(point.x, point.y) ?? point.target;
+      const event = { clientX: point.x, clientY: point.y };
       if (
-        !target ||
-        target.closest("a,button,input,textarea,[data-block-action]")
-      )
+        !host.contains(target) ||
+        target.closest("a,button,input,textarea,[data-block-action]") ||
+        window.getSelection()?.toString().trim()
+      ) {
+        hover.clear();
         return;
+      }
       const translated = target.closest<HTMLElement>("[data-sentence]");
       let t: TranslationBlock | undefined,
         index = -1,
@@ -147,11 +163,16 @@ export function useSentenceMarks(
           !translatedSentenceRanges(host, blockId ?? "", index).some((r) =>
             hit(r, event.clientX, event.clientY),
           )
-        )
+        ) {
+          hover.clear();
           return;
+        }
       } else {
         const page = target.closest<HTMLElement>(".page[data-page-number]");
-        if (!page) return;
+        if (!page) {
+          hover.clear();
+          return;
+        }
         const rect = page.getBoundingClientRect();
         const x = (event.clientX - rect.left) / rect.width,
           y = (event.clientY - rect.top) / rect.height;
@@ -186,18 +207,37 @@ export function useSentenceMarks(
             ),
           );
       }
-      if (!t || index < 0 || !t.sentences[index]) return;
+      if (!t || index < 0 || !t.sentences[index]) {
+        hover.clear();
+        return;
+      }
       const ranges = [
         ...(!fromTranslation || linked ? sourceRanges(t, index) : []),
         ...(fromTranslation || linked
           ? translatedSentenceRanges(host, t.blockId, index)
           : []),
       ];
-      registry.set(hoverName, new Highlight(...ranges));
+      hover.show(`${t.blockId}:${index}:${fromTranslation}`, ranges);
+    };
+    const move = (event: PointerEvent) => {
+      if (event.buttons || window.getSelection()?.toString().trim()) {
+        interruptHover();
+        return;
+      }
+      if (!(event.target instanceof Element)) {
+        clearHover();
+        return;
+      }
+      pointer.current = {
+        target: event.target,
+        x: event.clientX,
+        y: event.clientY,
+      };
+      resolveHover(pointer.current);
     };
     let pressed: { x: number; y: number } | undefined;
     const down = (event: PointerEvent) => {
-      clearHover();
+      interruptHover();
       pressed =
         event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
     };
@@ -220,7 +260,7 @@ export function useSentenceMarks(
       event.preventDefault();
       event.stopPropagation();
       const rect = matches[0].range.getBoundingClientRect();
-      events.annotation?.({
+      latest.current.events.annotation?.({
         ids: [...new Set(matches.map((m) => m.annotation.id))],
         anchor: { x: event.clientX, top: rect.top, bottom: rect.bottom },
       });
@@ -233,12 +273,13 @@ export function useSentenceMarks(
     });
     const resize = new ResizeObserver(schedule);
     resize.observe(host);
+    repaint.current = paint;
     paint();
     host.addEventListener("pointermove", move);
     host.addEventListener("pointerleave", clearHover);
     host.addEventListener("pointerdown", down, true);
     host.addEventListener("click", click, true);
-    host.addEventListener("scroll", clearHover, true);
+    host.addEventListener("scroll", interruptHover, true);
     return () => {
       observer.disconnect();
       resize.disconnect();
@@ -247,20 +288,14 @@ export function useSentenceMarks(
       host.removeEventListener("pointerleave", clearHover);
       host.removeEventListener("pointerdown", down, true);
       host.removeEventListener("click", click, true);
-      host.removeEventListener("scroll", clearHover, true);
-      clearHover();
+      host.removeEventListener("scroll", interruptHover, true);
+      repaint.current = undefined;
+      hover.destroy();
       names.forEach((name) => registry.delete(name));
       style.remove();
     };
-  }, [
-    root,
-    engine,
-    blocks,
-    translations,
-    annotations,
-    linked,
-    mode,
-    events.annotation,
-    prefix,
-  ]);
+  }, [root, engine, linked, mode, prefix]);
+  useEffect(() => {
+    repaint.current?.();
+  }, [blocks, translations, annotations]);
 }
