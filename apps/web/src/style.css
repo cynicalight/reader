@@ -2827,3 +2827,24 @@ textarea.paper-note-input {
   padding: 3px;
   cursor: pointer;
 }
+/* Waiting for the first answer chunk; keep the original provider glyph. */
+.chat-waiting {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--muted-foreground);
+}
+.chat-waiting-icon {
+  display: inline-flex;
+  animation: chat-waiting-spin 2.4s linear infinite;
+}
+@keyframes chat-waiting-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-waiting-icon {
+    animation: none;
+  }
+}
