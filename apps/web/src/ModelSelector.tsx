@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@reader/api";
-import type { AgentModel, ModelTask, ReasoningEffort } from "@reader/core";
+import type {
+  AIConfig,
+  AgentModel,
+  ModelTask,
+  ReasoningEffort,
+} from "@reader/core";
 import { RotateCcw, Zap } from "lucide-react";
 import {
   Popover,
@@ -70,6 +75,7 @@ export function ModelSelector({
     setAIModelSaving,
   } = useReaderStore();
   const provider = config?.primary ?? "";
+  const revision = catalogRevision(config);
   const [catalog, setCatalog] = useState<{
     provider: string;
     models: AgentModel[];
@@ -107,7 +113,7 @@ export function ModelSelector({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider, retry]);
+  }, [provider, revision, retry]);
   const models = catalog.provider === provider ? catalog.models : [];
   const configuredModel = config?.models[provider] ?? "";
   const current = selectedAgentModel(models, configuredModel);
@@ -337,4 +343,11 @@ export function ModelSelector({
       </PopoverContent>
     </Popover>
   );
+}
+
+/** The API agent's catalog depends on its endpoint; reload it after the
+ * address changes or a new connection test finishes. */
+export function catalogRevision(config: AIConfig | null | undefined) {
+  if (config?.primary !== "api") return "";
+  return `${config.api.url}\n${config.capabilities.api?.checkedAt ?? ""}`;
 }

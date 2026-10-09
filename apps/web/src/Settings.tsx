@@ -13,8 +13,9 @@ import {
 } from "lucide-react";
 import { ProviderIdentity } from "./ProviderIdentity";
 import { TaskModels } from "./TaskModels";
+import { APIAgentForm } from "./APIAgentForm";
 import { api } from "@reader/api";
-import type { LibraryMode, Provider } from "@reader/core";
+import type { APIConnection, LibraryMode, Provider } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -163,6 +164,22 @@ export function Settings({
   useEffect(() => {
     if (open) void refresh();
   }, [open]);
+  const saveAPI = async (connection: APIConnection) => {
+    setSaving(true);
+    try {
+      const latest = await api.aiConfig();
+      setAIConfig(await api.saveAIConfig({ ...latest, api: connection }));
+      // A new address or key is a new connection: test it again.
+      for (const key of checked.current)
+        if (key.startsWith('["api"')) checked.current.delete(key);
+    } catch (e) {
+      toast.error((e as Error).message);
+      return;
+    } finally {
+      setSaving(false);
+    }
+    await refresh();
+  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog sm:max-w-3xl">
@@ -381,6 +398,9 @@ export function Settings({
                       <SelectItem value="kimi">
                         <ProviderIdentity provider="kimi" />
                       </SelectItem>
+                      <SelectItem value="api">
+                        <ProviderIdentity provider="api" />
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <TaskModels disabled={saving || testing.size > 0} />
@@ -391,7 +411,7 @@ export function Settings({
                 </div>
               )}
               <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
-                {(["codex", "claude", "kimi"] as const).map((name) => {
+                {(["codex", "claude", "kimi", "api"] as const).map((name) => {
                   const p = providers.find((p) => p.id === name);
                   const capability = config?.capabilities[name];
                   const pending = testing.has(name);
@@ -403,9 +423,18 @@ export function Settings({
                           <ProviderIdentity provider={name} size={36} />
                         </span>
                         {!loading && !p?.installed && (
-                          <Badge variant="outline">未安装</Badge>
+                          <Badge variant="outline">
+                            {name === "api" ? "未配置" : "未安装"}
+                          </Badge>
                         )}
                       </div>
+                      {name === "api" && config && (
+                        <APIAgentForm
+                          connection={config.api}
+                          disabled={saving || testing.size > 0}
+                          onSave={saveAPI}
+                        />
+                      )}
                       {(pending || p?.installed || capability) && (
                         <div className="flex flex-wrap gap-x-5">
                           {(
@@ -462,14 +491,17 @@ export function Settings({
                                           {error ||
                                             (capability?.text
                                               ? "文本推理可用，图片理解未通过检测。"
-                                              : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
+                                              : name === "api"
+                                                ? "检测未通过，请检查 API 地址、Key、网络或额度。"
+                                                : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
                                         </p>
-                                        {!capability?.text && (
-                                          <p>
-                                            支持 CLI 当前使用的订阅登录或 API
-                                            Key 配置；以实际调用结果为准。
-                                          </p>
-                                        )}
+                                        {!capability?.text &&
+                                          name !== "api" && (
+                                            <p>
+                                              支持 CLI 当前使用的订阅登录或 API
+                                              Key 配置；以实际调用结果为准。
+                                            </p>
+                                          )}
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
@@ -487,8 +519,9 @@ export function Settings({
               <p className="mt-4 flex gap-2 text-xs leading-5 text-muted-foreground">
                 <CircleHelp className="mt-0.5 size-4 shrink-0" />
                 Reader 调用已安装的 CLI，不读取账号凭据。AI 请求使用 CLI
-                当前账户与计费方式；选择订阅登录时无需另填 API
-                Key。发送的选区或章节会交给对应服务。
+                当前账户与计费方式；选择订阅登录时无需另填 API Key。API 连接使用
+                OpenAI 兼容接口，Key 保存在本机 Reader
+                数据目录。发送的选区或章节会交给对应服务。
               </p>
             </section>
           </TabsContent>

@@ -15,6 +15,7 @@ import {
 } from "@reader/ui/components/select";
 import { toast } from "sonner";
 import {
+  catalogRevision,
   effortLabel,
   efforts,
   modelDisplayName,
@@ -47,6 +48,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     setAIModelSaving,
   } = useReaderStore();
   const provider = config?.primary ?? "";
+  const revision = catalogRevision(config);
   const [catalog, setCatalog] = useState<{
     provider: string;
     models: AgentModel[];
@@ -77,7 +79,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider]);
+  }, [provider, revision]);
   if (!config || !provider) return null;
   const models = catalog.provider === provider ? catalog.models : [];
 
