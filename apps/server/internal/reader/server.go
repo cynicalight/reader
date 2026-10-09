@@ -84,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/epub-blocks", s.epubBlocks)
+	mux.HandleFunc("GET /api/documents/{id}/epub-chapters", s.epubChapters)
+	mux.HandleFunc("GET /api/documents/{id}/epub-chapter", s.epubChapterHTML)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
@@ -377,7 +379,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		return l.Page > 0
 	}
 	_, err := safeResource(l.Href)
-	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href) && validEPUBTranslationLocations(data)
+	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href) && validEPUBTranslationLocations(data) && validEPUBBlockLocation(data)
 }
 func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))

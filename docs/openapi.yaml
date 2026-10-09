@@ -1051,6 +1051,107 @@
                 },
             },
         },
+      "/api/documents/{id}/epub-chapters":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "EPUB in-document reader",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/EPUBChapters" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/epub-chapter":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "in": "query",
+                    "name": "href",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "EPUB in-document reader",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["html"],
+                                  "properties":
+                                    {
+                                      "html":
+                                        {
+                                          "type": "string",
+                                          "description": "Server sanitized reader-mode HTML; no publisher CSS",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/epub-blocks":
         {
           "get":
@@ -3409,6 +3510,10 @@
                 {
                   "type": { "const": "epub" },
                   "href": { "type": "string" },
+                  "blockId": { "type": "string" },
+                  "start": { "type": "integer", "minimum": 0 },
+                  "end": { "type": "integer", "minimum": 0 },
+                  "endBlockId": { "type": "string" },
                   "locator": { "type": "string" },
                   "progression": { "type": "number" },
                   "quote": { "type": "string" },
@@ -3418,6 +3523,59 @@
                     { "$ref": "#/components/schemas/TranslationLocation" },
                 },
               "required": ["type", "href"],
+            },
+          "EPUBChapters":
+            {
+              "type": "object",
+              "required": ["chapters", "toc"],
+              "properties":
+                {
+                  "chapters":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/EPUBChapter" },
+                    },
+                  "toc":
+                    {
+                      "type": ["array", "null"],
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBChapterLink" },
+                    },
+                },
+            },
+          "EPUBChapter":
+            {
+              "type": "object",
+              "required": ["href", "title", "index", "characters", "blocks"],
+              "properties":
+                {
+                  "href": { "type": "string" },
+                  "title": { "type": "string" },
+                  "index": { "type": "integer" },
+                  "characters": { "type": "integer" },
+                  "blocks":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBReadingBlock" },
+                    },
+                },
+            },
+          "EPUBChapterLink":
+            {
+              "type": "object",
+              "required": ["href", "title"],
+              "properties":
+                {
+                  "href": { "type": "string" },
+                  "title": { "type": "string" },
+                  "children":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBChapterLink" },
+                    },
+                },
             },
           "EPUBReadingBlock":
             {

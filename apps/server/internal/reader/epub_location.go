@@ -88,7 +88,7 @@ func validEPUBTranslationLocations(data json.RawMessage) bool {
 			Progression float64         `json:"progression"`
 			Translation json.RawMessage `json:"translation"`
 		}
-		if json.Unmarshal(r.Location, &source) != nil || source.Type != "epub" || len(source.Translation) > 0 {
+		if json.Unmarshal(r.Location, &source) != nil || source.Type != "epub" || len(source.Translation) > 0 || !validEPUBBlockLocation(r.Location) {
 			return false
 		}
 		if _, err := safeResource(source.Href); err != nil || source.Href == "" || source.Progression < 0 || source.Progression > 1 || !validEPUBLocator(source.Locator, source.Href) {
@@ -96,4 +96,29 @@ func validEPUBTranslationLocations(data json.RawMessage) bool {
 		}
 	}
 	return true
+}
+
+func validEPUBBlockLocation(data json.RawMessage) bool {
+	var value struct {
+		BlockID    *string `json:"blockId"`
+		Start      *int    `json:"start"`
+		End        *int    `json:"end"`
+		EndBlockID *string `json:"endBlockId"`
+	}
+	if json.Unmarshal(data, &value) != nil {
+		return false
+	}
+	if value.BlockID == nil {
+		return value.Start == nil && value.End == nil && value.EndBlockID == nil
+	}
+	if strings.TrimSpace(*value.BlockID) == "" {
+		return false
+	}
+	if value.Start == nil || value.End == nil || *value.Start < 0 || *value.End < 0 {
+		return false
+	}
+	if value.EndBlockID != nil {
+		return strings.TrimSpace(*value.EndBlockID) != "" && (*value.EndBlockID != *value.BlockID || *value.End >= *value.Start)
+	}
+	return *value.End >= *value.Start
 }

@@ -44,6 +44,11 @@ export type TranslationLocation = {
   }[];
 };
 export type EPUBLocation = {
+  blockId?: string;
+  /** UTF-16 offsets in block text; endBlockId supports multi-paragraph selections. */
+  start?: number;
+  end?: number;
+  endBlockId?: string;
   type: "epub";
   href: string;
   sentenceLink?: SentenceLink;
@@ -530,4 +535,21 @@ export interface ProcessingUsage {
   failedCalls: number;
   partialCalls: number;
   elapsedMs: number;
+}
+
+export interface EPUBChapter {
+  href: string;
+  title: string;
+  index: number;
+  characters: number;
+  blocks: EPUBReadingBlock[];
+}
+export interface EPUBChapterLink {
+  href: string;
+  title: string;
+  children?: EPUBChapterLink[];
+}
+export interface EPUBChapters {
+  chapters: EPUBChapter[];
+  toc: EPUBChapterLink[] | null;
 }

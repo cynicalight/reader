@@ -22,6 +22,9 @@ type EPUBReadingLocation struct {
 	Href    string `json:"href"`
 	Locator string `json:"locator"`
 	Quote   string `json:"quote"`
+	BlockID string `json:"blockId,omitempty"`
+	Start   int    `json:"start"`
+	End     int    `json:"end"`
 }
 type EPUBReadingBlock struct {
 	ID       string              `json:"id"`
@@ -125,11 +128,16 @@ func epubDOMPoint(n *html.Node, offset int) map[string]any {
 }
 
 // Flush at semantic block boundaries, retaining direct text around nested blocks.
-// Inline markup stays in the same range. No elements are added to the publication.
+// Inline markup stays in the same range. Cached publication files remain unchanged.
 func epubTextBlocks(href, source string) (epubTranslationDocument, error) {
+	_, blocks, err := renderEPUBChapter(href, source, "")
+	return blocks, err
+}
+
+func parseEPUBChapter(href, source string, mark func(EPUBReadingBlock, []*html.Node)) (*html.Node, epubTranslationDocument, error) {
 	doc, err := html.Parse(strings.NewReader(source))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var body *html.Node
 	var find func(*html.Node)
@@ -145,7 +153,7 @@ func epubTextBlocks(href, source string) (epubTranslationDocument, error) {
 	find(doc)
 	out := epubTranslationDocument{}
 	if body == nil {
-		return out, nil
+		return doc, out, nil
 	}
 	offsets := map[*html.Node]int{}
 	offset := 0
@@ -194,6 +202,9 @@ func epubTextBlocks(href, source string) (epubTranslationDocument, error) {
 		key, _ := json.Marshal([]any{href, startPoint, endPoint})
 		sum := sha256.Sum256(key)
 		out = append(out, EPUBReadingBlock{ID: "e-" + hex.EncodeToString(sum[:16]), Label: label, Text: quote, Location: EPUBReadingLocation{Type: "epub", Href: href, Locator: string(loc), Quote: quote}})
+		b := &out[len(out)-1]
+		b.Location.BlockID, b.Location.End = b.ID, utf16Length(b.Text)
+		mark(*b, nodes[first:last+1])
 		nodes = nil
 	}
 	var walk func(*html.Node)
@@ -224,11 +235,14 @@ func epubTextBlocks(href, source string) (epubTranslationDocument, error) {
 					loc, _ := json.Marshal(map[string]any{"href": href, "type": "application/xhtml+xml", "locations": map[string]any{"cssSelector": epubCSSPath(n)}})
 					sum := sha256.Sum256([]byte(href + ":" + epubCSSPath(n)))
 					out = append(out, EPUBReadingBlock{ID: "e-" + hex.EncodeToString(sum[:16]), Label: "image", Text: alt, Image: name, Location: EPUBReadingLocation{Type: "epub", Href: href, Locator: string(loc)}})
+					b := &out[len(out)-1]
+					b.Location.BlockID = b.ID
+					mark(*b, []*html.Node{n})
 				}
 			}
 			return
 		}
-		if n.Data == "script" || n.Data == "style" || n.Data == "noscript" {
+		if epubDropped[strings.ToLower(n.Data)] {
 			flush()
 			return
 		}
@@ -256,5 +270,5 @@ func epubTextBlocks(href, source string) (epubTranslationDocument, error) {
 	}
 	walk(body)
 	flush()
-	return out, nil
+	return doc, out, nil
 }

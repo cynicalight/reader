@@ -113,6 +113,16 @@ export const api = {
     }
     return consumeTranslationStream(response.body, signal, onEvent);
   },
+  epubChapters: (id: string, signal?: AbortSignal) =>
+    request<import("@reader/core").EPUBChapters>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapters`,
+      { signal },
+    ),
+  epubChapter: (id: string, href: string, signal?: AbortSignal) =>
+    request<{ html: string }>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapter?href=${encodeURIComponent(href)}`,
+      { signal },
+    ),
   epubBlocks: (id: string) =>
     request<import("@reader/core").EPUBReadingBlock[]>(
       `/api/documents/${id}/epub-blocks`,

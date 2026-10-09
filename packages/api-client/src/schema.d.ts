@@ -854,6 +854,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/epub-chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description EPUB in-document reader */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EPUBChapters"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/epub-chapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    href: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description EPUB in-document reader */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Server sanitized reader-mode HTML; no publisher CSS */
+                            html: string;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/epub-blocks": {
         parameters: {
             query?: never;
@@ -2549,11 +2646,31 @@ export interface components {
             /** @constant */
             type: "epub";
             href: string;
+            blockId?: string;
+            start?: number;
+            end?: number;
+            endBlockId?: string;
             locator?: string;
             progression?: number;
             quote?: string;
             sentenceLink?: components["schemas"]["SentenceLink"];
             translation?: components["schemas"]["TranslationLocation"];
+        };
+        EPUBChapters: {
+            chapters: components["schemas"]["EPUBChapter"][];
+            toc: components["schemas"]["EPUBChapterLink"][] | null;
+        };
+        EPUBChapter: {
+            href: string;
+            title: string;
+            index: number;
+            characters: number;
+            blocks: components["schemas"]["EPUBReadingBlock"][];
+        };
+        EPUBChapterLink: {
+            href: string;
+            title: string;
+            children?: components["schemas"]["EPUBChapterLink"][];
         };
         EPUBReadingBlock: {
             id: string;
