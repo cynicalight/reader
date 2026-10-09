@@ -369,17 +369,18 @@ export function PaperLibrary({
       e.currentTarget.nextElementSibling?.getBoundingClientRect().width ?? 0;
     saveDetailWidth(clampDetailWidth(current + dx));
   };
+  const trashPapers = async (docs: Document[]) => {
+    const result = await trashWithUndo(docs.map((d) => d.id));
+    const state = usePaperUI.getState();
+    state.setPicked(
+      [...state.picked].filter((id) => !result.deleted.includes(id)),
+    );
+    return result;
+  };
   const actions: PaperMenuActions = {
     open: openDocument,
     move: moveToBooks,
-    trash: (docs) => {
-      void trashWithUndo(docs.map((d) => d.id)).then((result) => {
-        const state = usePaperUI.getState();
-        state.setPicked(
-          [...state.picked].filter((id) => !result.deleted.includes(id)),
-        );
-      });
-    },
+    trash: (docs) => void trashPapers(docs),
     newCategory: (docs) => ui.setNaming(docs.map((d) => d.id)),
     newTag: (docs) => setTagging(docs.map((d) => d.id)),
   };
@@ -778,7 +779,12 @@ export function PaperLibrary({
                     variant="ghost"
                     className="text-destructive"
                     disabled={!pickedDocs.length}
-                    onClick={() => actions.trash(pickedDocs)}
+                    onClick={() =>
+                      void trashPapers(pickedDocs).then((result) => {
+                        if (!result.failed.length)
+                          usePaperUI.getState().stopPicking();
+                      })
+                    }
                   >
                     <Trash2 />
                     移到回收站
