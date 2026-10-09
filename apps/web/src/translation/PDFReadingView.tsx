@@ -38,6 +38,7 @@ import { animatePDFScroll } from "../readers/pdf-scroll";
 import { TranslationPanes } from "./TranslationPanes";
 import { formulaNumbers } from "./formulaNumbers";
 import { TranslationText } from "./TranslationText";
+import { blockImageCache } from "./block-images";
 import { useSentenceMarks } from "./useSentenceMarks";
 import { linkTranslatedSelection, sentenceLink } from "./sentence-links";
 import { translatedSelection as captureTranslationSelection } from "./selection";
@@ -165,6 +166,17 @@ export function PDFReadingView({
     selection = useRef<ReaderSelection | null>(null),
     scrollFrame = useRef(0);
   const equationNumbers = useMemo(() => formulaNumbers(blocks), [blocks]);
+  const [blockImages, setBlockImages] =
+    useState<ReturnType<typeof blockImageCache>>();
+  useEffect(() => {
+    if (!engine?.renderBlockImage) return;
+    const cache = blockImageCache(engine.renderBlockImage.bind(engine));
+    setBlockImages(cache);
+    return () => {
+      cache.dispose();
+      setBlockImages(undefined);
+    };
+  }, [engine]);
   const visibleBlocks = blocks.filter(
     (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
   );
@@ -1026,6 +1038,7 @@ export function PDFReadingView({
                       formulaNumber={equationNumbers.byFormula.get(block.id)}
                       translation={translated}
                       documentId={doc.id}
+                      renderImage={blockImages?.url}
                       retry={() => void translate(block.id)}
                       paused={processing?.enabled === false}
                       linked={linked?.[block.id] ?? []}
@@ -1068,6 +1081,7 @@ export function PDFReadingView({
                 formulaNumber={equationNumbers.byFormula.get(popup.block.id)}
                 translation={activePopup}
                 documentId={doc.id}
+                renderImage={blockImages?.url}
                 retry={() => void translate(popup.block.id)}
                 paused={processing?.enabled === false}
               />
