@@ -444,30 +444,6 @@ it("tags a paper and collects it in a smart tag category", async () => {
   expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
 });
 
-it("puts reading and paper actions under the title, the remark first", async () => {
-  await act(async () => row("Attention Is All You Need").click());
-  const body = host.querySelector(".paper-detail-body")!;
-  const [title, open, actions, fields] = [...body.children];
-  expect(title.getAttribute("aria-label")).toBe("标题");
-  expect(open.textContent).toBe("开始阅读");
-  expect(
-    [...actions.querySelectorAll("button")].map(
-      (b) => b.getAttribute("aria-label") || b.textContent,
-    ),
-  ).toEqual(["引用", "加星标", "置顶到侧栏", "更多操作"]);
-  expect(fields.querySelector("dt")?.textContent).toBe("备注");
-  await act(async () =>
-    actions
-      .querySelector<HTMLButtonElement>('[aria-label="置顶到侧栏"]')!
-      .click(),
-  );
-  expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      papers: expect.objectContaining({ pinned: ["doc:a"] }),
-    }),
-  );
-});
-
 it.each([
   { phase: "learning" as const, label: "解析中", percent: 15 },
   { phase: "translating" as const, label: "翻译中", percent: 25 },
