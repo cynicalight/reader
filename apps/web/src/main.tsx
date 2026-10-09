@@ -2,6 +2,7 @@ import ReactDOM from "react-dom/client";
 import { configureAPI } from "@reader/api";
 import { App } from "./App";
 import { installCloseFlush } from "./close-flush";
+import { AppCrash, ErrorBoundary } from "./ErrorBoundary";
 import "./style.css";
 import { installScrollbars } from "./scrollbars";
 const removeScrollbars = installScrollbars(document);
@@ -35,5 +36,9 @@ if (import.meta.env.DEV && location.pathname === "/__streaming-benchmark") {
 } else {
   const removeCloseFlush = installCloseFlush();
   if (import.meta.hot) import.meta.hot.dispose(removeCloseFlush);
-  root.render(<App />);
+  root.render(
+    <ErrorBoundary fallback={<AppCrash />}>
+      <App />
+    </ErrorBoundary>,
+  );
 }

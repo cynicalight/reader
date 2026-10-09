@@ -4,6 +4,7 @@ import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { lazy, Suspense } from "react";
 import { ReadingLinkNavigation } from "../reading-links";
+import { ErrorBoundary } from "../ErrorBoundary";
 const FormulaFragment = lazy(() => import("./FormulaFragment"));
 const Markdown = lazy(() =>
   import("../chat/MessageMarkdown").then((module) => ({
@@ -31,7 +32,19 @@ function MessageMarkdown({
   );
 }
 
-export function TranslationText({
+/** A paragraph that fails to render shows a notice instead of taking down the reader. */
+export function TranslationText(props: TranslationTextProps) {
+  return (
+    <ErrorBoundary
+      resetKey={props.translation}
+      fallback={<p className="translation-warning">此段无法显示</p>}
+    >
+      <TranslationContent {...props} />
+    </ErrorBoundary>
+  );
+}
+type TranslationTextProps = Parameters<typeof TranslationContent>[0];
+function TranslationContent({
   block,
   translation,
   documentId,

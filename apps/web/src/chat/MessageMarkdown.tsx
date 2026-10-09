@@ -16,6 +16,7 @@ import {
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { ErrorBoundary } from "../ErrorBoundary";
 import remend from "remend";
 import { marked } from "marked";
 import {
@@ -274,21 +275,27 @@ export const MessageMarkdown = memo(function MessageMarkdown({
     !globalDefinitions;
   return (
     <div className="message-markdown" data-animated={animate}>
-      {animate ? (
-        <Streamdown
-          {...markdownOptions}
-          content={content}
-          smoothing="realtime"
-          granularity="word"
-        />
-      ) : (
-        <StaticMarkdown
-          content={content}
-          generating={generating}
-          global={globalDefinitions}
-          citationBlockId={citationBlockId}
-        />
-      )}
+      {/* A Markdown failure falls back to the raw text of this message only. */}
+      <ErrorBoundary
+        resetKey={content}
+        fallback={<div style={{ whiteSpace: "pre-wrap" }}>{content}</div>}
+      >
+        {animate ? (
+          <Streamdown
+            {...markdownOptions}
+            content={content}
+            smoothing="realtime"
+            granularity="word"
+          />
+        ) : (
+          <StaticMarkdown
+            content={content}
+            generating={generating}
+            global={globalDefinitions}
+            citationBlockId={citationBlockId}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   );
 });
