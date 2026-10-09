@@ -89,12 +89,15 @@ export function LibraryDocuments({
         (current) =>
           new Set([...current].filter((id) => !result.deleted.includes(id))),
       );
-      if (!result.failed.length) changeEditing(false);
+      return result;
     } finally {
       pending.current = false;
     }
   };
-  const removeSelected = () => void trash([...selected]);
+  const removeSelected = () =>
+    void trash([...selected]).then((result) => {
+      if (result && !result.failed.length) changeEditing(false);
+    });
   return (
     <section
       aria-label="文档列表"
