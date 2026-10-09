@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -81,11 +85,17 @@ blockId 和 sourceHash 必须与同一个输入段落严格对应。不能合并
 type translationJSONL struct {
 	strictSource bool
 	buffer       string
-	expected     map[string]translationParagraph
-	completed    map[string]bool
-	invalid      map[string]string
-	emit         func(TranslationBlock) error
+	// lines counts non-empty output lines; malformed ones no paragraph could claim.
+	lines          int
+	malformed      int
+	firstMalformed string
+	expected       map[string]translationParagraph
+	completed      map[string]bool
+	invalid        map[string]string
+	emit           func(TranslationBlock) error
 }
+
+var translationRowID = regexp.MustCompile(`"blockId"\s*:\s*"([^"\\]+)"`)
 
 func newTranslationJSONL(batch translationBatch, emit func(TranslationBlock) error) *translationJSONL {
 	d := &translationJSONL{expected: map[string]translationParagraph{}, completed: map[string]bool{}, invalid: map[string]string{}, emit: emit}
@@ -116,11 +126,24 @@ func (d *translationJSONL) line(line string) error {
 	if strings.TrimSpace(line) == "" {
 		return nil
 	}
+	d.lines++
 	var row struct {
 		BlockID    string `json:"blockId"`
 		SourceHash string `json:"sourceHash"`
 	}
-	if json.Unmarshal([]byte(line), &row) != nil {
+	if err := json.Unmarshal([]byte(line), &row); err != nil {
+		message := fmt.Sprintf("第 %d 行不是合法的 JSON：%v", d.lines, err)
+		// A broken row still names its paragraph when the blockId is readable.
+		if id := translationRowID.FindStringSubmatch(line); id != nil {
+			if _, ok := d.expected[id[1]]; ok && !d.completed[id[1]] {
+				d.invalid[id[1]] = message
+				return nil
+			}
+		}
+		d.malformed++
+		if d.firstMalformed == "" {
+			d.firstMalformed = message
+		}
 		return nil
 	} // Missing rows are failed at batch completion.
 	source, ok := d.expected[row.BlockID]
@@ -144,8 +167,25 @@ func (d *translationJSONL) line(line string) error {
 	delete(d.invalid, row.BlockID)
 	return nil
 }
-func (s *Server) translateBatch(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) error {
-	decoder := newTranslationJSONL(batch, func(t TranslationBlock) error {
+
+// translationAttempt is one provider request for a batch and what it returned.
+type translationAttempt struct {
+	paragraphs int
+	decoder    *translationJSONL
+	output     strings.Builder
+	truncated  bool
+	err        error
+}
+
+// Raw provider output kept per attempt for failure diagnostics.
+const translationDiagnosticOutput = 1 << 20
+
+// Diagnostic files kept per document; older ones are removed.
+const translationFailureLogs = 10
+
+func (s *Server) translationAttempt(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) (*translationAttempt, error) {
+	a := &translationAttempt{paragraphs: len(batch.Paragraphs)}
+	a.decoder = newTranslationJSONL(batch, func(t TranslationBlock) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -155,31 +195,75 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m translation
 		progress()
 		return nil
 	})
-	decoder.strictSource = doc.Type == "epub"
+	a.decoder.strictSource = doc.Type == "epub"
 	service.usageSink = s.processingUsageSink(doc.ID, "translating", batch.Paragraphs[0].BlockID+"…"+batch.Paragraphs[len(batch.Paragraphs)-1].BlockID)
-	_, callErr := service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {
+	_, a.err = service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {
 		if event.Text == "" {
 			return nil
 		}
-		return decoder.feed(event.Text)
+		if a.output.Len()+len(event.Text) <= translationDiagnosticOutput {
+			a.output.WriteString(event.Text)
+		} else {
+			a.truncated = true
+		}
+		return a.decoder.feed(event.Text)
 	})
-	if errorKind(callErr) == ErrorSave {
-		return callErr
+	if errorKind(a.err) == ErrorSave {
+		return nil, a.err
 	}
 	// A successful EOF may terminate the final JSONL record without a newline.
 	// Cancellation/truncation never promotes an unfinished line to a saved record.
-	if callErr == nil && strings.TrimSpace(decoder.buffer) != "" {
-		callErr = decoder.line(decoder.buffer)
+	if a.err == nil && strings.TrimSpace(a.decoder.buffer) != "" {
+		a.err = a.decoder.line(a.decoder.buffer)
 	}
-	for _, paragraph := range batch.Paragraphs {
-		if decoder.completed[paragraph.BlockID] {
-			continue
+	return a, nil
+}
+
+// reason explains why a paragraph of this attempt has no saved translation.
+func (a *translationAttempt) reason(blockID string) string {
+	if message := a.decoder.invalid[blockID]; message != "" {
+		return message
+	}
+	if a.err != nil {
+		return a.err.Error()
+	}
+	reason := fmt.Sprintf("模型只返回了 %d/%d 段", len(a.decoder.completed), a.paragraphs)
+	if a.decoder.malformed > 0 {
+		reason += fmt.Sprintf("，另有 %d 行无法解析（%s）", a.decoder.malformed, a.decoder.firstMalformed)
+	}
+	return reason
+}
+
+func (s *Server) translateBatch(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) error {
+	first, err := s.translationAttempt(ctx, doc, m, batch, service, progress)
+	if err != nil {
+		return err
+	}
+	attempts := []*translationAttempt{first}
+	unfinished := func() []translationParagraph {
+		out := []translationParagraph{}
+		for _, paragraph := range batch.Paragraphs {
+			if !slices.ContainsFunc(attempts, func(a *translationAttempt) bool { return a.decoder.completed[paragraph.BlockID] }) {
+				out = append(out, paragraph)
+			}
 		}
-		t := TranslationBlock{BlockID: paragraph.BlockID, SourceHash: paragraph.SourceHash, Status: "failed", Sentences: []TranslationSentence{}, Error: "此段未收到完整有效译文，请重试"}
-		if message := decoder.invalid[paragraph.BlockID]; message != "" {
-			t.Error = message
-		} else if callErr != nil {
-			t.Error = callErr.Error()
+		return out
+	}
+	// A provider that ended normally but skipped or broke rows is asked once
+	// more for just those paragraphs. Provider errors are left to the user.
+	if missing := unfinished(); first.err == nil && len(missing) > 0 && ctx.Err() == nil {
+		retry, err := s.translationAttempt(ctx, doc, m, translationBatch{Before: batch.Before, Paragraphs: missing, After: batch.After}, service, progress)
+		if err != nil {
+			return err
+		}
+		attempts = append(attempts, retry)
+	}
+	last := attempts[len(attempts)-1]
+	failed := []TranslationBlock{}
+	for _, paragraph := range unfinished() {
+		t := TranslationBlock{BlockID: paragraph.BlockID, SourceHash: paragraph.SourceHash, Status: "failed", Sentences: []TranslationSentence{}, Error: last.reason(paragraph.BlockID)}
+		if len(attempts) > 1 {
+			t.Error = "补译后仍未完成：" + t.Error
 		}
 		if ctx.Err() != nil {
 			t.Status = "pending"
@@ -188,9 +272,60 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m translation
 		if err := s.saveTranslation(doc.ID, t); err != nil {
 			return err
 		}
+		if t.Status == "failed" {
+			failed = append(failed, t)
+		}
+	}
+	if len(failed) > 0 {
+		s.recordTranslationFailure(doc.ID, batch, attempts, failed)
 	}
 	return ctx.Err()
 }
+
+// recordTranslationFailure keeps the raw provider output of a batch that left
+// paragraphs failed, so a failure can be attributed after the fact.
+func (s *Server) recordTranslationFailure(documentID string, batch translationBatch, attempts []*translationAttempt, failed []TranslationBlock) {
+	span := batch.Paragraphs[0].BlockID + "…" + batch.Paragraphs[len(batch.Paragraphs)-1].BlockID
+	log.Printf("translation %s %s: %d/%d paragraphs failed after %d attempt(s): %s", documentID, span, len(failed), len(batch.Paragraphs), len(attempts), failed[0].Error)
+	var b strings.Builder
+	fmt.Fprintf(&b, "time: %s\nbatch: %s (%d paragraphs)\n", time.Now().UTC().Format(time.RFC3339), span, len(batch.Paragraphs))
+	for _, t := range failed {
+		fmt.Fprintf(&b, "failed %s: %s\n", t.BlockID, t.Error)
+	}
+	for i, a := range attempts {
+		fmt.Fprintf(&b, "\n=== attempt %d: %d paragraphs requested, %d saved, %d output lines, %d unparsable\n", i+1, a.paragraphs, len(a.decoder.completed), a.decoder.lines, a.decoder.malformed)
+		if a.err != nil {
+			fmt.Fprintf(&b, "provider error: %v\n", a.err)
+		}
+		b.WriteString("--- raw output ---\n")
+		b.WriteString(a.output.String())
+		if a.truncated {
+			fmt.Fprintf(&b, "\n--- output truncated at %d bytes ---", translationDiagnosticOutput)
+		}
+		b.WriteString("\n")
+	}
+	dir := filepath.Join(s.Store.Root, "cache", documentID, "translation-failures")
+	name := time.Now().UTC().Format("20060102T150405.000000000Z") + "-" + translationFileID.ReplaceAllString(batch.Paragraphs[0].BlockID, "_") + ".txt"
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Printf("cannot record translation failure: %v", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(b.String()), 0o600); err != nil {
+		log.Printf("cannot record translation failure: %v", err)
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	// Names start with a UTC timestamp, so directory order is oldest first.
+	for i := 0; i < len(entries)-translationFailureLogs; i++ {
+		_ = os.Remove(filepath.Join(dir, entries[i].Name()))
+	}
+}
+
+var translationFileID = regexp.MustCompile(`[^A-Za-z0-9_-]`)
+
 func (s *Server) settleTranslations(ctx context.Context, p *Processing, m translationInput) error {
 	doc, err := s.Store.Document(p.DocumentID)
 	if err != nil {
