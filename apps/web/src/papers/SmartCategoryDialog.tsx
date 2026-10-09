@@ -70,25 +70,30 @@ export function SmartCategoryDialog({
             onChange={(e) => setName(e.target.value)}
           />
           {choices.length > 0 ? (
-            <ToggleGroup
-              multiple
-              aria-label="所需标签"
-              size="sm"
-              variant="outline"
-              className="flex-wrap justify-start"
-              value={chosen}
-              onValueChange={(value: string[]) => setChosen(value)}
-            >
-              {choices.map((tag) => (
-                <ToggleGroupItem
-                  key={tag}
-                  value={tag}
-                  className="px-2 text-xs aria-pressed:border-emerald-300 aria-pressed:bg-emerald-100 aria-pressed:text-emerald-900 dark:aria-pressed:border-emerald-500/40 dark:aria-pressed:bg-emerald-500/20 dark:aria-pressed:text-emerald-200"
-                >
-                  #{tag}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                请选择需要的标签组合
+              </p>
+              <ToggleGroup
+                multiple
+                aria-label="所需标签"
+                size="sm"
+                variant="outline"
+                className="flex-wrap justify-start"
+                value={chosen}
+                onValueChange={(value: string[]) => setChosen(value)}
+              >
+                {choices.map((tag) => (
+                  <ToggleGroupItem
+                    key={tag}
+                    value={tag}
+                    className="px-2 text-xs aria-pressed:border-emerald-300 aria-pressed:bg-emerald-100 aria-pressed:text-emerald-900 dark:aria-pressed:border-emerald-500/40 dark:aria-pressed:bg-emerald-500/20 dark:aria-pressed:text-emerald-200"
+                  >
+                    #{tag}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">
               请先给论文加上一个标签吧！
