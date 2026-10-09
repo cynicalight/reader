@@ -208,3 +208,32 @@ it("retains the placeholder and exposes an independent retry after failure", asy
   await act(async () => host.querySelector("button")?.click());
   expect(retry).toHaveBeenCalledOnce();
 });
+it("replaces a loaded layout crop with a display-sized render", async () => {
+  vi.stubGlobal("devicePixelRatio", 2);
+  const renderImage = vi.fn(async () => "blob:sharp");
+  await act(async () =>
+    root.render(
+      <TranslationText
+        block={base}
+        documentId="doc"
+        retry={() => {}}
+        renderImage={renderImage}
+      />,
+    ),
+  );
+  const image = host.querySelector("img")!;
+  expect(image.getAttribute("src")).toContain("assets/p1-b1.png");
+  Object.defineProperty(image, "naturalWidth", { value: 480 });
+  Object.defineProperty(image, "clientWidth", { value: 300 });
+  await act(async () => {
+    image.dispatchEvent(new Event("load"));
+  });
+  expect(renderImage).toHaveBeenCalledWith("p1-b1", 600);
+  expect(image.getAttribute("src")).toBe("blob:sharp");
+  // Keeps the crop's layout width so small figures are not enlarged.
+  expect(image.getAttribute("width")).toBe("480");
+  await act(async () => {
+    image.dispatchEvent(new Event("load"));
+  });
+  expect(renderImage).toHaveBeenCalledTimes(1);
+});
