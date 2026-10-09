@@ -30,6 +30,8 @@ import {
 import { installTranslationSelectionHighlight } from "./selection-highlight";
 import { epubBlocksAt, epubOffsets, epubSentenceLocation } from "./epub-links";
 import { isSelectionToolbar } from "../readers/selection-anchor";
+import { defaultTheme } from "@reader/core";
+import { translationFont } from "../appearance";
 import "./translation.css";
 
 type Mode = "source" | "parallel" | "translation";
@@ -41,7 +43,6 @@ export function EPUBReadingView({
   onReady,
   toolbarHost,
   processing,
-  pageNavigation,
 }: ComponentProps<typeof ReaderView> & {
   toolbarHost?: HTMLElement | null;
   processing?: Processing;
@@ -159,7 +160,7 @@ export function EPUBReadingView({
       ) {
         const target = syncTarget.current;
         syncTarget.current = undefined;
-        await engine.current?.goTo(target);
+        await engine.current?.goTo({ ...target, quote: undefined });
       }
     } catch (e) {
       toast.error((e as Error).message);
@@ -461,11 +462,6 @@ export function EPUBReadingView({
                 },
               }}
             />
-            {theme.epubFlow === "paginated" && mode !== "translation" && (
-              <div className="pdf-reading-controls">
-                <div className="pdf-page-navigation">{pageNavigation}</div>
-              </div>
-            )}
           </div>
         }
         translation={
@@ -473,8 +469,13 @@ export function EPUBReadingView({
             ref={pane}
             className="translation-document"
             style={{
-              fontSize: `${theme.fontSize}rem`,
-              fontFamily: theme.fontFamily,
+              fontSize: `${theme.translationFontSize ?? 1}rem`,
+              fontFamily: translationFont(theme.translationFontFamily),
+              fontWeight:
+                (theme.translationFontWeight ??
+                  defaultTheme.translationFontWeight) === "bold"
+                  ? 600
+                  : undefined,
               lineHeight: theme.lineHeight,
             }}
             onPointerDown={() => {

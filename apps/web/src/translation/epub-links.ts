@@ -20,6 +20,17 @@ export function epubBlocksAt(
   const chapter = blocks.filter(
     (b) => b.location.href === location.href.split("#")[0],
   );
+  if (location.blockId) {
+    const start = blocks.findIndex(
+      (b) =>
+        b.id === location.blockId &&
+        b.location.href === location.href.split("#")[0],
+    );
+    const end = blocks.findIndex(
+      (b) => b.id === (location.endBlockId ?? location.blockId),
+    );
+    return start >= 0 && end >= start ? blocks.slice(start, end + 1) : [];
+  }
   const range = epubOffsets(location);
   if (range)
     return chapter.filter((b) => {
@@ -82,5 +93,11 @@ export function epubSentenceLocation(
     return block.location;
   const locator = JSON.parse(block.location.locator);
   locator.locations.sourceSlice = { start: map[start], end: map[end - 1] + 1 };
-  return { ...block.location, locator: JSON.stringify(locator) };
+  return {
+    ...block.location,
+    blockId: block.id,
+    start: map[start],
+    end: map[end - 1] + 1,
+    locator: JSON.stringify(locator),
+  };
 }

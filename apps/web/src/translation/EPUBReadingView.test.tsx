@@ -67,6 +67,7 @@ const adapter = {
   stopColumnFit: vi.fn(),
   followBlock: vi.fn(async () => {}),
   focusSentences: vi.fn(async () => {}),
+  focusEPUBLocations: vi.fn(async () => {}),
   hoverBlock: vi.fn(),
 } as unknown as ReaderAdapter;
 vi.mock("../ReaderView", () => ({
@@ -331,5 +332,58 @@ it("follows the latest translated position after an earlier chapter navigation f
   expect(adapter.goTo).toHaveBeenCalledTimes(2);
   expect(adapter.goTo).toHaveBeenLastCalledWith(
     expect.objectContaining({ href: "b.xhtml" }),
+  );
+});
+
+it("focuses the matching block slice when a translated sentence is selected", async () => {
+  await click("原文译文");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const sentence = host.querySelector('[data-sentence="1"]')!;
+  const range = document.createRange();
+  range.selectNodeContents(sentence);
+  Object.assign(range, {
+    getBoundingClientRect: () => new DOMRect(0, 0, 100, 20),
+  });
+  window.getSelection()!.addRange(range);
+  await act(async () =>
+    sentence.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })),
+  );
+  expect(adapter.focusEPUBLocations).toHaveBeenLastCalledWith([
+    expect.objectContaining({ blockId: "p1-b1", start: 16, end: 32 }),
+  ]);
+  expect(adapter.goTo).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      blockId: "p1-b1",
+      start: 16,
+      end: 32,
+      quote: undefined,
+    }),
+  );
+});
+it("follows source block anchors and scrolls the source to the translated block in both directions", async () => {
+  await click("原文译文");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  Object.defineProperty(pane, "clientHeight", { value: 400 });
+  pane.getBoundingClientRect = () => new DOMRect(0, 0, 400, 400);
+  const nodes = Array.from(
+    pane.querySelectorAll<HTMLElement>("[data-translation-block]"),
+  );
+  nodes[0].getBoundingClientRect = () => new DOMRect(0, -200, 400, 100);
+  nodes[1].getBoundingClientRect = () => new DOMRect(0, 300, 400, 100);
+  await act(async () => fixture.events!.epubReadingAnchor?.("e-b"));
+  expect(pane.scrollTop).toBe(200);
+  vi.mocked(adapter.goTo).mockClear();
+  await act(async () => {
+    pane.dispatchEvent(new Event("wheel", { bubbles: true }));
+    pane.dispatchEvent(new Event("scroll"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  expect(adapter.goTo).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      type: "epub",
+      href: "b.xhtml",
+      quote: undefined,
+    }),
   );
 });

@@ -919,25 +919,6 @@ export function Workspace({
                 {doc.type === "epub" ? (
                   <>
                     <div className="setting-row">
-                      <span>阅读方式</span>
-                      <div className="flex gap-2">
-                        {(["scroll", "paginated"] as const).map((flow, i) => (
-                          <Button
-                            key={flow}
-                            size="sm"
-                            variant={
-                              (theme.epubFlow ?? "scroll") === flow
-                                ? "default"
-                                : "outline"
-                            }
-                            onClick={() => setTheme({ epubFlow: flow })}
-                          >
-                            {["上下滚动", "左右翻页"][i]}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="setting-row">
                       <span>字号</span>
                       <Button
                         size="icon-xs"
@@ -1026,46 +1007,43 @@ export function Workspace({
                         </Button>
                       ))}
                     </div>
-                    <div className="setting-row">
-                      <span>译文字号</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        aria-label="减小译文字号"
-                        onClick={() =>
-                          setTheme({
-                            translationFontSize: stepTranslationSize(
-                              translationSize,
-                              -1,
-                            ),
-                          })
-                        }
-                      >
-                        −
-                      </Button>
-                      <span>{Math.round(translationSize * 100)}%</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        aria-label="增大译文字号"
-                        onClick={() =>
-                          setTheme({
-                            translationFontSize: stepTranslationSize(
-                              translationSize,
-                              1,
-                            ),
-                          })
-                        }
-                      >
-                        +
-                      </Button>
-                    </div>
-                    <TranslationFontControls
-                      theme={theme}
-                      setTheme={setTheme}
-                    />
                   </>
                 )}
+                <div className="setting-row">
+                  <span>译文字号</span>
+                  <Button
+                    size="icon-xs"
+                    variant="outline"
+                    aria-label="减小译文字号"
+                    onClick={() =>
+                      setTheme({
+                        translationFontSize: stepTranslationSize(
+                          translationSize,
+                          -1,
+                        ),
+                      })
+                    }
+                  >
+                    −
+                  </Button>
+                  <span>{Math.round(translationSize * 100)}%</span>
+                  <Button
+                    size="icon-xs"
+                    variant="outline"
+                    aria-label="增大译文字号"
+                    onClick={() =>
+                      setTheme({
+                        translationFontSize: stepTranslationSize(
+                          translationSize,
+                          1,
+                        ),
+                      })
+                    }
+                  >
+                    +
+                  </Button>
+                </div>
+                <TranslationFontControls theme={theme} setTheme={setTheme} />
               </div>
             </PopoverContent>
           </Popover>

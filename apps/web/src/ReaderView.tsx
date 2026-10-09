@@ -44,7 +44,7 @@ export function ReaderView({
           : { PDFReaderAdapter: undefined };
       const { EPUBReaderAdapter } =
         doc.type === "epub"
-          ? await import("./readers/epub")
+          ? await import("./readers/epub-web")
           : { EPUBReaderAdapter: undefined };
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
