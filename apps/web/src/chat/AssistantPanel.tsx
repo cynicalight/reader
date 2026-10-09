@@ -82,6 +82,7 @@ export function AssistantPanel({
           {chatRows(state).map(({ key, message, pending: answer }) => {
             const assistant = answer || message?.role === "assistant",
               content = answer?.content ?? message?.content ?? "";
+            const waiting = answer?.phase === "generating" && !content;
             const timestamp = message?.createdAt
               ? new Date(message.createdAt)
               : undefined;
@@ -91,22 +92,28 @@ export function AssistantPanel({
                 data-message-id={message?.id}
                 className={`chat-message ${assistant ? "assistant" : "user"}`}
               >
-                {answer?.phase === "generating" && !content && (
+                {waiting && (
                   <div
                     className="chat-waiting"
                     role="status"
-                    aria-label="正在等待回答"
+                    aria-label={answer.notice ? undefined : "正在等待回答"}
                   >
                     <span className="chat-waiting-icon" aria-hidden="true">
                       {answer.fallback ||
                       !["codex", "claude", "kimi"].includes(
                         answer.input.provider,
                       ) ? (
-                        <LoaderCircle size={24} />
+                        <LoaderCircle size={16} />
                       ) : (
-                        <ProviderGlyph provider={answer.input.provider} />
+                        <ProviderGlyph
+                          provider={answer.input.provider}
+                          size={16}
+                        />
                       )}
                     </span>
+                    {answer.notice && (
+                      <span className="chat-status">{answer.notice}</span>
+                    )}
                   </div>
                 )}
                 {assistant ? (
@@ -126,7 +133,7 @@ export function AssistantPanel({
                 {answer?.fallback && (
                   <p className="chat-status">{answer.fallback}</p>
                 )}
-                {answer?.notice && (
+                {answer?.notice && !waiting && (
                   <p role="status" className="chat-status">
                     {answer.notice}
                   </p>

@@ -2827,7 +2827,8 @@ textarea.paper-note-input {
 .chat-waiting {
   display: flex;
   align-items: center;
-  min-height: 32px;
+  gap: 6px;
+  min-height: 24px;
   color: var(--muted-foreground);
 }
 .chat-waiting-icon {
