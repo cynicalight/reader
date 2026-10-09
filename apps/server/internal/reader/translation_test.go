@@ -60,9 +60,16 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
+		mismatched := strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Unrelated words here.", 1)
 		text := translationLine(m.Blocks[1])
-		if n == 1 {
-			text = translationLine(m.Blocks[0]) + strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Unrelated words here.", 1)
+		switch n {
+		case 1:
+			text = translationLine(m.Blocks[0]) + mismatched
+		case 2: // The automatic follow-up asks for the rejected paragraph only.
+			if batch := readTranslationInput(t, r).Batch; len(batch.Paragraphs) != 1 || batch.Paragraphs[0].BlockID != m.Blocks[1].ID {
+				t.Errorf("follow-up regenerated completed text: %+v", batch.Paragraphs)
+			}
+			text = mismatched
 		}
 
 		writeAPIReply(w, text)
@@ -96,7 +103,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
-	if calls.Load() != 2 || p.Status != "complete" {
+	if calls.Load() != 3 || p.Status != "complete" {
 		t.Fatalf("completed paragraph regenerated or job not complete: calls=%d %+v", calls.Load(), p)
 	}
 	// A changed source must never silently reuse the old translated text.

@@ -69,10 +69,14 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 		batch := readTranslationInput(t, r).Batch
 		var out strings.Builder
 		for i, paragraph := range batch.Paragraphs {
-			if calls == 1 && i == 0 {
-				continue
+			line := translationParagraphLine(paragraph)
+			if i == 0 && calls == 1 {
+				continue // Skipped by the first request.
 			}
-			out.WriteString(translationParagraphLine(paragraph))
+			if i == 0 && calls == 2 { // The automatic follow-up answers a stale source.
+				line = strings.Replace(line, paragraph.SourceHash, "stale", 1)
+			}
+			out.WriteString(line)
 		}
 		writeAPIReply(w, out.String())
 	}))
@@ -100,7 +104,7 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err = s.translations(doc.ID, source)
-	if err != nil || items[0].Status != "complete" || calls != 2 {
+	if err != nil || items[0].Status != "complete" || calls != 3 {
 		t.Fatalf("retry regenerated completed text: %d %v", calls, err)
 	}
 	// A source change invalidates only the affected paragraph's cached translation.
