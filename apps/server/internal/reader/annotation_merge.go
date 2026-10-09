@@ -84,12 +84,17 @@ func joinAnnotationQuotes(first, second string) string {
 	return strings.TrimSpace(first + "\n" + second)
 }
 func mergeUnderline(a, b Annotation) (Annotation, bool) {
-	// Translation rectangles locate a block, not the marked text. Sentence links
-	// and translated offsets must never be lost to the geometric union below.
+	// Translated ranges, sentence links and EPUB source locators live in their
+	// own coordinate spaces. The geometric union below would discard them.
 	for _, location := range []json.RawMessage{a.Location, b.Location} {
 		var fields map[string]json.RawMessage
-		if json.Unmarshal(location, &fields) == nil && (len(fields["translation"]) > 0 || len(fields["sentenceLink"]) > 0) {
-			return a, false
+		if json.Unmarshal(location, &fields) != nil {
+			continue
+		}
+		for _, key := range []string{"translation", "sentenceLink"} {
+			if value := fields[key]; len(value) > 0 && string(value) != "null" {
+				return a, false
+			}
 		}
 	}
 	if a.Kind != "underline" || b.Kind != "underline" || a.DocumentID != b.DocumentID {

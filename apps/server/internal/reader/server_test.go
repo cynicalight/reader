@@ -143,6 +143,56 @@ func TestLibraryRoundTrip(t *testing.T) {
 		t.Fatalf("library: %v %v", docs, e)
 	}
 }
+func TestEPUBPositionsIncludeTotal(t *testing.T) {
+	s := testServer(t)
+	w := upload(t, s, "the-art-of-reading.epub", sample(t, "the-art-of-reading.epub"))
+	if w.Code != 201 {
+		t.Fatalf("import: %s", w.Body.String())
+	}
+	var doc Document
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(s.Store.Root, "cache", doc.ID, "positions.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cached struct {
+		Total     int               `json:"total"`
+		Positions []json.RawMessage `json:"positions"`
+	}
+	if err := json.Unmarshal(data, &cached); err != nil {
+		t.Fatal(err)
+	}
+	if cached.Total == 0 || cached.Total != len(cached.Positions) {
+		t.Errorf("invalid cached position count: %s", data)
+	}
+	// Previously imported books have no total. Serve them without reimporting or
+	// changing their persisted progress and annotations.
+	legacy, err := json.Marshal(map[string]any{"positions": cached.Positions})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+	w = request(t, s, "GET", "/pub/test-secret/"+doc.ID+"/positions.json", nil)
+	var served struct {
+		Total     int               `json:"total"`
+		Positions []json.RawMessage `json:"positions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &served); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || served.Total == 0 || served.Total != len(served.Positions) {
+		t.Fatalf("invalid served position count: %s", w.Body.String())
+	}
+	if len(served.Positions) != len(cached.Positions) {
+		t.Fatal("positions changed")
+	}
+}
+
 func TestAuthBoundaries(t *testing.T) {
 	s := testServer(t)
 	for _, test := range []struct {
@@ -336,5 +386,38 @@ func TestSVGRemainsSVG(t *testing.T) {
 	out, _, e := sanitizeContent([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/><script>evil()</script></svg>`))
 	if e != nil || !strings.HasPrefix(string(out), "<svg") || strings.Contains(string(out), "<script") {
 		t.Fatal(string(out), e)
+	}
+}
+
+func TestReaderPolicyAllowsReadiumBlobStyles(t *testing.T) {
+	s := testServer(t)
+	w := request(t, s, "GET", "/api/health", nil)
+	directives := map[string][]string{}
+	for _, directive := range strings.Split(w.Header().Get("Content-Security-Policy"), ";") {
+		fields := strings.Fields(directive)
+		if len(fields) > 1 {
+			directives[fields[0]] = fields[1:]
+		}
+	}
+	// Blob chapter frames inherit the creator's policy. Readium's CSS is also
+	// a blob stylesheet, so permitting blob frames alone does not enable it.
+	for _, directive := range []string{"style-src", "frame-src"} {
+		found := false
+		for _, source := range directives[directive] {
+			if source == "blob:" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s blocks Readium blob resources", directive)
+		}
+	}
+	for _, directive := range []string{"default-src", "connect-src"} {
+		if got := strings.Join(directives[directive], " "); got != "'self'" {
+			t.Errorf("%s unexpectedly widened: %s", directive, got)
+		}
+	}
+	if got := strings.Join(directives["object-src"], " "); got != "'none'" {
+		t.Errorf("object-src unexpectedly widened: %s", got)
 	}
 }

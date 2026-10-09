@@ -110,7 +110,7 @@ func TestWholeDocumentTranslationReusesCachedResults(t *testing.T) {
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.processPDF(context.Background(), &p); e != nil {
+	if e := s.processTranslation(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	before := calls.Load()
@@ -121,7 +121,7 @@ func TestWholeDocumentTranslationReusesCachedResults(t *testing.T) {
 	if e := s.learnPDF(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.processPDF(context.Background(), &p); e != nil {
+	if e := s.processTranslation(context.Background(), &p); e != nil {
 		t.Fatal(e)
 	}
 	if calls.Load() != before {

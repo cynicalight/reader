@@ -8,13 +8,16 @@ import (
 // leaving independent chat requests and already published results intact.
 func (s *Server) getAssistance(w http.ResponseWriter, r *http.Request) {
 	d, e := s.Store.Document(r.PathValue("id"))
-	if e != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if e != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
 	p, e := s.Store.processing(d.ID)
 	if e != nil {
 		p = initialProcessing(d.ID)
+		if d.Type == "epub" {
+			p = initialDocumentProcessing(d, "")
+		}
 	}
 	respond(w, 200, p)
 }
@@ -32,14 +35,17 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	s.processingControlMu.Lock()
 	defer s.processingControlMu.Unlock()
 	d, e := s.Store.Document(r.PathValue("id"))
-	if e != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if e != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
 	s.processingMu.Lock()
 	p, e := s.Store.processing(d.ID)
 	if e != nil {
 		p = initialProcessing(d.ID)
+		if d.Type == "epub" {
+			p = initialDocumentProcessing(d, "")
+		}
 	}
 	if s.blockedProcessing == nil {
 		s.blockedProcessing = map[string]bool{}
@@ -69,7 +75,7 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 	if latest, err := s.Store.processing(d.ID); err == nil {
 		p = latest
 	} else {
-		fail(w, 404, "PDF 不存在")
+		fail(w, 404, "文档不存在")
 		return
 	}
 	p.Enabled = req.Action != "pause"
@@ -81,6 +87,10 @@ func (s *Server) setAssistance(w http.ResponseWriter, r *http.Request) {
 		p.Phase = "learning"
 		p.PagesDone = 0
 		p.Translating = nil
+		if d.Type == "epub" {
+			p.Phase = "translating"
+			p.Translating = &ProcessingStage{Status: "queued", Detail: "等待继续翻译"}
+		}
 		if e = s.retryFailedTranslations(d.ID); e != nil {
 			fail(w, 500, "无法恢复译文")
 			return

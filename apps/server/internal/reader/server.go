@@ -90,7 +90,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/documents/{id}/assistance", s.getAssistance)
 	mux.HandleFunc("POST /api/documents/{id}/assistance", s.setAssistance)
 	mux.HandleFunc("POST /api/documents/{id}/translations/range", s.requestTranslationRange)
+	mux.HandleFunc("POST /api/documents/{id}/translations/chapter", s.requestEPUBTranslationChapter)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
+	mux.HandleFunc("GET /api/documents/{id}/epub-blocks", s.epubBlocks)
+	mux.HandleFunc("GET /api/documents/{id}/epub-chapters", s.epubChapters)
+	mux.HandleFunc("GET /api/documents/{id}/epub-chapter", s.epubChapterHTML)
 	mux.HandleFunc("GET /api/documents/{id}/translations", s.documentTranslations)
 	mux.HandleFunc("GET /api/documents/{id}/translations/stream", s.streamTranslations)
 	mux.HandleFunc("POST /api/documents/{id}/translations", s.requestTranslation)
@@ -179,7 +183,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data: blob:; frame-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' blob: 'unsafe-inline'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data: blob:; frame-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'")
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/health" {
 			provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if subtle.ConstantTimeCompare([]byte(provided), []byte(s.Token)) != 1 {
@@ -280,7 +284,7 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string,
 		if d, err = s.restore(docID); err != nil {
 			return failure(500, "无法恢复回收站中的文档")
 		}
-		if err = s.Store.enqueuePDF(d); err != nil {
+		if err = s.Store.enqueueDocument(d); err != nil {
 			return failure(500, "无法创建解析任务")
 		}
 		return d, 200, nil
@@ -373,10 +377,10 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string,
 			}
 		}
 	}
-	if err == nil && kind == "pdf" {
+	if err == nil {
 		var settings string
 		_ = tx.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&settings)
-		p := importedProcessing(d.ID, library, settings)
+		p := initialDocumentProcessing(d, settings)
 		b, _ := json.Marshal(p)
 		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}
@@ -398,6 +402,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		Type        string  `json:"type"`
 		Page        int     `json:"page"`
 		Href        string  `json:"href"`
+		Locator     string  `json:"locator"`
 		Progression float64 `json:"progression"`
 	}
 	if json.Unmarshal(data, &l) != nil || l.Type != kind {
@@ -407,7 +412,7 @@ func validLocation(data json.RawMessage, kind string) bool {
 		return l.Page > 0
 	}
 	_, err := safeResource(l.Href)
-	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1
+	return l.Href != "" && err == nil && l.Progression >= 0 && l.Progression <= 1 && validEPUBLocator(l.Locator, l.Href) && validEPUBTranslationLocations(data) && validEPUBBlockLocation(data)
 }
 func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
@@ -645,6 +650,19 @@ func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal(data, &m)
 		m["links"] = []map[string]string{{"rel": "self", "href": "http://" + r.Host + r.URL.Path, "type": "application/webpub+json"}, {"rel": "http://readium.org/positions", "href": "positions.json", "type": "application/vnd.readium.position-list+json"}}
 		respond(w, 200, m)
+		return
+	}
+	if name == "positions.json" {
+		data, err := os.ReadFile(filepath.Join(cache, name))
+		var list struct {
+			Positions []json.RawMessage `json:"positions"`
+		}
+		if err != nil || json.Unmarshal(data, &list) != nil || len(list.Positions) == 0 {
+			fail(w, 404, "EPUB 阅读位置不可用")
+			return
+		}
+		// Older caches omitted total, which Readium requires to load positions.
+		respond(w, 200, map[string]any{"total": len(list.Positions), "positions": list.Positions})
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(name))

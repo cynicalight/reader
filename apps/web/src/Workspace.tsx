@@ -31,7 +31,6 @@ import {
   Type,
   Sun,
   Moon,
-  AlignJustify,
   Check,
   CircleHelp,
 } from "lucide-react";
@@ -109,9 +108,9 @@ import {
 } from "./annotations";
 import { ColorSwatches } from "./ColorSwatches";
 import { copyText } from "./chat/clipboard";
-import { ReaderView } from "./ReaderView";
 import { NotesPanel } from "./NotesPanel";
 import { ExportNotesDialog } from "./ExportNotesDialog";
+import { EPUBReadingView } from "./translation/EPUBReadingView";
 import { PDFReadingView } from "./translation/PDFReadingView";
 import { useReaderStore } from "./store";
 import { scheduleProgress, flushProgress } from "./progress";
@@ -221,7 +220,9 @@ export function Workspace({
   const [annotationsLoaded, setAnnotationsLoaded] = useState(false);
   const [blocks, setBlocks] = useState<PDFBlock[]>([]);
   const [adapter, setAdapter] = useState<ReaderAdapter>();
-  const [pdfToolbar, setPDFToolbar] = useState<HTMLDivElement | null>(null);
+  const [readingToolbar, setReadingToolbar] = useState<HTMLDivElement | null>(
+    null,
+  );
   const renderBlockImage = useMemo(
     () => adapter?.renderBlockImage?.bind(adapter),
     [adapter],
@@ -453,9 +454,6 @@ export function Workspace({
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
     setNoteSaving(written);
-    // Start clipboard access inside the user's click, before network awaits.
-    const copying =
-      kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
       const prepared =
         source && kind !== "bookmark" && !editingAnnotation
@@ -478,15 +476,8 @@ export function Workspace({
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
       adapter?.clearSelection();
-      const copied = await copying;
-      toast.success(
-        kind === "bookmark"
-          ? "已添加书签"
-          : copied
-            ? "已保存，已复制"
-            : "已保存",
-        { id: "reader-annotation-save" },
-      );
+      if (kind === "bookmark")
+        toast.success("已添加书签", { id: "reader-annotation-save" });
       setNoteOpen(false);
       setNoteSelection(null);
       setEditingAnnotation(null);
@@ -884,8 +875,7 @@ export function Workspace({
               返回阅读位置
             </Button>
           )}
-          {doc.type === "pdf" && <div ref={setPDFToolbar} />}
-          {doc.type !== "pdf" && pageNavigation}
+          <div ref={setReadingToolbar} />
           <span className="toolbar-divider" />
           <IconButton
             label="添加书签"
@@ -991,14 +981,6 @@ export function Workspace({
                           ? "宋体 / 衬线"
                           : "黑体 / 无衬线"}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setTheme({ scroll: !theme.scroll })}
-                      >
-                        <AlignJustify />
-                        {theme.scroll ? "滚动阅读" : "分页阅读"}
-                      </Button>
                     </div>
                   </>
                 ) : (
@@ -1015,46 +997,43 @@ export function Workspace({
                         </Button>
                       ))}
                     </div>
-                    <div className="setting-row">
-                      <span>译文字号</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        aria-label="减小译文字号"
-                        onClick={() =>
-                          setTheme({
-                            translationFontSize: stepTranslationSize(
-                              translationSize,
-                              -1,
-                            ),
-                          })
-                        }
-                      >
-                        −
-                      </Button>
-                      <span>{Math.round(translationSize * 100)}%</span>
-                      <Button
-                        size="icon-xs"
-                        variant="outline"
-                        aria-label="增大译文字号"
-                        onClick={() =>
-                          setTheme({
-                            translationFontSize: stepTranslationSize(
-                              translationSize,
-                              1,
-                            ),
-                          })
-                        }
-                      >
-                        +
-                      </Button>
-                    </div>
-                    <TranslationFontControls
-                      theme={theme}
-                      setTheme={setTheme}
-                    />
                   </>
                 )}
+                <div className="setting-row">
+                  <span>译文字号</span>
+                  <Button
+                    size="icon-xs"
+                    variant="outline"
+                    aria-label="减小译文字号"
+                    onClick={() =>
+                      setTheme({
+                        translationFontSize: stepTranslationSize(
+                          translationSize,
+                          -1,
+                        ),
+                      })
+                    }
+                  >
+                    −
+                  </Button>
+                  <span>{Math.round(translationSize * 100)}%</span>
+                  <Button
+                    size="icon-xs"
+                    variant="outline"
+                    aria-label="增大译文字号"
+                    onClick={() =>
+                      setTheme({
+                        translationFontSize: stepTranslationSize(
+                          translationSize,
+                          1,
+                        ),
+                      })
+                    }
+                  >
+                    +
+                  </Button>
+                </div>
+                <TranslationFontControls theme={theme} setTheme={setTheme} />
               </div>
             </PopoverContent>
           </Popover>
@@ -1175,7 +1154,7 @@ export function Workspace({
           <div className="reading-pane" ref={readingPane}>
             {(() => {
               const ReadingView =
-                doc.type === "pdf" ? PDFReadingView : ReaderView;
+                doc.type === "pdf" ? PDFReadingView : EPUBReadingView;
               return (
                 <ReadingView
                   document={doc}
@@ -1183,7 +1162,7 @@ export function Workspace({
                   annotations={annotations}
                   blocks={blocks}
                   processing={processing}
-                  toolbarHost={pdfToolbar}
+                  toolbarHost={readingToolbar}
                   pageNavigation={pageNavigation}
                   onReady={(engine, items) => {
                     setAdapter(engine);

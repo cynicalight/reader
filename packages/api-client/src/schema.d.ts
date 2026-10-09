@@ -4,2691 +4,2911 @@
  */
 
 export interface paths {
-  "/api/documents": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"][];
-          };
+    "/api/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "multipart/form-data": {
-            /** Format: binary */
-            file: string;
-            /**
-             * @description Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.
-             * @enum {unknown}
-             */
-            library?: "books" | "papers";
-            /**
-             * @description Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.
-             * @enum {unknown}
-             */
-            allowLarge?: "1";
-          };
-        };
-      };
-      responses: {
-        /** @description The identical file already exists, in either library */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Success */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Permanently delete a document and its library-owned data after stopping background tasks */
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Deleted or already absent */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            /** @enum {unknown} */
-            category?: "book" | "article" | "paper";
-            tags?: string[];
-            folders?: string[];
-            favorite?: boolean;
-            progress?: components["schemas"]["DocumentLocation"];
-            percentage?: number;
-            title?: string;
-            author?: string;
-            /** @enum {unknown} */
-            library?: "books" | "papers";
-            /** @description Fields to replace; each becomes a manual value. Empty strings clear a field. */
-            metadata?: {
-              /** @enum {unknown} */
-              itemType?:
-                | "journal"
-                | "conference"
-                | "preprint"
-                | "thesis"
-                | "book"
-                | "chapter"
-                | "report"
-                | "other";
-              translatedTitle?: string;
-              shortTitle?: string;
-              creators?: components["schemas"]["Creator"][];
-              affiliation?: string;
-              date?: string;
-              venue?: string;
-              volume?: string;
-              issue?: string;
-              pages?: string;
-              publisher?: string;
-              doi?: string;
-              arxiv?: string;
-              isbn?: string;
-              url?: string;
-              abstract?: string;
-              language?: string;
-              remark?: string;
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
             };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        /**
+                         * @description Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.
+                         * @enum {unknown}
+                         */
+                        library?: "books" | "papers";
+                        /**
+                         * @description Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.
+                         * @enum {unknown}
+                         */
+                        allowLarge?: "1";
+                    };
+                };
+            };
+            responses: {
+                /** @description The identical file already exists, in either library */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Permanently delete a document and its library-owned data after stopping background tasks */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted or already absent */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {unknown} */
+                        category?: "book" | "article" | "paper";
+                        tags?: string[];
+                        folders?: string[];
+                        favorite?: boolean;
+                        progress?: components["schemas"]["DocumentLocation"];
+                        percentage?: number;
+                        title?: string;
+                        author?: string;
+                        /** @enum {unknown} */
+                        library?: "books" | "papers";
+                        /** @description Fields to replace; each becomes a manual value. Empty strings clear a field. */
+                        metadata?: {
+                            /** @enum {unknown} */
+                            itemType?: "journal" | "conference" | "preprint" | "thesis" | "book" | "chapter" | "report" | "other";
+                            translatedTitle?: string;
+                            shortTitle?: string;
+                            creators?: components["schemas"]["Creator"][];
+                            affiliation?: string;
+                            date?: string;
+                            venue?: string;
+                            volume?: string;
+                            issue?: string;
+                            pages?: string;
+                            publisher?: string;
+                            doi?: string;
+                            arxiv?: string;
+                            isbn?: string;
+                            url?: string;
+                            abstract?: string;
+                            language?: string;
+                            remark?: string;
+                        };
+                        /** @enum {unknown} */
+                        readingStatus?: "unread" | "reading" | "done";
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/documents/{id}/classification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry AI classification; manual types are protected */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Queued */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/annotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Annotation"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        id?: string;
+                        documentId?: string;
+                        /** @enum {unknown} */
+                        kind: "highlight" | "underline" | "note" | "bookmark";
+                        location: components["schemas"]["DocumentLocation"];
+                        quote: string;
+                        note: string;
+                        color: string;
+                        createdAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SavedAnnotation"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/annotations/{annotation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    annotation: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    annotation: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        note?: string;
+                        /** @description Message ID of this document; empty clears */
+                        answerId?: string;
+                        resolved?: boolean;
+                        color?: string;
+                        /** @description Replaces the tags; trimmed and de-duplicated without regard to case */
+                        tags?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated note; annotation identity, kind and location are preserved. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Annotation"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/documents/{id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SearchResult"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Message"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {unknown} */
+                        provider: "codex" | "claude" | "kimi";
+                        attachments?: string[];
+                        prompt: string;
+                        context: string;
+                        references?: {
+                            text: string;
+                            /** @enum {unknown} */
+                            kind?: "selection" | "section";
+                            location: components["schemas"]["DocumentLocation"];
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description SSE v1: status, delta, fallback, error, done. See ChatStreamEvent. done is sent once only after confirmed upstream completion and successful assistant persistence. Fallback is allowed only before the first text delta. Disconnect cancels upstream; missing done requires checking messages, never automatic POST replay. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Use skip for fast installation discovery; authentication is not a capability test. */
+                    auth?: "skip";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Provider"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/processing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/assistance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved assistance state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "start" | "pause" | "resume";
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved assistance state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/processing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PDFBlock"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/epub-chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description EPUB in-document reader */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EPUBChapters"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/epub-chapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    href: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description EPUB in-document reader */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Server sanitized reader-mode HTML; no publisher CSS */
+                            html: string;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/epub-blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ordered EPUB paragraphs with exact source locations */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EPUBReadingBlock"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List models reported by the installed Agent SDK without sending a prompt */
+        get: {
+            parameters: {
+                query: {
+                    provider: "codex" | "claude" | "kimi";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Models available through this SDK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AgentModel"][];
+                    };
+                };
+                /** @description Unknown provider */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Agent model discovery failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AIConfig"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AIConfig"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AIConfig"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/test/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: {
+                    /** @description Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration. */
+                    capability?: "text" | "vision";
+                };
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AICapability"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TranslationBlock"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        blockId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Translation queued; completed blocks are retained */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            queued: boolean;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations/chapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue the EPUB chapter at this location. Top-level TOC boundaries (children of a sole book-title parent) take precedence; without a TOC use the spine file. Queues at most approximately 40000 Unicode source characters, retaining whole paragraphs and completed results. Resumes paused work. No PDF page numbers. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        location: {
+                            /** @enum {string} */
+                            type: "epub";
+                            href: string;
+                            blockId?: string;
+                            locator?: string;
+                            start?: number;
+                            end?: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Chapter queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            queued: number;
+                            characters: number;
+                            /** @description Request this chapter again to queue the remaining text after the character limit. */
+                            hasMore: boolean;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        fromPage: number;
+                        toPage: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Range queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            queued: number;
+                            characters: number;
+                            /** @description Page where the character or 30-page limit stopped the request; 0 when the range is fully queued. */
+                            nextPage: number;
+                            /** @description Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes. */
+                            parsing: boolean;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Authenticated translation subscription. Sends a snapshot on connection, then flushes each persisted translation block immediately. Reconnect obtains a new snapshot. Does not start or cancel generation. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description SSE: snapshot with TranslationBlock[], translation with TranslationBlock. Comment heartbeats; error closes subscription. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description PDF not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tag-boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TagBoard"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TagBoardInput"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TagBoard"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tag-boards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TagBoardInput"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TagBoard"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted; documents are unchanged */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/processing-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Persisted processing usage, including failed and fallback attempts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingUsage"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/chat-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Persisted per-document chat usage, including failed and fallback attempts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingUsage"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preferences/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: "library";
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved preferences, or an empty object */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: "library";
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/related/{other}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                other: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Link two documents as related (both directions, idempotent, at most 100 per document) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    other: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The document at id */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Remove the link between two documents */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    other: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The document at id */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        from: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Merged */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            document: components["schemas"]["Document"];
+                            trashed: string[];
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move to the trash, keeping files and records; idempotent */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Trashed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore from the trash; idempotent */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Restored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    library: "books" | "papers";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Trashed documents, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"][];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Permanently delete every trashed document in a library */
+        delete: {
+            parameters: {
+                query: {
+                    library: "books" | "papers";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Emptied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            removed: number;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/libraries/{library}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    library: "books" | "papers";
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        from: string;
+                        to?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Changed documents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            changed: number;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/libraries/{library}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    library: "books" | "papers";
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        from: string;
+                        to?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Changed documents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            changed: number;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        ref: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The same file already exists */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Imported */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/metadata/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Document"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The document's free-form paper note */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Note (empty when unset) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            body: string;
+                            updatedAt?: string;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            body: string;
+                            updatedAt?: string;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
+export type webhooks = Record<string, never>;
+export interface components {
+    schemas: {
+        DocumentLocation: {
+            /** @constant */
+            type: "pdf";
+            page: number;
+            x?: number;
+            y?: number;
+            quote?: string;
+            rects?: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            }[];
+            sentenceLink?: components["schemas"]["SentenceLink"];
+            translation?: components["schemas"]["TranslationLocation"];
+        } | components["schemas"]["EPUBLocation"];
+        Document: {
             /** @enum {unknown} */
-            readingStatus?: "unread" | "reading" | "done";
-          };
-        };
-      };
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    trace?: never;
-  };
-  "/api/documents/{id}/classification": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Retry AI classification; manual types are protected */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Queued */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/annotations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Annotation"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            id?: string;
-            documentId?: string;
+            category: "book" | "article" | "paper";
             /** @enum {unknown} */
-            kind: "highlight" | "underline" | "note" | "bookmark";
+            categorySource: "default" | "ai" | "manual";
+            /** @enum {unknown} */
+            classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
+            classificationError: string;
+            tags: string[];
+            /** @description Paper-library categories; a/b is nested in a */
+            folders: string[];
+            id: string;
+            /** @enum {unknown} */
+            type: "pdf" | "epub";
+            title: string;
+            author: string;
+            size: number;
+            createdAt: string;
+            lastOpenedAt: string;
+            favorite: boolean;
+            percentage: number;
+            progress?: components["schemas"]["DocumentLocation"];
+            /** @enum {unknown} */
+            library: "books" | "papers";
+            /** @description Set while the document is in the trash */
+            deletedAt?: string;
+            metadata: components["schemas"]["PaperMetadata"];
+            /** @enum {unknown} */
+            readingStatus: "unread" | "reading" | "done";
+            noteCount: number;
+            /** @description Highlights and underlines */
+            highlightCount: number;
+            /** @description Questions without an answer that are not resolved */
+            openQuestionCount: number;
+            /** @description Documents linked as related, in both directions; may include trashed ones */
+            related: string[];
+        };
+        Annotation: {
+            id: string;
+            documentId: string;
+            /** @enum {unknown} */
+            kind: "highlight" | "underline" | "note" | "question" | "bookmark";
             location: components["schemas"]["DocumentLocation"];
             quote: string;
             note: string;
             color: string;
-            createdAt?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Success */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["SavedAnnotation"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/annotations/{annotation}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-          annotation: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": unknown;
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-          annotation: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            note?: string;
-            /** @description Message ID of this document; empty clears */
+            createdAt: string;
+            /** @description Chat message that answers a question */
             answerId?: string;
+            /** @description A question closed without an answer */
             resolved?: boolean;
-            color?: string;
-            /** @description Replaces the tags; trimmed and de-duplicated without regard to case */
             tags?: string[];
-          };
         };
-      };
-      responses: {
-        /** @description Updated note; annotation identity, kind and location are preserved. */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Annotation"];
-          };
+        SavedAnnotation: components["schemas"]["Annotation"] & {
+            /** @description IDs removed when overlapping underlines were merged into the returned annotation. */
+            replacedIds?: string[];
         };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
+        SearchResult: {
+            id: string;
+            excerpt: string;
+            location: components["schemas"]["DocumentLocation"];
         };
-      };
-    };
-    trace?: never;
-  };
-  "/api/documents/{id}/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query: {
-          q: string;
-        };
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["SearchResult"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/messages": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Message"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/chat": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
+        Message: {
+            id: string;
+            documentId: string;
             /** @enum {unknown} */
-            provider: "codex" | "claude" | "kimi";
-            attachments?: string[];
-            prompt: string;
-            context: string;
-            references?: {
-              text: string;
-              /** @enum {unknown} */
-              kind?: "selection" | "section";
-              location: components["schemas"]["DocumentLocation"];
+            role: "user" | "assistant";
+            content: string;
+            createdAt: string;
+            context?: string;
+            attachments?: {
+                id: string;
+                page: number;
+                label: string;
+                caption?: string;
             }[];
-          };
+            references?: {
+                text: string;
+                /** @enum {unknown} */
+                kind?: "selection" | "section";
+                location: components["schemas"]["DocumentLocation"];
+            }[];
         };
-      };
-      responses: {
-        /** @description SSE v1: status, delta, fallback, error, done. See ChatStreamEvent. done is sent once only after confirmed upstream completion and successful assistant persistence. Fallback is allowed only before the first text delta. Disconnect cancels upstream; missing done requires checking messages, never automatic POST replay. */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "text/event-stream": string;
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/providers": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: {
-          /** @description Use skip for fast installation discovery; authentication is not a capability test. */
-          auth?: "skip";
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Provider"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/settings": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Settings"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["Settings"];
-        };
-      };
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Settings"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/processing": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Processing"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/assistance": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Saved assistance state */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Processing"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
+        Provider: {
             /** @enum {string} */
-            action: "start" | "pause" | "resume";
-          };
+            id: "codex" | "claude" | "kimi";
+            installed: boolean;
+            authenticated: boolean;
+            status: string;
         };
-      };
-      responses: {
-        /** @description Saved assistance state */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Processing"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/processing": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Processing"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/blocks": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["PDFBlock"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/ai/models": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** List models reported by the installed Agent SDK without sending a prompt */
-    get: {
-      parameters: {
-        query: {
-          provider: "codex" | "claude" | "kimi";
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Models available through this SDK */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["AgentModel"][];
-          };
-        };
-        /** @description Unknown provider */
-        400: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        /** @description Agent model discovery failed */
-        502: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/ai/config": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["AIConfig"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["AIConfig"];
-        };
-      };
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["AIConfig"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/ai/test/{provider}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post: {
-      parameters: {
-        query?: {
-          /** @description Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration. */
-          capability?: "text" | "vision";
-        };
-        header?: never;
-        path: {
-          provider: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["AICapability"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/translations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["TranslationBlock"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            blockId?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Translation queued; completed blocks are retained */
-        202: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              queued: boolean;
-            };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/translations/range": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing. */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            fromPage: number;
-            toPage: number;
-          };
-        };
-      };
-      responses: {
-        /** @description Range queued */
-        202: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              queued: number;
-              characters: number;
-              /** @description Page where the character or 30-page limit stopped the request; 0 when the range is fully queued. */
-              nextPage: number;
-              /** @description Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes. */
-              parsing: boolean;
-            };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/translations/stream": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** @description Authenticated translation subscription. Sends a snapshot on connection, then flushes each persisted translation block immediately. Reconnect obtains a new snapshot. Does not start or cancel generation. */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description SSE: snapshot with TranslationBlock[], translation with TranslationBlock. Comment heartbeats; error closes subscription. */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "text/event-stream": string;
-          };
-        };
-        /** @description Authentication required */
-        401: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        /** @description PDF not found */
-        404: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/tag-boards": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["TagBoard"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["TagBoardInput"];
-        };
-      };
-      responses: {
-        /** @description Success */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["TagBoard"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/tag-boards/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": components["schemas"]["TagBoardInput"];
-        };
-      };
-      responses: {
-        /** @description Success */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["TagBoard"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    post?: never;
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Deleted; documents are unchanged */
-        204: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content?: never;
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/processing-usage": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Persisted processing usage, including failed and fallback attempts */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["ProcessingUsage"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/chat-usage": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Persisted per-document chat usage, including failed and fallback attempts */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["ProcessingUsage"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/preferences/{key}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          key: "library";
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Saved preferences, or an empty object */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              [key: string]: unknown;
-            };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          key: "library";
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
+        Settings: {
             [key: string]: unknown;
-          };
         };
-      };
-      responses: {
-        /** @description Saved */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              [key: string]: unknown;
+        /** @description Decoded SSE event union for documentation and generated types only. Wire uses event: NAME and data: JSON lines; no envelope is transmitted. Append delta text verbatim. Only done confirms successful persistence. EOF is not completion. After error/done ignore late data. No automatic POST replay. */
+        ChatStreamEvent: {
+            /** @enum {string} */
+            event: "status";
+            data: {
+                /** @enum {string} */
+                status: "reading" | "reading-image";
             };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/related/{other}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-        other: string;
-      };
-      cookie?: never;
-    };
-    get?: never;
-    /** Link two documents as related (both directions, idempotent, at most 100 per document) */
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-          other: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description The document at id */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    post?: never;
-    /** Remove the link between two documents */
-    delete: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-          other: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description The document at id */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/merge": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Fold duplicates into this document: categories, star, the furthest reading status, missing metadata and paper notes move over; the duplicates go to the trash with their files, annotations and chats */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            from: string[];
-          };
-        };
-      };
-      responses: {
-        /** @description Merged */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              document: components["schemas"]["Document"];
-              trashed: string[];
+        } | {
+            /** @enum {string} */
+            event: "delta";
+            data: {
+                text: string;
             };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/trash": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Move to the trash, keeping files and records; idempotent */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Trashed */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/restore": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Restore from the trash; idempotent */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Restored */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/trash": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get: {
-      parameters: {
-        query: {
-          library: "books" | "papers";
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Trashed documents, newest first */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"][];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    put?: never;
-    post?: never;
-    /** Permanently delete every trashed document in a library */
-    delete: {
-      parameters: {
-        query: {
-          library: "books" | "papers";
-        };
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Emptied */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              removed: number;
+        } | {
+            /** @enum {string} */
+            event: "fallback";
+            data: {
+                message: string;
             };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/libraries/{library}/folders": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Rename a folder (with to) or remove it (without to) on every document of a library, including the trash, in one transaction. Subfolders (from/child) follow; 400 when a renamed folder would exceed 40 characters */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          library: "books" | "papers";
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            from: string;
-            to?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Changed documents */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              changed: number;
+        } | {
+            /** @enum {string} */
+            event: "error";
+            data: {
+                error: string;
             };
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/libraries/{library}/tags": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Rename a tag (with to) or remove it (without to) on every document of a library, including the trash, in one transaction */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          library: "books" | "papers";
-        };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            from: string;
-            to?: string;
-          };
-        };
-      };
-      responses: {
-        /** @description Changed documents */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              changed: number;
+        } | {
+            /** @enum {string} */
+            event: "done";
+            data: {
+                /** @enum {boolean} */
+                ok: true;
             };
-          };
         };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
+        Error: {
+            error: string;
         };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/resolve": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Download a paper into the paper library from an arXiv ID, DOI, paper or PDF link, or title; metadata comes from arXiv, Crossref, Semantic Scholar, OpenReview or the page's citation tags */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            ref: string;
-          };
+        ProcessingStage: {
+            /** @enum {unknown} */
+            status: "queued" | "running" | "waiting" | "failed" | "complete";
+            detail: string;
+            warning?: string;
         };
-      };
-      responses: {
-        /** @description The same file already exists */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
+        Processing: {
+            enabled?: boolean;
+            /** @description EPUB work uses explicit chapter requests; the legacy automatic queue has been migrated. */
+            readonly epubManual?: boolean;
+            translating?: components["schemas"]["ProcessingStage"];
+            documentId: string;
+            /** @enum {string} */
+            phase: "learning" | "translating" | "ready";
+            /** @enum {string} */
+            status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
+            pagesDone: number;
+            pagesTotal: number;
+            translationsDone: number;
+            translationsTotal: number;
+            detail: string;
+            warning?: string;
+            updatedAt: string;
+            incomplete?: boolean;
+            startedAt?: string;
+            completedAt?: string;
+            usageTracked?: boolean;
         };
-        /** @description Imported */
-        201: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/metadata/lookup": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Look up metadata by DOI, arXiv ID (also detected on the first pages) or a close title match; manual fields are kept */
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Updated */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Document"];
-          };
-        };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
-        };
-      };
-    };
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/documents/{id}/note": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** The document's free-form paper note */
-    get: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
-        };
-        cookie?: never;
-      };
-      requestBody?: never;
-      responses: {
-        /** @description Note (empty when unset) */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              body: string;
-              updatedAt?: string;
+        PDFBlock: {
+            id: string;
+            page: number;
+            label: string;
+            bounds: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
             };
-          };
+            text: string;
+            /** @enum {unknown} */
+            kind?: "selection" | "section";
+            image?: string;
+            caption?: string;
         };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
+        AICapability: {
+            text: boolean;
+            /** @description Text passed; vision has not finished. Resume vision on the next check. */
+            pendingVision?: boolean;
+            vision: boolean;
+            checkedAt: string;
+            error?: string;
         };
-      };
-    };
-    put: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path: {
-          id: string;
+        APIConnection: {
+            url: string;
+            model: string;
+            key?: string;
+            hasKey: boolean;
         };
-        cookie?: never;
-      };
-      requestBody: {
-        content: {
-          "application/json": {
-            body: string;
-          };
+        AgentModel: {
+            id: string;
+            name: string;
+            description: string;
+            isDefault: boolean;
+            aliases?: string[];
+            /** @description Tasks that use this model when no model is chosen. */
+            recommendedFor?: ("chat" | "translation")[];
         };
-      };
-      responses: {
-        /** @description Saved */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": {
-              body: string;
-              updatedAt?: string;
+        /** @enum {string} */
+        ReasoningEffort: "low" | "medium" | "high" | "max";
+        AIConfig: {
+            primary: string;
+            models: {
+                [key: string]: string;
             };
-          };
+            /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
+            efforts?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ReasoningEffort"];
+                };
+            };
+            /** @description Translation model by provider. Empty uses the provider's fast-tier recommendation. */
+            translationModels?: {
+                [key: string]: string;
+            };
+            /** @description Translation effort by provider and model ID. Defaults to medium. */
+            translationEfforts?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ReasoningEffort"];
+                };
+            };
+            textAPI: components["schemas"]["APIConnection"];
+            imageAPI: components["schemas"]["APIConnection"];
+            capabilities: {
+                [key: string]: components["schemas"]["AICapability"];
+            };
         };
-        /** @description Error */
-        default: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["Error"];
-          };
+        TranslationSentence: {
+            /** @description The model's sentence; it may repair PDF extraction errors. */
+            source: string;
+            target: string;
+            /** @description Extracted text this sentence covers when it differs from source; used to locate the sentence in the PDF text layer. */
+            anchor?: string;
         };
-      };
-    };
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-}
-export type webhooks = Record<string, never>;
-export interface components {
-  schemas: {
-    DocumentLocation:
-      | {
-          /** @constant */
-          type: "pdf";
-          page: number;
-          x?: number;
-          y?: number;
-          quote?: string;
-          rects?: {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-          }[];
-          sentenceLink?: {
+        TranslationBlock: {
+            blockId: string;
+            sourceHash: string;
+            /**
+             * @description idle: a book paragraph that has not been requested.
+             * @enum {unknown}
+             */
+            status: "idle" | "pending" | "running" | "complete" | "failed";
+            sentences: components["schemas"]["TranslationSentence"][];
+            /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
+            formulaMarkdown?: string;
+            error?: string;
+        };
+        TagBoardInput: {
+            name: string;
+            tags: string[];
+            /** @enum {string} */
+            match: "all" | "any";
+        };
+        TagBoard: {
+            id: string;
+            name: string;
+            tags: string[];
+            /** @enum {string} */
+            match: "all" | "any";
+        };
+        TokenCounts: {
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            cachedInputTokens: number | null;
+            cacheWriteInputTokens: number | null;
+            reasoningOutputTokens: number | null;
+        };
+        ModelTokens: {
+            model: string;
+            tokens: components["schemas"]["TokenCounts"] | null;
+        };
+        UsageCall: {
+            id: string;
+            stage: string;
+            target: string;
+            provider: string;
+            startedAt: string;
+            finishedAt?: string;
+            status: string;
+            models: components["schemas"]["ModelTokens"][];
+        };
+        UsageGroup: {
+            stage: string;
+            provider: string;
+            model: string;
+            calls: number;
+            unknownCalls: number;
+            tokens: components["schemas"]["TokenCounts"];
+        };
+        StageUsage: {
+            stage: string;
+            durationMs: number;
+        };
+        ProcessingUsage: {
+            historyComplete: boolean;
+            total: components["schemas"]["TokenCounts"];
+            calls: components["schemas"]["UsageCall"][];
+            groups: components["schemas"]["UsageGroup"][];
+            stages: components["schemas"]["StageUsage"][];
+            unknownCalls: number;
+            failedCalls: number;
+            partialCalls: number;
+            elapsedMs: number;
+        };
+        /** @description CSL-style name: given/family for split names, name for a single literal name */
+        Creator: {
+            given?: string;
+            family?: string;
+            name?: string;
+        };
+        PaperMetadata: {
+            /** @enum {unknown} */
+            itemType?: "journal" | "conference" | "preprint" | "thesis" | "book" | "chapter" | "report" | "other";
+            translatedTitle?: string;
+            shortTitle?: string;
+            creators?: components["schemas"]["Creator"][];
+            affiliation?: string;
+            date?: string;
+            venue?: string;
+            volume?: string;
+            issue?: string;
+            pages?: string;
+            publisher?: string;
+            doi?: string;
+            arxiv?: string;
+            isbn?: string;
+            url?: string;
+            abstract?: string;
+            language?: string;
+            /** @description The reader's own note on the item; never looked up */
+            remark?: string;
+            /** @description Origin per field; lookups never replace manual values */
+            sources?: {
+                [key: string]: "file" | "lookup" | "manual";
+            };
+            lookedUpAt?: string;
+            /**
+             * @description Automatic lookup state for papers imported from files
+             * @enum {unknown}
+             */
+            lookup?: "pending" | "done" | "notFound" | "failed";
+        };
+        SentenceLink: {
             /** @enum {string} */
             origin: "source" | "translation";
             parts: {
-              blockId: string;
-              sourceHash: string;
-              sentenceIndex: number;
-              source: string;
-              target: string;
+                blockId: string;
+                sourceHash: string;
+                sentenceIndex: number;
+                source: string;
+                target: string;
             }[];
-          };
-          translation?: {
+        };
+        TranslationLocation: {
             blockId: string;
             sourceHash: string;
             sentenceIndexes: number[];
             start: number;
             end: number;
             ranges?: {
-              blockId: string;
-              sourceHash: string;
-              sentenceIndexes: number[];
-              start: number;
-              end: number;
-              quote: string;
+                blockId: string;
+                sourceHash: string;
+                sentenceIndexes: number[];
+                start: number;
+                end: number;
+                quote: string;
+                location?: components["schemas"]["EPUBLocation"];
             }[];
-          };
-        }
-      | {
-          /** @constant */
-          type: "epub";
-          href: string;
-          locator?: string;
-          progression?: number;
-          quote?: string;
         };
-    Document: {
-      /** @enum {unknown} */
-      category: "book" | "article" | "paper";
-      /** @enum {unknown} */
-      categorySource: "default" | "ai" | "manual";
-      /** @enum {unknown} */
-      classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
-      classificationError: string;
-      tags: string[];
-      /** @description Paper-library categories; a/b is nested in a */
-      folders: string[];
-      id: string;
-      /** @enum {unknown} */
-      type: "pdf" | "epub";
-      title: string;
-      author: string;
-      size: number;
-      createdAt: string;
-      lastOpenedAt: string;
-      favorite: boolean;
-      percentage: number;
-      progress?: components["schemas"]["DocumentLocation"];
-      /** @enum {unknown} */
-      library: "books" | "papers";
-      /** @description Set while the document is in the trash */
-      deletedAt?: string;
-      metadata: components["schemas"]["PaperMetadata"];
-      /** @enum {unknown} */
-      readingStatus: "unread" | "reading" | "done";
-      noteCount: number;
-      /** @description Highlights and underlines */
-      highlightCount: number;
-      /** @description Questions without an answer that are not resolved */
-      openQuestionCount: number;
-      /** @description Documents linked as related, in both directions; may include trashed ones */
-      related: string[];
-    };
-    Annotation: {
-      id: string;
-      documentId: string;
-      /** @enum {unknown} */
-      kind: "highlight" | "underline" | "note" | "question" | "bookmark";
-      location: components["schemas"]["DocumentLocation"];
-      quote: string;
-      note: string;
-      color: string;
-      createdAt: string;
-      /** @description Chat message that answers a question */
-      answerId?: string;
-      /** @description A question closed without an answer */
-      resolved?: boolean;
-      tags?: string[];
-    };
-    SavedAnnotation: components["schemas"]["Annotation"] & {
-      /** @description IDs removed when overlapping underlines were merged into the returned annotation. */
-      replacedIds?: string[];
-    };
-    SearchResult: {
-      id: string;
-      excerpt: string;
-      location: components["schemas"]["DocumentLocation"];
-    };
-    Message: {
-      id: string;
-      documentId: string;
-      /** @enum {unknown} */
-      role: "user" | "assistant";
-      content: string;
-      createdAt: string;
-      context?: string;
-      attachments?: {
-        id: string;
-        page: number;
-        label: string;
-        caption?: string;
-      }[];
-      references?: {
-        text: string;
-        /** @enum {unknown} */
-        kind?: "selection" | "section";
-        location: components["schemas"]["DocumentLocation"];
-      }[];
-    };
-    Provider: {
-      /** @enum {string} */
-      id: "codex" | "claude" | "kimi";
-      installed: boolean;
-      authenticated: boolean;
-      status: string;
-    };
-    Settings: {
-      [key: string]: unknown;
-    };
-    /** @description Decoded SSE event union for documentation and generated types only. Wire uses event: NAME and data: JSON lines; no envelope is transmitted. Append delta text verbatim. Only done confirms successful persistence. EOF is not completion. After error/done ignore late data. No automatic POST replay. */
-    ChatStreamEvent:
-      | {
-          /** @enum {string} */
-          event: "status";
-          data: {
-            /** @enum {string} */
-            status: "reading" | "reading-image";
-          };
-        }
-      | {
-          /** @enum {string} */
-          event: "delta";
-          data: {
+        EPUBLocation: {
+            /** @constant */
+            type: "epub";
+            href: string;
+            blockId?: string;
+            start?: number;
+            end?: number;
+            endBlockId?: string;
+            locator?: string;
+            progression?: number;
+            quote?: string;
+            sentenceLink?: components["schemas"]["SentenceLink"];
+            translation?: components["schemas"]["TranslationLocation"];
+        };
+        EPUBChapters: {
+            chapters: components["schemas"]["EPUBChapter"][];
+            toc: components["schemas"]["EPUBChapterLink"][] | null;
+        };
+        EPUBChapter: {
+            href: string;
+            title: string;
+            index: number;
+            characters: number;
+            blocks: components["schemas"]["EPUBReadingBlock"][];
+        };
+        EPUBChapterLink: {
+            href: string;
+            title: string;
+            children?: components["schemas"]["EPUBChapterLink"][];
+        };
+        EPUBReadingBlock: {
+            id: string;
+            label: string;
             text: string;
-          };
-        }
-      | {
-          /** @enum {string} */
-          event: "fallback";
-          data: {
-            message: string;
-          };
-        }
-      | {
-          /** @enum {string} */
-          event: "error";
-          data: {
-            error: string;
-          };
-        }
-      | {
-          /** @enum {string} */
-          event: "done";
-          data: {
-            /** @enum {boolean} */
-            ok: true;
-          };
+            location: components["schemas"]["EPUBLocation"];
+            image?: string;
         };
-    Error: {
-      error: string;
     };
-    ProcessingStage: {
-      /** @enum {unknown} */
-      status: "queued" | "running" | "waiting" | "failed" | "complete";
-      detail: string;
-      warning?: string;
-    };
-    Processing: {
-      enabled?: boolean;
-      translating?: components["schemas"]["ProcessingStage"];
-      documentId: string;
-      /** @enum {string} */
-      phase: "learning" | "translating" | "ready";
-      /** @enum {string} */
-      status:
-        "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
-      pagesDone: number;
-      pagesTotal: number;
-      translationsDone: number;
-      translationsTotal: number;
-      detail: string;
-      warning?: string;
-      updatedAt: string;
-      incomplete?: boolean;
-      startedAt?: string;
-      completedAt?: string;
-      usageTracked?: boolean;
-    };
-    PDFBlock: {
-      id: string;
-      page: number;
-      label: string;
-      bounds: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      };
-      text: string;
-      /** @enum {unknown} */
-      kind?: "selection" | "section";
-      image?: string;
-      caption?: string;
-    };
-    AICapability: {
-      text: boolean;
-      /** @description Text passed; vision has not finished. Resume vision on the next check. */
-      pendingVision?: boolean;
-      vision: boolean;
-      checkedAt: string;
-      error?: string;
-    };
-    APIConnection: {
-      url: string;
-      model: string;
-      key?: string;
-      hasKey: boolean;
-    };
-    AgentModel: {
-      id: string;
-      name: string;
-      description: string;
-      isDefault: boolean;
-      aliases?: string[];
-      /** @description Tasks that use this model when no model is chosen. */
-      recommendedFor?: ("chat" | "translation")[];
-    };
-    /** @enum {string} */
-    ReasoningEffort: "low" | "medium" | "high" | "max";
-    AIConfig: {
-      primary: string;
-      models: {
-        [key: string]: string;
-      };
-      /** @description Reader effort by provider and model ID. Defaults to medium; adapted to SDK-native values on invocation. */
-      efforts?: {
-        [key: string]: {
-          [key: string]: components["schemas"]["ReasoningEffort"];
-        };
-      };
-      /** @description Translation model by provider. Empty uses the provider's fast-tier recommendation. */
-      translationModels?: {
-        [key: string]: string;
-      };
-      /** @description Translation effort by provider and model ID. Defaults to medium. */
-      translationEfforts?: {
-        [key: string]: {
-          [key: string]: components["schemas"]["ReasoningEffort"];
-        };
-      };
-      textAPI: components["schemas"]["APIConnection"];
-      imageAPI: components["schemas"]["APIConnection"];
-      capabilities: {
-        [key: string]: components["schemas"]["AICapability"];
-      };
-    };
-    TranslationSentence: {
-      /** @description The model's sentence; it may repair PDF extraction errors. */
-      source: string;
-      target: string;
-      /** @description Extracted text this sentence covers when it differs from source; used to locate the sentence in the PDF text layer. */
-      anchor?: string;
-    };
-    TranslationBlock: {
-      blockId: string;
-      sourceHash: string;
-      /**
-       * @description idle: a book paragraph that has not been requested.
-       * @enum {unknown}
-       */
-      status: "idle" | "pending" | "running" | "complete" | "failed";
-      sentences: components["schemas"]["TranslationSentence"][];
-      /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
-      formulaMarkdown?: string;
-      error?: string;
-    };
-    TagBoardInput: {
-      name: string;
-      tags: string[];
-      /** @enum {string} */
-      match: "all" | "any";
-    };
-    TagBoard: {
-      id: string;
-      name: string;
-      tags: string[];
-      /** @enum {string} */
-      match: "all" | "any";
-    };
-    TokenCounts: {
-      inputTokens: number;
-      outputTokens: number;
-      totalTokens: number;
-      cachedInputTokens: number | null;
-      cacheWriteInputTokens: number | null;
-      reasoningOutputTokens: number | null;
-    };
-    ModelTokens: {
-      model: string;
-      tokens: components["schemas"]["TokenCounts"] | null;
-    };
-    UsageCall: {
-      id: string;
-      stage: string;
-      target: string;
-      provider: string;
-      startedAt: string;
-      finishedAt?: string;
-      status: string;
-      models: components["schemas"]["ModelTokens"][];
-    };
-    UsageGroup: {
-      stage: string;
-      provider: string;
-      model: string;
-      calls: number;
-      unknownCalls: number;
-      tokens: components["schemas"]["TokenCounts"];
-    };
-    StageUsage: {
-      stage: string;
-      durationMs: number;
-    };
-    ProcessingUsage: {
-      historyComplete: boolean;
-      total: components["schemas"]["TokenCounts"];
-      calls: components["schemas"]["UsageCall"][];
-      groups: components["schemas"]["UsageGroup"][];
-      stages: components["schemas"]["StageUsage"][];
-      unknownCalls: number;
-      failedCalls: number;
-      partialCalls: number;
-      elapsedMs: number;
-    };
-    /** @description CSL-style name: given/family for split names, name for a single literal name */
-    Creator: {
-      given?: string;
-      family?: string;
-      name?: string;
-    };
-    PaperMetadata: {
-      /** @enum {unknown} */
-      itemType?:
-        | "journal"
-        | "conference"
-        | "preprint"
-        | "thesis"
-        | "book"
-        | "chapter"
-        | "report"
-        | "other";
-      translatedTitle?: string;
-      shortTitle?: string;
-      creators?: components["schemas"]["Creator"][];
-      affiliation?: string;
-      date?: string;
-      venue?: string;
-      volume?: string;
-      issue?: string;
-      pages?: string;
-      publisher?: string;
-      doi?: string;
-      arxiv?: string;
-      isbn?: string;
-      url?: string;
-      abstract?: string;
-      language?: string;
-      /** @description The reader's own note on the item; never looked up */
-      remark?: string;
-      /** @description Origin per field; lookups never replace manual values */
-      sources?: {
-        [key: string]: "file" | "lookup" | "manual";
-      };
-      lookedUpAt?: string;
-      /**
-       * @description Automatic lookup state for papers imported from files
-       * @enum {unknown}
-       */
-      lookup?: "pending" | "done" | "notFound" | "failed";
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;

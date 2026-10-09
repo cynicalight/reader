@@ -44,7 +44,7 @@
 
 自动测试覆盖默认开启与手动禁用、开关持久化与新导入语义、无效设置拒绝、长 PDF 导入确认、重启及翻译进度不能解除暂停、聊天隔离、全文译文复用、旧处理记录、图书导入不解析、章节分批解析与版面合并、章节范围与字数上限、未请求公式不转换、章节请求解除暂停。
 
-验证命令：`pnpm typecheck`、`pnpm test`、`pnpm build`。沿用 PDF 100 MB、1000 页及现有 OCR 限制。EPUB 的章节翻译另见后续实现。
+验证命令：`pnpm typecheck`、`pnpm test`、`pnpm build`。沿用 PDF 100 MB、1000 页及现有 OCR 限制。EPUB 也采用手动按章翻译，以目录和 EPUB 位置划分范围，详见 `docs/epub-reading.md`。共享处理器通过 `translationInput` 接收两种格式；EPUB 跳过 PDF 版面解析。
 
 手动检查：
 

@@ -20,7 +20,8 @@ type ProcessingStage struct {
 	Warning string `json:"warning,omitempty"`
 }
 type Processing struct {
-	Enabled bool `json:"enabled"`
+	Enabled    bool `json:"enabled"`
+	EPUBManual bool `json:"epubManual,omitempty"`
 	// Chapter is a book chapter waiting for its pages to be parsed.
 	Chapter           *PageRange       `json:"chapter,omitempty"`
 	Translating       *ProcessingStage `json:"translating,omitempty"`
@@ -111,7 +112,7 @@ func (s *Store) enableLegacyProcessing() error {
 }
 
 // Only document creation reads this preference; updating settings never wakes a job.
-// Books always run the local layout pass; their paragraphs translate on request.
+// PDF books wait for an explicit chapter request before layout or translation.
 func importedProcessing(id, library, value string) Processing {
 	p := initialProcessing(id)
 	var settings struct {
@@ -129,13 +130,23 @@ func importedProcessing(id, library, value string) Processing {
 	}
 	return p
 }
-func (s *Store) enqueuePDF(d Document) error {
-	if d.Type != "pdf" {
-		return nil
+
+// EPUB has no layout pass and waits for explicit chapter requests.
+func initialDocumentProcessing(d Document, settings string) Processing {
+	if d.Type == "pdf" {
+		return importedProcessing(d.ID, d.Library, settings)
 	}
+	p := initialProcessing(d.ID)
+	p.Enabled = true
+	p.EPUBManual = true
+	p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
+	aggregateProcessing(&p)
+	return p
+}
+func (s *Store) enqueueDocument(d Document) error {
 	var value string
 	_ = s.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
-	p := importedProcessing(d.ID, d.Library, value)
+	p := initialDocumentProcessing(d, value)
 	b, _ := json.Marshal(p)
 	_, e := s.DB.Exec("INSERT OR IGNORE INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	return e
@@ -165,16 +176,14 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档不存在")
 		return
 	}
-	if d.Type != "pdf" {
-		fail(w, 400, "此解析流程用于 PDF")
-		return
-	}
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
 	p, e := s.Store.processing(d.ID)
 	if e != nil {
-		e = s.Store.enqueuePDF(d)
-		p = initialProcessing(d.ID)
+		e = s.Store.enqueueDocument(d)
+		if e == nil {
+			p, e = s.Store.processing(d.ID)
+		}
 	}
 	if e != nil {
 		fail(w, 500, "无法创建解析任务")
@@ -263,6 +272,10 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	if err := s.Store.enableLegacyProcessing(); err != nil {
 		log.Printf("cannot migrate processing state: %v", err)
 	}
+	if err := s.Store.prepareManualEPUBProcessing(); err != nil {
+		log.Printf("cannot prepare EPUB processing: %v", err)
+		return cancel
+	}
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running' OR json_extract(body,'$.translating.status')='running'")
 	if e == nil {
@@ -345,7 +358,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 						}
 					}
 				} else {
-					e = s.processPDF(work, &p)
+					e = s.processTranslation(work, &p)
 				}
 				if e != nil && phase == "learning" {
 					if ctx.Err() != nil {

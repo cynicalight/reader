@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, RotateCcw, Sparkles } from "lucide-react";
-import type { LibraryMode, Processing } from "@reader/core";
+import type { EPUBLocation, LibraryMode, Processing } from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { toast } from "sonner";
@@ -17,12 +17,14 @@ export function AssistanceControls({
   processing,
   library = "papers",
   chapter,
+  epubChapter,
 }: {
   documentId: string;
   processing?: Processing;
   library?: LibraryMode;
   /** The chapter at the reading position, read when the button is pressed. */
   chapter?: () => PageRange | undefined;
+  epubChapter?: () => EPUBLocation | undefined;
 }) {
   const [saved, setSaved] = useState<Processing>();
   const [busy, setBusy] = useState(false);
@@ -55,15 +57,25 @@ export function AssistanceControls({
       : job?.enabled && !complete
         ? ["pause", "暂停翻译"]
         : !job?.enabled
-          ? job?.startedAt
-            ? ["resume", "继续翻译"]
-            : ["start", "开始翻译"]
+          ? epubChapter &&
+            (!job?.startedAt || job.translating?.status === "complete")
+            ? ["chapter", "翻译本章"]
+            : job?.startedAt
+              ? ["resume", "继续翻译"]
+              : ["start", "开始翻译"]
           : library === "books"
             ? ["chapter", "翻译本章"]
             : ["start", "翻译完成"];
   const finished = complete && action !== "chapter";
   const run = async () => {
     if (action !== "chapter") return api.setAssistance(documentId, action);
+    if (epubChapter) {
+      const location = epubChapter();
+      if (!location?.href) throw new Error("正文仍在加载，请稍后再试");
+      const result = await api.translateEPUBChapter(documentId, location);
+      if (result.hasMore) toast("本章较长，完成后可再次点击翻译本章继续");
+      return api.assistance(documentId);
+    }
     const range = chapter?.();
     if (!range) return undefined;
     const result = await api.translateRange(
@@ -90,7 +102,9 @@ export function AssistanceControls({
             ? "翻译当前章节，单次最多约 4 万字"
             : job?.enabled
               ? job.detail
-              : "使用当前 AI 连接翻译全文与公式"
+              : epubChapter
+                ? "继续已请求章节的翻译"
+                : "使用当前 AI 连接翻译全文与公式"
         }
         onClick={async () => {
           const operation = ++serial.current;

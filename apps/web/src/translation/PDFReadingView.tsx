@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "./useTranslations";
 import { createPortal } from "react-dom";
 import type {
   Annotation,
@@ -74,8 +75,7 @@ export function PDFReadingView({
 }) {
   const [mode, setMode] = useState<Mode>("source"),
     [swapped, setSwapped] = useState(false);
-  const [translations, setTranslations] = useState<TranslationBlock[]>([]),
-    [error, setError] = useState("");
+  const { translations, error } = useTranslations(doc.id);
   const [popup, setPopup] = useState<{ block: PDFBlock; rect: DOMRect }>(),
     [linked, setLinked] = useState<Record<string, number[]>>();
   const [engine, setEngine] = useState<ReaderAdapter>();
@@ -171,41 +171,6 @@ export function PDFReadingView({
   useEffect(() => {
     if (pane.current) return installTranslationSelectionHighlight(pane.current);
   }, [mode, doc.id]);
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let retryDelay = 500;
-    const subscribe = async () => {
-      try {
-        await api.translationStream(doc.id, controller.signal, (event) => {
-          if (controller.signal.aborted) return;
-          retryDelay = 500;
-          setError("");
-          if (event.event === "snapshot") setTranslations(event.data);
-          else
-            setTranslations((current) => {
-              const index = current.findIndex(
-                (b) => b.blockId === event.data.blockId,
-              );
-              if (index < 0) return [...current, event.data];
-              return current.map((b, i) => (i === index ? event.data : b));
-            });
-        });
-      } catch (e) {
-        if (!controller.signal.aborted) setError((e as Error).message);
-      } finally {
-        if (!controller.signal.aborted) {
-          timer = setTimeout(() => void subscribe(), retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 5000);
-        }
-      }
-    };
-    void subscribe();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [doc.id]);
   useEffect(() => {
     if (theme.linkTranslationAnnotations === false) {
       setLinked(undefined);

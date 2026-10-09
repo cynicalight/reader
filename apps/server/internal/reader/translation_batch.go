@@ -29,13 +29,8 @@ type translationBatch struct {
 
 // Count Unicode characters and include the entire paragraph crossing the target.
 // Batch boundaries are stable across retries; only their pending members change.
-func translationBatches(m layoutManifest, items []TranslationBlock, target int) []translationBatch {
-	paragraphs := []translationParagraph{}
-	for _, b := range m.Blocks {
-		if source := translationSource(b); source != "" {
-			paragraphs = append(paragraphs, translationParagraph{b.ID, translationHash(source), source})
-		}
-	}
+func translationBatches(m translationInput, items []TranslationBlock, target int) []translationBatch {
+	paragraphs := m.translationParagraphs()
 	pending := map[string]bool{}
 	for _, t := range items {
 		pending[t.BlockID] = t.Status == "pending" || t.Status == "running"
@@ -60,20 +55,11 @@ func translationBatches(m layoutManifest, items []TranslationBlock, target int) 
 	}
 	return batches
 }
-func translationPrompt(doc Document, m layoutManifest, batch translationBatch) string {
-	// Keep verbatim title-page evidence when PDF author metadata is missing.
-	frontMatter := []string{}
-	for _, b := range m.Blocks {
-		if b.Page != 1 {
-			break
-		}
-		text := strings.TrimSpace(b.Text)
-		if b.Label == "paragraph_title" || strings.EqualFold(text, "abstract") || text == "摘要" {
-			break
-		}
-		if text != "" && !isImageAsset(b) && !isPDFPageDecoration(b) {
-			frontMatter = append(frontMatter, text)
-		}
+func translationPrompt(doc Document, m translationInput, batch translationBatch) string {
+	frontMatter := m.translationFrontMatter()
+	sourceRule := `原文由 PDF 文字提取得到，可能有少量提取错误：单词内部多出空格（如 "A GENT" 应为 "AGENT"）、行末连字符拆开的单词、错位的数学斜体字母或上下标。sentences.source 默认逐字复制原文；只在能确定是这类提取错误时做最小修正，例如合并被拆开的单词。不确定时保持原样，不要润色、改写或调整语序，公式和符号保持原样。译文按修正后的正确含义翻译。`
+	if doc.Type == "epub" {
+		sourceRule = "原文直接来自 EPUB 正文。sentences.source 必须逐字保留，禁止修正、改写、增删或重排原文。"
 	}
 	data, _ := json.Marshal(struct {
 		Title       string           `json:"title"`
@@ -85,7 +71,7 @@ func translationPrompt(doc Document, m layoutManifest, batch translationBatch) s
 只输出 JSONL：每个待译段落恰好占一行，按 paragraphs 顺序输出，每完成一段立即输出换行，不等待其他段落。禁止 Markdown 围栏、说明或外层数组。
 每行格式：{"blockId":"原样复制该段 blockId","sourceHash":"原样复制该段 sourceHash","sentences":[{"source":"该句原文","target":"该句中文译文"}]}。
 blockId 和 sourceHash 必须与同一个输入段落严格对应。不能合并、拆分或遗漏段落。sentences 按顺序完整覆盖该段 source，不能改写措辞、增补或遗漏原文；一句原文可以对应多句中文。保留术语、数值、公式和代码。图题仅翻译图题，不补写图表或图片内部内容。
-原文由 PDF 文字提取得到，可能有少量提取错误：单词内部多出空格（如 "A GENT" 应为 "AGENT"）、行末连字符拆开的单词、错位的数学斜体字母或上下标。sentences.source 默认逐字复制原文；只在能确定是这类提取错误时做最小修正，例如合并被拆开的单词。不确定时保持原样，不要润色、改写或调整语序，公式和符号保持原样。译文按修正后的正确含义翻译。
+` + sourceRule + `
 译文 target 中的行内数学（变量、下标、上标、集合、运算符等）一律写成 KaTeX 可解析的 LaTeX，用 $...$ 包裹，例如 $T_i$、$MVSG(s, \ll)$、$O(n\log n)$。原文中被提取打散的下标（如 "𝑇 … 𝑖"）在能确定时还原为 $T_i$；不确定时照抄原文符号，不要猜。不要使用 Unicode 数学斜体或上下标字符代替 LaTeX。普通文本中的美元符号写成 \$。不要输出 $$ 独立公式：独立公式块已由公式图片单独转换。字符串在 JSON 中，反斜杠必须转义：\ll 写作 \\ll，\$ 写作 \\$。sentences.source 仍按原文复制，不写成 LaTeX。
 字符串内部的换行必须写为 JSON 转义，物理换行仅用于分隔完整 JSON 对象。标题、作者、frontMatter、contextBefore、contextAfter 仅为参考上下文，不为它们额外输出行。只翻译 paragraphs 列出的段落。
 输入资料：
@@ -93,11 +79,12 @@ blockId 和 sourceHash 必须与同一个输入段落严格对应。不能合并
 }
 
 type translationJSONL struct {
-	buffer    string
-	expected  map[string]translationParagraph
-	completed map[string]bool
-	invalid   map[string]string
-	emit      func(TranslationBlock) error
+	strictSource bool
+	buffer       string
+	expected     map[string]translationParagraph
+	completed    map[string]bool
+	invalid      map[string]string
+	emit         func(TranslationBlock) error
 }
 
 func newTranslationJSONL(batch translationBatch, emit func(TranslationBlock) error) *translationJSONL {
@@ -144,7 +131,7 @@ func (d *translationJSONL) line(line string) error {
 		d.invalid[row.BlockID] = "译文原文版本不匹配"
 		return nil
 	}
-	sentences, err := parseTranslation(line, source.Source)
+	sentences, err := parseTranslationSource(line, source.Source, !d.strictSource)
 	if err != nil {
 		d.invalid[row.BlockID] = err.Error()
 		return nil
@@ -157,7 +144,7 @@ func (d *translationJSONL) line(line string) error {
 	delete(d.invalid, row.BlockID)
 	return nil
 }
-func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManifest, batch translationBatch, service *GenerationService, progress func()) error {
+func (s *Server) translateBatch(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) error {
 	decoder := newTranslationJSONL(batch, func(t TranslationBlock) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -168,6 +155,7 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 		progress()
 		return nil
 	})
+	decoder.strictSource = doc.Type == "epub"
 	service.usageSink = s.processingUsageSink(doc.ID, "translating", batch.Paragraphs[0].BlockID+"…"+batch.Paragraphs[len(batch.Paragraphs)-1].BlockID)
 	_, callErr := service.Generate(ctx, AIInput{Prompt: translationPrompt(doc, m, batch)}, false, func(event ProviderEvent) error {
 		if event.Text == "" {
@@ -203,7 +191,7 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 	}
 	return ctx.Err()
 }
-func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layoutManifest) error {
+func (s *Server) settleTranslations(ctx context.Context, p *Processing, m translationInput) error {
 	doc, err := s.Store.Document(p.DocumentID)
 	if err != nil {
 		return err
@@ -338,13 +326,11 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 }
 
 // Text batches never reset or count the concurrently converted formula records.
-func (s *Server) textTranslations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+func (s *Server) textTranslations(documentID string, m translationInput) ([]TranslationBlock, error) {
 	items, err := s.translations(documentID, m)
 	textIDs := map[string]bool{}
-	for _, b := range m.Blocks {
-		if translationSource(b) != "" {
-			textIDs[b.ID] = true
-		}
+	for _, p := range m.translationParagraphs() {
+		textIDs[p.BlockID] = true
 	}
 	out := []TranslationBlock{}
 	for _, t := range items {
@@ -355,7 +341,7 @@ func (s *Server) textTranslations(documentID string, m layoutManifest) ([]Transl
 	return out, err
 }
 
-func (s *Server) refreshTranslationCounts(p *Processing, m layoutManifest) error {
+func (s *Server) refreshTranslationCounts(p *Processing, m translationInput) error {
 	items, err := s.translations(p.DocumentID, m)
 	if err != nil {
 		return err

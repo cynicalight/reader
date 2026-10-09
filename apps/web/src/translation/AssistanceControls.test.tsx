@@ -14,6 +14,7 @@ vi.mock("@reader/api", () => ({
     assistance: vi.fn(async () => undefined),
     setAssistance: vi.fn(),
     translateRange: vi.fn(),
+    translateEPUBChapter: vi.fn(),
     aiConfig: vi.fn(async () => ({ primary: "codex" })),
   },
 }));
@@ -160,4 +161,35 @@ it("a failed paper job offers a retry", async () => {
     host.querySelector<HTMLButtonElement>("button")!.click(),
   );
   expect(api.setAssistance).toHaveBeenCalledWith("book", "resume");
+});
+
+it("EPUB legacy jobs request a chapter without restarting old whole-book work", async () => {
+  const location = { type: "epub" as const, href: "a.xhtml#two" };
+  const job: Processing = {
+    ...paused,
+    startedAt: "2026-10-08T00:00:00Z",
+    translating: { status: "complete", detail: "请按章节翻译" },
+  };
+  vi.mocked(api.translateEPUBChapter).mockResolvedValue({
+    queued: 2,
+    characters: 80,
+    hasMore: false,
+  });
+  await act(async () =>
+    root.render(
+      <AssistanceControls
+        documentId="book"
+        processing={job}
+        library="books"
+        epubChapter={() => location}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("翻译本章");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(api.translateEPUBChapter).toHaveBeenCalledWith("book", location);
+  expect(api.setAssistance).not.toHaveBeenCalled();
+  expect(api.translateRange).not.toHaveBeenCalled();
 });

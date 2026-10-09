@@ -127,6 +127,20 @@ export const api = {
     }
     return consumeTranslationStream(response.body, signal, onEvent);
   },
+  epubChapters: (id: string, signal?: AbortSignal) =>
+    request<import("@reader/core").EPUBChapters>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapters`,
+      { signal },
+    ),
+  epubChapter: (id: string, href: string, signal?: AbortSignal) =>
+    request<{ html: string }>(
+      `/api/documents/${encodeURIComponent(id)}/epub-chapter?href=${encodeURIComponent(href)}`,
+      { signal },
+    ),
+  epubBlocks: (id: string) =>
+    request<import("@reader/core").EPUBReadingBlock[]>(
+      `/api/documents/${id}/epub-blocks`,
+    ),
   translations: (id: string) =>
     request<import("@reader/core").TranslationBlock[]>(
       `/api/documents/${id}/translations`,
@@ -148,6 +162,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ fromPage, toPage }),
     }),
+  translateEPUBChapter: (
+    id: string,
+    location: import("@reader/core").EPUBLocation,
+  ) =>
+    request<{ queued: number; characters: number; hasMore: boolean }>(
+      `/api/documents/${id}/translations/chapter`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          location: {
+            type: "epub",
+            href: location.href,
+            blockId: location.blockId,
+            locator: location.locator,
+            start: location.start,
+            end: location.end,
+          },
+        }),
+      },
+    ),
   assistance: (id: string) =>
     request<Processing>(`/api/documents/${id}/assistance`),
   setAssistance: (id: string, action: "start" | "pause" | "resume") =>

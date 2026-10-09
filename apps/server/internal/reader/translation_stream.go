@@ -21,12 +21,15 @@ func (s *Server) publishTranslation(documentID string, block TranslationBlock) {
 }
 func (s *Server) streamTranslations(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
-	if err != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if err != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
 	s.translationMu.Lock()
-	m, _ := s.readLayout(d.ID)
+	m, sourceErr := s.readTranslationSource(d.ID)
+	if sourceErr != nil {
+		m = layoutManifest{}
+	}
 	items, err := s.translations(d.ID, m)
 	if err != nil {
 		s.translationMu.Unlock()
@@ -81,7 +84,7 @@ func (s *Server) streamTranslations(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-heartbeat.C:
 			if _, err = s.Store.Document(d.ID); err != nil {
-				_ = send("error", map[string]string{"error": "PDF 不存在"})
+				_ = send("error", map[string]string{"error": "文档不存在"})
 				return
 			}
 			_ = controller.SetWriteDeadline(time.Now().Add(10 * time.Second))

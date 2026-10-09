@@ -54,8 +54,8 @@ func newTranslation(b PDFBlock) TranslationBlock {
 	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
 
-// Book paragraphs stay idle until a reader requests them; papers translate in full.
-func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+// Book paragraphs stay idle until requested; PDF papers translate in full.
+func (s *Server) translations(documentID string, m translationInput) ([]TranslationBlock, error) {
 	d, err := s.Store.Document(documentID)
 	if err != nil {
 		return nil, err
@@ -84,14 +84,10 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 		return nil, err
 	}
 	result := []TranslationBlock{}
-	for _, b := range m.Blocks {
-		if !needsTranslation(b) {
-			continue
-		}
-		t := newTranslation(b)
+	for _, t := range m.translationItems() {
 		if value, ok := saved[t.BlockID+":"+t.SourceHash]; ok {
 			t = value
-		} else if d.Library == "books" {
+		} else if d.Library == "books" || d.Type == "epub" {
 			t.Status = "idle"
 		}
 		result = append(result, t)
@@ -100,7 +96,7 @@ func (s *Server) translations(documentID string, m layoutManifest) ([]Translatio
 }
 
 func (s *Server) retryFailedTranslations(documentID string) error {
-	m, err := s.readLayout(documentID)
+	m, err := s.readTranslationSource(documentID)
 	if err != nil {
 		return nil
 	}
@@ -135,11 +131,11 @@ func (s *Server) saveTranslation(documentID string, t TranslationBlock) error {
 }
 func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
-	if err != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if err != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
-	m, err := s.readLayout(d.ID)
+	m, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		respond(w, 200, []TranslationBlock{})
 		return
@@ -156,8 +152,8 @@ func (s *Server) documentTranslations(w http.ResponseWriter, r *http.Request) {
 // completed responses independently, so closing a reader never loses progress.
 func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.Document(r.PathValue("id"))
-	if err != nil || d.Type != "pdf" {
-		fail(w, 404, "PDF 不存在")
+	if err != nil || (d.Type != "pdf" && d.Type != "epub") {
+		fail(w, 404, "文档不存在")
 		return
 	}
 	var req struct {
@@ -166,11 +162,11 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if req.BlockID == "" && d.Library == "books" {
+	if req.BlockID == "" && (d.Library == "books" || d.Type == "epub") {
 		fail(w, 400, "图书请按章节翻译")
 		return
 	}
-	m, err := s.readLayout(d.ID)
+	m, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		fail(w, 409, "正文仍在解析中")
 		return
@@ -223,6 +219,10 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseTranslation(raw, source string) ([]TranslationSentence, error) {
+	return parseTranslationSource(raw, source, true)
+}
+
+func parseTranslationSource(raw, source string, repairPDF bool) ([]TranslationSentence, error) {
 	raw = strings.TrimSpace(raw)
 	if strings.HasPrefix(raw, "```") {
 		if i := strings.IndexByte(raw, '\n'); i >= 0 {
@@ -237,7 +237,8 @@ func parseTranslation(raw, source string) ([]TranslationSentence, error) {
 		return nil, errors.New("译文格式不完整，请重试此段")
 	}
 	var joined strings.Builder
-	for _, sentence := range out.Sentences {
+	for i, sentence := range out.Sentences {
+		out.Sentences[i].Anchor = ""
 		if strings.TrimSpace(sentence.Source) == "" || strings.TrimSpace(sentence.Target) == "" {
 			return nil, errors.New("译文存在空句，请重试此段")
 		}
@@ -248,7 +249,7 @@ func parseTranslation(raw, source string) ([]TranslationSentence, error) {
 	if normalize(joined.String()) == normalize(source) {
 		return out.Sentences, nil
 	}
-	if !similarText(joined.String(), source) {
+	if !repairPDF || !similarText(joined.String(), source) {
 		return nil, errors.New("原文句子未完整对应，请重试此段")
 	}
 	for i, anchor := range alignAnchors(source, out.Sentences) {

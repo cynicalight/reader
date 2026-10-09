@@ -252,7 +252,7 @@ func TestBookTranslatesOnlyRequestedChapterWithinLimit(t *testing.T) {
 	if p.Status != "queued" || p.Phase != "translating" {
 		t.Fatalf("range request did not queue translation: %+v", p)
 	}
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	sort.Strings(translated)

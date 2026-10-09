@@ -1,5 +1,17 @@
+import {
+  installEPUBPaging,
+  installEPUBScroll,
+  type EPUBScrollState,
+} from "./epub-scroll";
+import { EPUBTransition } from "./epub-transition";
+import { toast } from "sonner";
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
-import { selectionLocator } from "./selection-locator";
+import {
+  selectionLocator,
+  sliceEPUBRange,
+  resolveEPUBRange,
+  searchEPUBLocators,
+} from "./selection-locator";
 import { installScrollbars } from "../scrollbars";
 import {
   EpubNavigator,
@@ -23,6 +35,7 @@ import type {
   Document,
   DocumentLocation,
   EPUBLocation,
+  EPUBReadingBlock,
   ReaderAdapter,
   ReaderEvents,
   ReaderSelection,
@@ -39,10 +52,71 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private selection: ReaderSelection | null = null;
   private doc?: Document;
   private disposed = false;
+  private abort = new AbortController();
+  private resourceDocuments = new Map<string, Promise<globalThis.Document>>();
+  private highlightRevision = 0;
+  private focusRevision = 0;
+  private unresolvedAnnotations = "";
+  private decorationAnnotations = new Map<string, string>();
+  private annotationId(id: string) {
+    return this.decorationAnnotations.get(id) ?? id;
+  }
+  private scrollState: EPUBScrollState = {
+    busy: false,
+    locked: false,
+    lastInput: 0,
+    direction: 0,
+  };
+  private paginated = false;
+  private loaded = false;
+  private transition: EPUBTransition;
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
   private annotations: Annotation[] = [];
+  private readingBlocks: EPUBReadingBlock[] = [];
+  private readingFrame = 0;
+  private lastReadingBlock = "";
+  setEPUBBlocks(blocks: EPUBReadingBlock[]) {
+    this.readingBlocks = blocks;
+    this.reportReadingBlock();
+  }
+  private reportReadingBlock = () => {
+    cancelAnimationFrame(this.readingFrame);
+    this.readingFrame = requestAnimationFrame(() => {
+      if (this.disposed) return;
+      const wnd = this.navigator?._cframes[0]?.iframe.contentWindow;
+      if (!wnd) return;
+      const candidates = this.readingBlocks.filter(
+        (b) => b.location.href === this.location.href,
+      );
+      let chosen: string | undefined,
+        distance = Infinity;
+      for (const block of candidates) {
+        const locator = this.toLocator(block.location);
+        const range = resolveEPUBRange(wnd.document, locator);
+        if (!range) continue;
+        for (const rect of Array.from(range.getClientRects())) {
+          if (
+            rect.right <= 0 ||
+            rect.left >= wnd.innerWidth ||
+            rect.bottom <= 0 ||
+            rect.top >= wnd.innerHeight
+          )
+            continue;
+          const delta = Math.abs(rect.top - wnd.innerHeight * 0.25);
+          if (delta < distance) {
+            chosen = block.id;
+            distance = delta;
+          }
+        }
+      }
+      if (chosen && chosen !== this.lastReadingBlock) {
+        this.lastReadingBlock = chosen;
+        this.events.epubReadingAnchor?.(chosen);
+      }
+    });
+  };
   private annotationAnchor?: SelectionAnchor;
   private hoverAllowed = false;
   private hoveredAnnotation?: string;
@@ -57,11 +131,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.disposed ||
         !this.annotationAnchor ||
         this.hasTextSelection() ||
-        !this.annotations.some((a) => a.id === decoration.id)
+        !this.annotations.some((a) => a.id === this.annotationId(decoration.id))
       )
         return false;
       this.events.annotation?.({
-        ids: [decoration.id],
+        ids: [this.annotationId(decoration.id)],
         anchor: this.annotationAnchor,
       });
       this.annotationAnchor = undefined;
@@ -72,7 +146,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.disposed ||
         !this.hoverAllowed ||
         this.hasTextSelection() ||
-        !this.annotations.some((a) => a.id === decoration.id)
+        !this.annotations.some((a) => a.id === this.annotationId(decoration.id))
       )
         return;
       this.hoveredAnnotation = decoration.id;
@@ -111,6 +185,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     document.addEventListener("keydown", this.onKeyDown);
     this.resize = new ResizeObserver(this.clearSelection);
     this.resize.observe(container);
+    this.transition = new EPUBTransition(container);
+  }
+  /** Read before open so the first layout already uses the saved flow. */
+  preferTheme(theme: ReaderTheme) {
+    this.paginated = theme.epubFlow === "paginated";
   }
   private clearState = () => {
     this.selectedWindow = undefined;
@@ -136,6 +215,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private bindFrame = (wnd: Window) => {
     this.frameCleanups.get(wnd)?.();
     const doc = wnd.document;
+    const interact = () => this.events.epubInteraction?.();
+    this.reportReadingBlock();
     let pressed: { x: number; y: number } | undefined;
     const annotationPress = (event: PointerEvent) => {
       this.annotationAnchor = undefined;
@@ -185,6 +266,29 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.clearAnnotationHover();
     };
     const removeScrollbars = installScrollbars(doc);
+    const current = () =>
+      !this.disposed &&
+      !!this.navigator?._cframes.some((f) => f?.iframe.contentWindow === wnd);
+    const turn = (direction: number) =>
+      direction > 0 ? this.next() : this.previous();
+    const failed = (reason: unknown) =>
+      toast.error(
+        reason instanceof Error ? reason.message : "无法读取相邻章节",
+      );
+    const removeContinuousScroll = installEPUBScroll(
+      wnd,
+      this.scrollState,
+      () => current() && !this.paginated,
+      turn,
+      failed,
+    );
+    const removePaging = installEPUBPaging(
+      wnd,
+      this.scrollState,
+      () => current() && this.paginated,
+      turn,
+      failed,
+    );
     const changed = () => {
       const selected = wnd.getSelection();
       if (
@@ -213,6 +317,33 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.pointers.delete(wnd);
       this.onKeyDown(event);
     };
+    const keyReleased = (event: KeyboardEvent) => {
+      if (event.key === "Escape" || this.disposed) return;
+      const selection = wnd.getSelection();
+      if (
+        !selection?.rangeCount ||
+        selection.isCollapsed ||
+        !selection.toString().trim()
+      )
+        return;
+      const manager = this.navigator?._cframes.find(
+        (f) => f?.iframe.contentWindow === wnd,
+      );
+      const rect = selection.getRangeAt(0).getClientRects()[0];
+      if (!manager || !rect) return;
+      this.navigator?.eventListener(
+        "text_selected",
+        {
+          text: selection.toString(),
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          targetFrameSrc: manager.source,
+        },
+        manager,
+      );
+    };
     const unload = () => {
       this.clearSelection();
       if (this.selectedWindow === wnd) this.clearState();
@@ -221,6 +352,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     };
     const cleanup = () => {
       removeScrollbars();
+      removeContinuousScroll();
+      removePaging();
       doc.removeEventListener("pointerdown", annotationPress, true);
       doc.removeEventListener("pointerup", annotationRelease, true);
       doc.removeEventListener("pointermove", annotationMove, true);
@@ -229,7 +362,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       doc.removeEventListener("pointerdown", start);
       doc.removeEventListener("mouseup", released);
       doc.removeEventListener("keydown", key);
+      doc.removeEventListener("keyup", keyReleased);
       doc.removeEventListener("scroll", this.clearSelection, true);
+      doc.removeEventListener("scroll", this.reportReadingBlock, true);
+      for (const event of ["pointerdown", "wheel", "keydown"])
+        doc.removeEventListener(event, interact, true);
       wnd.removeEventListener("pagehide", unload);
     };
     doc.addEventListener("selectionchange", changed);
@@ -240,7 +377,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     doc.addEventListener("pointerdown", start);
     doc.addEventListener("mouseup", released);
     doc.addEventListener("keydown", key);
+    doc.addEventListener("keyup", keyReleased);
     doc.addEventListener("scroll", this.clearSelection, true);
+    doc.addEventListener("scroll", this.reportReadingBlock, true);
+    for (const event of ["pointerdown", "wheel", "keydown"])
+      doc.addEventListener(event, interact, { capture: true, passive: true });
     wnd.addEventListener("pagehide", unload);
     this.frameCleanups.set(wnd, cleanup);
   };
@@ -257,9 +398,19 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     if (location.locator) {
       try {
         const locator = Locator.deserialize(JSON.parse(location.locator));
-        if (locator) return locator;
-      } catch {
-        /* recover from href */
+        if (locator) {
+          if (locator.href.split("#")[0] !== location.href.split("#")[0])
+            throw new Error("批注章节与原文位置不一致");
+          if (!locator.text?.highlight && location.quote)
+            return Locator.deserialize({
+              ...locator.serialize(),
+              text: { ...locator.text?.serialize(), highlight: location.quote },
+            })!;
+          return locator;
+        }
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        /* Legacy malformed locators can still recover from href and quote. */
       }
     }
     return Locator.deserialize({
@@ -274,13 +425,75 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       text: { highlight: location.quote },
     })!;
   }
+  private resourceDocument(href: string): Promise<globalThis.Document> {
+    const resource = href.split("#")[0]!;
+    if (!this.doc || !this.publication?.readingOrder.findWithHref(resource))
+      return Promise.reject(new Error("该章节不属于当前书籍"));
+    let pending = this.resourceDocuments.get(resource);
+    if (!pending) {
+      pending = fetch(publicationURL(this.doc.id, resource), {
+        signal: this.abort.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("无法读取 EPUB 章节");
+          return new DOMParser().parseFromString(
+            await response.text(),
+            "text/html",
+          );
+        })
+        .catch((error) => {
+          this.resourceDocuments.delete(resource);
+          throw error;
+        });
+      this.resourceDocuments.set(resource, pending);
+    }
+    return pending;
+  }
+  private async exactLocator(location: EPUBLocation): Promise<Locator> {
+    const locator = this.toLocator(location);
+    if (!locator.text?.highlight) return locator;
+    const doc = await this.resourceDocument(locator.href);
+    let range = resolveEPUBRange(doc, locator);
+    const slice = locator.locations.otherLocations?.get("sourceSlice") as
+      { start: number; end: number } | undefined;
+    if (range && slice) range = sliceEPUBRange(range, slice.start, slice.end);
+    const exact = range && selectionLocator(locator, range);
+    exact?.locations.otherLocations?.delete("sourceSlice");
+    if (!exact)
+      throw new Error("未能唯一定位这段原文，笔记已保留。请使用书内搜索。");
+    return exact;
+  }
+  private navigate(locator: Locator): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const finish = (error?: Error) => {
+        clearTimeout(timeout);
+        this.abort.signal.removeEventListener("abort", cancelled);
+        error ? reject(error) : resolve();
+      };
+      const cancelled = () =>
+        finish(new DOMException("阅读器已关闭", "AbortError"));
+      const timeout = setTimeout(
+        () => finish(new Error("章节跳转超时，请重试")),
+        10000,
+      );
+      this.abort.signal.addEventListener("abort", cancelled, { once: true });
+      if (this.disposed) return cancelled();
+      try {
+        this.navigator!.go(locator, false, (ok) =>
+          finish(ok ? undefined : new Error("无法跳转到该位置")),
+        );
+      } catch (error) {
+        finish(error as Error);
+      }
+    });
+  }
   async open(doc: Document) {
     this.doc = doc;
     const url = new URL(
       publicationURL(doc.id, "manifest.json"),
       window.location.origin,
     ).href;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: this.abort.signal });
     if (!response.ok) throw new Error("无法加载 EPUB 目录");
     const json = await response.json();
     json.links = [
@@ -299,11 +512,13 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     });
     const positions = await this.publication.positionsFromManifest();
     if (this.disposed) return;
+    if (!positions.length) throw new Error("EPUB 阅读位置为空，无法打开正文");
     const listeners: EpubNavigatorListeners = {
       frameLoaded: this.bindFrame,
       positionChanged: (locator) => {
         this.clearSelection();
         this.location = this.fromLocator(locator);
+        this.reportReadingBlock();
         const index = this.publication!.readingOrder.items.findIndex(
           (l) => l.href === locator.href,
         );
@@ -314,18 +529,24 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.events.location(this.location, percent);
       },
       timelineItemChanged: () => {},
-      tap: () => false,
-      click: () => false,
+      // Consume edge taps: a click clears a selection or opens a note, and
+      // never turns a page by accident. Pages turn by key, wheel or swipe.
+      tap: () => true,
+      click: () => true,
       zoom: () => {},
       miscPointer: () => {},
       scroll: this.clearSelection,
       customEvent: () => {},
       handleLocator: (locator) => /^[a-z]+:/i.test(locator.href),
       textSelected: (selection) => {
+        if (this.disposed) return;
         if (!selection.text.trim()) return this.clearState();
-        const frame = Array.from(
-          this.container.querySelectorAll("iframe"),
-        ).find((frame) => frame.src === selection.targetFrameSrc);
+        // Readium navigates via contentWindow.location.replace(), so iframe.src
+        // does not identify the loaded chapter. Match the active frame manager.
+        const frame = this.navigator?._cframes.find(
+          (manager) => manager?.source === selection.targetFrameSrc,
+        )?.iframe;
+        if (!frame) return; // Ignore delayed selections from previous chapters.
         const selected = frame?.contentWindow?.getSelection();
         if (
           !selected ||
@@ -360,14 +581,31 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       contextMenu: () => {},
       peripheral: () => {},
     };
+    let initial =
+      doc.progress?.type === "epub" ? this.toLocator(doc.progress) : undefined;
+    if (
+      doc.progress?.type === "epub" &&
+      initial?.locations.otherLocations?.has("sourceSlice")
+    ) {
+      try {
+        initial = await this.exactLocator(doc.progress);
+      } catch {
+        /* Reopen the original paragraph if only the saved sentence slice is stale. */
+      }
+    }
     this.navigator = new EpubNavigator(
       this.container,
       this.publication,
       listeners,
       positions,
-      doc.progress?.type === "epub" ? this.toLocator(doc.progress) : undefined,
+      initial,
       {
-        preferences: { fontSize: 1.15, lineHeight: 1.8, columnCount: 1 },
+        preferences: {
+          fontSize: 1.15,
+          lineHeight: 1.8,
+          columnCount: 1,
+          scroll: !this.paginated,
+        },
         defaults: {},
       },
     );
@@ -375,7 +613,37 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       "annotations",
       this.annotationObserver,
     );
-    await this.navigator.load();
+    this.fadeChapterChanges();
+    const loaded = await this.navigator.load();
+    if (!this.disposed && !loaded)
+      throw new Error("EPUB 正文加载失败，请重新打开这本书");
+    this.loaded = true;
+  }
+  // Every chapter change, including Readium's own swipe and boundary
+  // handling, replaces the visible frame through the frame pool.
+  private fadeChapterChanges() {
+    const pool = (
+      this.navigator as unknown as {
+        framePool?: { update?: (...args: unknown[]) => Promise<void> };
+      }
+    ).framePool;
+    if (typeof pool?.update !== "function") return;
+    const update = pool.update.bind(pool);
+    pool.update = (...args: unknown[]) => {
+      const target = (args[1] as Locator | undefined)?.href.split("#")[0];
+      const source = this.location.href.split("#")[0];
+      if (!this.loaded || !target || !source || target === source)
+        return update(...args);
+      const order = this.publication!.readingOrder.items.map(
+        (l) => l.href.split("#")[0],
+      );
+      const direction = Math.sign(
+        order.indexOf(target) - order.indexOf(source),
+      );
+      return this.transition.run(direction, this.paginated ? "x" : "y", () =>
+        update(...args),
+      );
+    };
   }
   async getTOC(): Promise<TOCItem[]> {
     const map = (items: Link[], prefix = ""): TOCItem[] =>
@@ -397,68 +665,164 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   async goTo(location: DocumentLocation) {
     if (location.type !== "epub" || !this.navigator) return;
     this.clearSelection();
-    await new Promise<void>((resolve, reject) =>
-      this.navigator!.go(this.toLocator(location), false, (ok) =>
-        ok ? resolve() : reject(new Error("无法跳转到该位置")),
-      ),
-    );
+    const locator = await this.exactLocator(location);
+    if (this.disposed) return;
+    await this.navigate(locator);
+  }
+  private step(direction: 1 | -1) {
+    const move = () =>
+      new Promise<void>((resolve) =>
+        direction > 0
+          ? this.navigator?.goForward(false, () => resolve())
+          : this.navigator?.goBackward(false, () => resolve()),
+      );
+    // Scrolling moves continuously; only page turns need the cross-fade.
+    return this.paginated ? this.transition.run(direction, "x", move) : move();
   }
   async next() {
     this.clearSelection();
-    await new Promise<void>((resolve) =>
-      this.navigator?.goForward(false, () => resolve()),
-    );
+    await this.step(1);
   }
   async previous() {
     this.clearSelection();
-    await new Promise<void>((resolve) =>
-      this.navigator?.goBackward(false, () => resolve()),
-    );
+    await this.step(-1);
   }
   async search(query: string): Promise<SearchResult[]> {
-    return this.doc ? api.search(this.doc.id, query) : [];
+    if (!this.doc || !query.trim()) return [];
+    const chapters = await api.search(this.doc.id, query);
+    const results: SearchResult[] = [];
+    for (const chapter of chapters) {
+      if (this.disposed || results.length >= 100) break;
+      if (chapter.location.type !== "epub") continue;
+      const doc = await this.resourceDocument(chapter.location.href);
+      const matches = searchEPUBLocators(
+        doc,
+        this.toLocator(chapter.location),
+        query,
+        100 - results.length,
+      );
+      for (const [index, locator] of matches.entries()) {
+        results.push({
+          id: `${chapter.id}:${index}`,
+          excerpt: `${locator.text?.before ?? ""}${locator.text?.highlight ?? ""}${locator.text?.after ?? ""}`,
+          location: this.fromLocator(locator),
+        });
+      }
+    }
+    return results;
   }
   getSelection() {
     return this.selection;
   }
+  async focusEPUBLocations(locations: EPUBLocation[]) {
+    const revision = ++this.focusRevision;
+    const decorations = await Promise.all(
+      locations.map(async (location, index): Promise<Decoration> => ({
+        id: `translation-focus-${index}`,
+        locator: await this.exactLocator(location),
+        style: {
+          type: "template",
+          layout: DecorationLayout.Boxes,
+          width: DecorationWidth.Wrap,
+          element: () =>
+            '<div style="background:rgba(59,130,246,0.18);border-radius:2px;pointer-events:none;"></div>',
+        },
+      })),
+    );
+    if (!this.disposed && revision === this.focusRevision)
+      this.navigator?.applyDecorations(decorations, "translation-focus");
+  }
   async highlight(annotations: Annotation[]) {
+    const revision = ++this.highlightRevision;
     this.annotations = annotations;
     this.clearAnnotationHover();
-    const decorations: Decoration[] = annotations
-      .filter(
-        (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
-      )
-      .map((a) => ({
-        id: a.id,
-        locator: this.toLocator(a.location as EPUBLocation),
-        style: {
-          type: a.kind === "underline" ? "underline" : "highlight",
-          tint: a.color || "#facc15",
-        },
-      }));
-    this.navigator?.applyDecorations(decorations, "annotations");
+    const unresolved: string[] = [];
+    const decorationAnnotations = new Map<string, string>();
+    const decorations = await Promise.all(
+      annotations
+        .filter(
+          (a) => a.location.type === "epub" && a.kind !== "bookmark" && a.quote,
+        )
+        .flatMap((a) => {
+          const locations =
+            a.location.translation?.ranges?.flatMap((r) =>
+              r.location ? [r.location] : [],
+            ) ?? [];
+          return locations.length
+            ? locations.map((location, index) => ({
+                ...a,
+                location,
+                decorationId: `${a.id}:${index}`,
+              }))
+            : [{ ...a, decorationId: a.id }];
+        })
+        .map(async (a): Promise<Decoration | undefined> => {
+          try {
+            const location = a.location as EPUBLocation;
+            const locator = await this.exactLocator({
+              ...location,
+              quote: location.quote || a.quote,
+            });
+            decorationAnnotations.set(a.decorationId, a.id);
+            return {
+              id: a.decorationId,
+              locator,
+              style: {
+                type: a.kind === "underline" ? "underline" : "highlight",
+                tint: a.color || "#facc15",
+              },
+            };
+          } catch {
+            unresolved.push(a.id);
+            return undefined;
+          }
+        }),
+    );
+    if (this.disposed || revision !== this.highlightRevision) return;
+    this.decorationAnnotations = decorationAnnotations;
+    this.navigator?.applyDecorations(
+      decorations.filter((d): d is Decoration => !!d),
+      "annotations",
+    );
+    const key = unresolved.sort().join(",");
+    if (key !== this.unresolvedAnnotations) {
+      this.unresolvedAnnotations = key;
+      if (unresolved.length)
+        throw new Error(
+          `${unresolved.length} 条批注暂时无法定位，已保留在笔记中。`,
+        );
+    }
   }
   async setTheme(theme: ReaderTheme) {
     this.clearSelection();
+    const paginated = theme.epubFlow === "paginated";
+    const flowChanged = paginated !== this.paginated;
+    this.paginated = paginated;
     const palette = {
       light: ["#ffffff", "#27272a"],
       sepia: ["#f7f6f2", "#1f1e1d"],
       dark: ["#202020", "#dededb"],
     }[theme.mode];
-    await this.navigator?.submitPreferences(
-      new EpubPreferences({
-        fontSize: theme.fontSize,
-        fontFamily: theme.fontFamily,
-        lineHeight: theme.lineHeight,
-        pageGutter: theme.margin,
-        scrollPaddingLeft: theme.margin,
-        scrollPaddingRight: theme.margin,
-        scroll: theme.scroll,
-        backgroundColor: palette[0],
-        textColor: palette[1],
-        columnCount: 1,
-      }),
-    );
+    const submit = async () => {
+      await this.navigator?.submitPreferences(
+        new EpubPreferences({
+          fontSize: theme.fontSize,
+          fontFamily: theme.fontFamily,
+          lineHeight: theme.lineHeight,
+          pageGutter: theme.margin,
+          scrollPaddingLeft: theme.margin,
+          scrollPaddingRight: theme.margin,
+          scroll: !paginated,
+          backgroundColor: palette[0],
+          textColor: palette[1],
+          columnCount: 1,
+        }),
+      );
+    };
+    // Switching between pages and scrolling relayouts the whole chapter.
+    await (flowChanged && this.loaded
+      ? this.transition.run(0, "x", submit)
+      : submit());
   }
   async getContext() {
     if (!this.doc || !this.location.href) return "";
@@ -476,6 +840,10 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   async destroy() {
     if (this.disposed) return;
     this.disposed = true;
+    this.abort.abort();
+    this.resourceDocuments.clear();
+    this.highlightRevision++;
+    cancelAnimationFrame(this.readingFrame);
     this.resize.disconnect();
     document.removeEventListener("pointerdown", this.onOutsidePointer);
     document.removeEventListener("keydown", this.onKeyDown);

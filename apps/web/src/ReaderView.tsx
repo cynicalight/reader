@@ -44,11 +44,17 @@ export function ReaderView({
           : { PDFReaderAdapter: undefined };
       const { EPUBReaderAdapter } =
         doc.type === "epub"
-          ? await import("./readers/epub")
+          ? await import("./readers/epub-web")
           : { EPUBReaderAdapter: undefined };
       if (disposed) return;
       const Engine = PDFReaderAdapter || EPUBReaderAdapter!;
       engine = new Engine(container, {
+        epubInteraction: () => {
+          if (!disposed) latest.current.events.epubInteraction?.();
+        },
+        epubReadingAnchor: (id) => {
+          if (!disposed) latest.current.events.epubReadingAnchor?.(id);
+        },
         readingAnchor: (anchor) => {
           if (!disposed) latest.current.events.readingAnchor?.(anchor);
         },
@@ -80,10 +86,13 @@ export function ReaderView({
           if (!disposed) latest.current.events.internalLink?.(origin);
         },
       });
+      engine.preferTheme?.(latest.current.theme);
       await engine.open(doc);
       if (disposed) return;
       await engine.setTheme(latest.current.theme);
-      await engine.highlight(latest.current.annotations);
+      await engine.highlight(latest.current.annotations).catch((e) => {
+        if (!disposed) toast.error(e.message);
+      });
       engine.setBlocks?.(latest.current.blocks);
       const toc = await engine.getTOC();
       if (disposed) return;

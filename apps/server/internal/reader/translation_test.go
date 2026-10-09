@@ -73,7 +73,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.processPDF(context.Background(), &p); err == nil {
+	if err := s.processTranslation(context.Background(), &p); err == nil {
 		t.Fatal("invalid translation reported success")
 	}
 	if p.Phase != "translating" || p.TranslationsDone != 1 || p.TranslationsTotal != 2 {
@@ -93,7 +93,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 		t.Fatal(response.Body.String())
 	}
 	p, _ = s.Store.processing("doc")
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	if calls.Load() != 2 || p.Status != "complete" {
@@ -127,7 +127,7 @@ func TestTranslationResumesInterruptedWithoutPrioritizingRequestedParagraph(t *t
 	}))
 	defer provider.Close()
 	configureTranslationTest(t, s, provider.URL)
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	if len(order) != 2 || order[0] != m.Blocks[0].ID {
@@ -206,7 +206,7 @@ func TestTranslationStageResumesPersistedProgressAfterRestart(t *testing.T) {
 
 func TestTranslationStageWaitsForTextCapabilityAndResumes(t *testing.T) {
 	s, p, _ := translationFixture(t)
-	if err := s.processPDF(context.Background(), &p); err != nil {
+	if err := s.processTranslation(context.Background(), &p); err != nil {
 		t.Fatal(err)
 	}
 	if p.Phase != "translating" || p.Status != "waiting" || p.TranslationsDone != 0 || p.TranslationsTotal != 2 {
