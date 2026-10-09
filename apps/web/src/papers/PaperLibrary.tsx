@@ -264,6 +264,23 @@ export function PaperLibrary({
     // A paper that left the library (trash, move) cannot stay selected.
     if (selectedId && !selected) ui.select(null);
   }, [selectedId, selected, ui]);
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // Pressing on empty library space closes the detail panel.
+    const main = mainRef.current;
+    if (!main || !selectedId) return;
+    const away = (e: PointerEvent) => {
+      if (
+        e.button === 0 &&
+        !(e.target as Element).closest(
+          '[data-paper-id], .paper-detail, button, a, input, textarea, select, label, [role="button"], [role="separator"], [role="tab"], [contenteditable="true"]',
+        )
+      )
+        ui.select(null);
+    };
+    main.addEventListener("pointerdown", away);
+    return () => main.removeEventListener("pointerdown", away);
+  }, [selectedId, ui]);
   const actions: PaperMenuActions = {
     open: openDocument,
     move: moveToBooks,
@@ -368,7 +385,7 @@ export function PaperLibrary({
     />
   );
   return (
-    <main className="library-main paper-library">
+    <main className="library-main paper-library" ref={mainRef}>
       <header className="library-topbar">
         <div className="flex min-w-0 items-center gap-3">
           <Button

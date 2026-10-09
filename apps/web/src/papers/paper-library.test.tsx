@@ -421,3 +421,18 @@ it.each(["list", "table"] as const)(
     expect(open).not.toHaveBeenCalled();
   },
 );
+
+const press = (target: Element, type: string, clientX = 0) =>
+  act(async () => {
+    target.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, button: 0, clientX }),
+    );
+  });
+it("closes the detail panel when pressing empty library space", async () => {
+  await act(async () => usePaperUI.setState({ selectedId: "a" }));
+  await press(host.querySelector(".paper-detail")!, "pointerdown");
+  expect(usePaperUI.getState().selectedId).toBe("a");
+  await press(host.querySelector(".paper-list-pane")!, "pointerdown");
+  expect(usePaperUI.getState().selectedId).toBeNull();
+  expect(host.querySelector(".paper-detail")).toBeNull();
+});
