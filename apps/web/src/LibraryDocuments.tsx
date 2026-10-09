@@ -89,6 +89,7 @@ export function LibraryDocuments({
         (current) =>
           new Set([...current].filter((id) => !result.deleted.includes(id))),
       );
+      if (!result.failed.length) changeEditing(false);
     } finally {
       pending.current = false;
     }

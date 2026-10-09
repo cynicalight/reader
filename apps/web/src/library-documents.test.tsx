@@ -137,6 +137,25 @@ it("moves selected documents to the trash, keeps failures and offers an undo", a
   expect(api.restoreDocument).toHaveBeenCalledExactlyOnceWith("0");
   expect(open).not.toHaveBeenCalled();
 });
+it("leaves selection mode after all selected documents move to the trash", async () => {
+  await act(async () => button("编辑").click());
+  await act(async () =>
+    host.querySelector("article")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "a",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  vi.mocked(api.trashDocument).mockResolvedValue(docs[0]);
+
+  await act(async () => button("移到回收站").click());
+
+  expect(button("编辑")).toBeDefined();
+  expect(host.textContent).not.toContain("已选");
+});
 it("opens the context menu on the targeted document and edits that document", async () => {
   const card = host.querySelectorAll("article")[1];
   await act(async () =>
