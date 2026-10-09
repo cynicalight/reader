@@ -100,6 +100,11 @@
                                       "enum": ["books", "papers"],
                                       "description": "Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.",
                                     },
+                                  "allowLarge":
+                                    {
+                                      "enum": ["1"],
+                                      "description": "Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.",
+                                    },
                                 },
                               "required": ["file"],
                             },

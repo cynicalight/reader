@@ -58,6 +58,11 @@ export interface paths {
              * @enum {unknown}
              */
             library?: "books" | "papers";
+            /**
+             * @description Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.
+             * @enum {unknown}
+             */
+            allowLarge?: "1";
           };
         };
       };

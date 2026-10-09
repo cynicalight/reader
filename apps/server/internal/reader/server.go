@@ -7,6 +7,8 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net"
@@ -229,7 +231,12 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "保存失败")
 		return
 	}
-	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library)
+	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library, r.FormValue("allowLarge") == "1")
+	var large importError
+	if errors.As(err, &large) && large.code != "" {
+		respond(w, status, map[string]any{"error": large.message, "code": large.code, "pages": large.pages})
+		return
+	}
 	if err != nil {
 		fail(w, status, err.Error())
 		return
@@ -240,18 +247,22 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 type importError struct {
 	status  int
 	message string
+	// code and pages describe a long paper the reader may import as a book.
+	code  string
+	pages int
 }
 
 func (e importError) Error() string { return e.message }
 
 // importFile moves a completed temporary file into the library. An identical
 // file returns the existing document, whichever library holds it.
-func (s *Server) importFile(ctx context.Context, temp, filename, library string) (Document, int, error) {
+// A long paper is imported only after the reader confirms (allowLarge).
+func (s *Server) importFile(ctx context.Context, temp, filename, library string, allowLarge bool) (Document, int, error) {
 	s.importMu.Lock()
 	defer s.importMu.Unlock()
 	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
 	failure := func(status int, message string) (Document, int, error) {
-		return Document{}, status, importError{status, message}
+		return Document{}, status, importError{status: status, message: message}
 	}
 	f, err := os.Open(temp)
 	if err != nil {
@@ -289,6 +300,9 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 	if library == "papers" {
 		if reason := paperLimit(kind, size, temp); reason != "" {
 			return failure(400, reason)
+		}
+		if pages, e := pdfPageCount(temp); e == nil && pages > largePaperPages && !allowLarge {
+			return Document{}, 409, importError{409, fmt.Sprintf("这份 PDF 有 %d 页，篇幅较大", pages), "large-paper", pages}
 		}
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}

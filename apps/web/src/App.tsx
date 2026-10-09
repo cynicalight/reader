@@ -19,7 +19,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
-import { api } from "@reader/api";
+import { api, RequestError } from "@reader/api";
+import { LargePaperDialog, type LargePaper } from "./LargePaperDialog";
 import type { Document, LibraryMode } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import { Input } from "@reader/ui/components/input";
@@ -88,6 +89,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [commandQuery, setCommandQuery] = useState("");
   const [busy, setBusy] = useState(false);
+  const [largePapers, setLargePapers] = useState<LargePaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [command, setCommand] = useState(false);
@@ -161,9 +163,32 @@ export function App() {
       setBusy(true);
       void window.readerDesktop
         .importFiles(currentMode())
+        .then((large) => setLargePapers(large))
         .catch((e) => toast.error(e.message))
         .finally(() => setBusy(false));
     } else fileRef.current?.click();
+  };
+  // Long papers are confirmed together: keep them as papers or switch to books.
+  const importLargePapers = async (library: LibraryMode) => {
+    const papers = largePapers;
+    setBusy(true);
+    try {
+      if (library === "books") switchMode("books");
+      const desktop = papers.flatMap((p) => (p.id ? [p.id] : []));
+      if (desktop.length)
+        await window.readerDesktop?.importLargePapers(desktop, library);
+      for (const paper of papers)
+        if (paper.file) await api.import(paper.file, library, true);
+      await refreshLibrary();
+      toast.success(
+        `已导入 ${papers.length} 个文件到${libraryModes[library].label}`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLargePapers([]);
+      setBusy(false);
+    }
   };
   useEffect(() => {
     if (loading) return;
@@ -199,17 +224,24 @@ export function App() {
     setBusy(true);
     try {
       const elsewhere: Document[] = [];
+      const large: LargePaper[] = [];
       for (const file of accepted) {
-        const document = await api.import(file, target);
-        if (document.library !== target) elsewhere.push(document);
+        try {
+          const document = await api.import(file, target);
+          if (document.library !== target) elsewhere.push(document);
+        } catch (e) {
+          if (!(e instanceof RequestError) || e.code !== "large-paper") throw e;
+          large.push({ name: file.name, pages: e.pages ?? 0, file });
+        }
       }
       await refreshLibrary();
+      setLargePapers(large);
       if (elsewhere.length)
         toast.info(
           `${elsewhere.length} 个文件已在${libraryModes[elsewhere[0].library].label}中，可在那里移动`,
         );
-      if (accepted.length > elsewhere.length)
-        toast.success(`已导入 ${accepted.length - elsewhere.length} 个文件`);
+      const imported = accepted.length - elsewhere.length - large.length;
+      if (imported > 0) toast.success(`已导入 ${imported} 个文件`);
       setError("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -718,6 +750,12 @@ export function App() {
             </div>
           </DialogContent>
         </Dialog>
+        <LargePaperDialog
+          papers={largePapers}
+          busy={busy}
+          onChoose={(library) => void importLargePapers(library)}
+          onCancel={() => setLargePapers([])}
+        />
         <Toaster
           richColors
           position="bottom-right"

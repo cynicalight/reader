@@ -48,6 +48,16 @@ client.use({
     return request;
   },
 });
+/** A failed request; `code` and `pages` identify a long paper to confirm. */
+export class RequestError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly pages?: number,
+  ) {
+    super(message);
+  }
+}
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -61,7 +71,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `请求失败 (${response.status})`);
+    throw new RequestError(
+      data.error || `请求失败 (${response.status})`,
+      data.code,
+      data.pages,
+    );
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
@@ -160,9 +174,11 @@ export const api = {
     if (error) throw new Error(error.error);
     return data;
   },
-  import: (file: File, library: LibraryMode = "books") => {
+  /** Papers over 50 pages fail with code "large-paper" unless allowLarge. */
+  import: (file: File, library: LibraryMode = "books", allowLarge = false) => {
     const form = new FormData();
     form.append("library", library);
+    if (allowLarge) form.append("allowLarge", "1");
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
