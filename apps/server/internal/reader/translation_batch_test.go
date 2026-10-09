@@ -316,11 +316,38 @@ func TestTranslationDeadlineDoesNotChangeChatDeadline(t *testing.T) {
 	}
 }
 
-func TestTranslationJSONLNamesBrokenLines(t *testing.T) {
+func TestTranslationJSONLRepairsUnescapedLatexBackslashes(t *testing.T) {
+	p := translationParagraph{"p1-b2", "h2", "Two."}
+	var got TranslationBlock
+	d := newTranslationJSONL(translationBatch{Paragraphs: []translationParagraph{p}}, func(block TranslationBlock) error {
+		got = block
+		return nil
+	})
+	line := `{"blockId":"p1-b2","sourceHash":"h2","sentences":[{"source":"Two.","target":"$\pi$、$\eta$、$\ll$、$\log n$"}]}`
+	if err := d.feed(line + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !d.completed[p.BlockID] || len(got.Sentences) != 1 || got.Sentences[0].Target != `$\pi$、$\eta$、$\ll$、$\log n$` {
+		t.Fatalf("unescaped LaTeX was not repaired: decoder=%+v block=%+v", d, got)
+	}
+}
+
+func TestRepairInvalidJSONEscapesPreservesValidEscapesAndOutsideText(t *testing.T) {
+	valid := `{"target":"quote: \" newline: \n unicode: \u03c0 slash: \\ solidus: \/"}`
+	if got, changed := repairInvalidJSONEscapes(valid); changed || got != valid {
+		t.Fatalf("valid JSON changed: changed=%v %q", changed, got)
+	}
+	broken := `{"target":"$\pi$"}\tail`
+	want := `{"target":"$\\pi$"}\tail`
+	if got, changed := repairInvalidJSONEscapes(broken); !changed || got != want {
+		t.Fatalf("wrong repair: changed=%v got=%q want=%q", changed, got, want)
+	}
+}
+
+func TestTranslationJSONLNamesStructurallyBrokenLines(t *testing.T) {
 	a, b := translationParagraph{"p1-b1", "h1", "One."}, translationParagraph{"p1-b2", "h2", "Two."}
 	d := newTranslationJSONL(translationBatch{Paragraphs: []translationParagraph{a, b}}, func(TranslationBlock) error { return nil })
-	// An unescaped LaTeX backslash breaks the JSON but leaves the blockId readable.
-	for _, line := range []string{"```jsonl", `{"blockId":"p1-b2","sourceHash":"h2","sentences":[{"source":"Two.","target":"$\pi$"}]}`, translationParagraphLine(a)} {
+	for _, line := range []string{"```jsonl", `{"blockId":"p1-b2","sourceHash":"h2","sentences":`, translationParagraphLine(a)} {
 		if err := d.feed(strings.TrimSuffix(line, "\n") + "\n"); err != nil {
 			t.Fatal(err)
 		}

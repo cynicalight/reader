@@ -97,6 +97,47 @@ type translationJSONL struct {
 
 var translationRowID = regexp.MustCompile(`"blockId"\s*:\s*"([^"\\]+)"`)
 
+func repairInvalidJSONEscapes(line string) (string, bool) {
+	var repaired strings.Builder
+	repaired.Grow(len(line))
+	inString, changed := false, false
+	isHex := func(c byte) bool {
+		return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+	}
+	for i := 0; i < len(line); {
+		c := line[i]
+		if c == '"' {
+			inString = !inString
+			repaired.WriteByte(c)
+			i++
+			continue
+		}
+		if inString && c == '\\' && i+1 < len(line) {
+			next := line[i+1]
+			if strings.ContainsRune(`"\/bfnrt`, rune(next)) {
+				repaired.WriteString(line[i : i+2])
+				i += 2
+				continue
+			}
+			if next == 'u' && i+5 < len(line) && isHex(line[i+2]) && isHex(line[i+3]) && isHex(line[i+4]) && isHex(line[i+5]) {
+				repaired.WriteString(line[i : i+6])
+				i += 6
+				continue
+			}
+			repaired.WriteString(`\\`)
+			changed = true
+			i++
+			continue
+		}
+		repaired.WriteByte(c)
+		i++
+	}
+	if !changed {
+		return line, false
+	}
+	return repaired.String(), true
+}
+
 func newTranslationJSONL(batch translationBatch, emit func(TranslationBlock) error) *translationJSONL {
 	d := &translationJSONL{expected: map[string]translationParagraph{}, completed: map[string]bool{}, invalid: map[string]string{}, emit: emit}
 	for _, p := range batch.Paragraphs {
@@ -131,7 +172,16 @@ func (d *translationJSONL) line(line string) error {
 		BlockID    string `json:"blockId"`
 		SourceHash string `json:"sourceHash"`
 	}
-	if err := json.Unmarshal([]byte(line), &row); err != nil {
+	parsedLine := line
+	err := json.Unmarshal([]byte(parsedLine), &row)
+	if err != nil {
+		if repaired, changed := repairInvalidJSONEscapes(line); changed {
+			if repairedErr := json.Unmarshal([]byte(repaired), &row); repairedErr == nil {
+				parsedLine, err = repaired, nil
+			}
+		}
+	}
+	if err != nil {
 		message := fmt.Sprintf("第 %d 行不是合法的 JSON：%v", d.lines, err)
 		// A broken row still names its paragraph when the blockId is readable.
 		if id := translationRowID.FindStringSubmatch(line); id != nil {
@@ -154,7 +204,7 @@ func (d *translationJSONL) line(line string) error {
 		d.invalid[row.BlockID] = "译文原文版本不匹配"
 		return nil
 	}
-	sentences, err := parseTranslationSource(line, source.Source, !d.strictSource)
+	sentences, err := parseTranslationSource(parsedLine, source.Source, !d.strictSource)
 	if err != nil {
 		d.invalid[row.BlockID] = err.Error()
 		return nil
