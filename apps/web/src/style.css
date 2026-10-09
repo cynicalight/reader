@@ -2872,7 +2872,7 @@ textarea.paper-note-input {
   align-items: center;
   gap: 6px;
   min-height: 24px;
-  padding-bottom: 13px;
+  padding-bottom: 16px;
   color: var(--muted-foreground);
 }
 .chat-waiting-icon {
