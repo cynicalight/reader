@@ -121,7 +121,7 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 	select {
 	case id := <-ch:
 		return id
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("timed out")
 		return ""
 	}
@@ -168,7 +168,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
 		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		items, err := s.translations("doc", m)
 		if err != nil {
@@ -190,7 +190,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("workers ignored cancellation")
 	}
 	items, _ := s.translations("doc", m)

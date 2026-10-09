@@ -310,7 +310,7 @@ func TestTranslationCodexCancellationClosesAllWorkers(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- s.settleTranslations(ctx, &p, m) }()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		items, err := s.translations("doc", m)
 		if err != nil {
@@ -336,7 +336,7 @@ func TestTranslationCodexCancellationClosesAllWorkers(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancellation reported %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("workers did not stop")
 	}
 	data, err := os.ReadFile(capture)

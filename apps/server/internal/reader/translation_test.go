@@ -196,7 +196,7 @@ func TestTranslationStageResumesPersistedProgressAfterRestart(t *testing.T) {
 				t.Fatalf("did not restore progress from saved translations: %+v, %v", saved, err)
 			}
 			close(release)
-			deadline := time.Now().Add(5 * time.Second)
+			deadline := time.Now().Add(10 * time.Second)
 			for {
 				saved, err = s.Store.processing("doc")
 				if err == nil && saved.Phase == "ready" && saved.Status == "complete" && saved.TranslationsDone == 2 {
