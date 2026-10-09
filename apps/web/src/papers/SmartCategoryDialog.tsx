@@ -32,7 +32,6 @@ export function SmartCategoryDialog({
 }) {
   const [name, setName] = useState(smart.name);
   const [chosen, setChosen] = useState<string[]>(smart.tags);
-  const [extra, setExtra] = useState("");
   // Chosen tags no paper carries yet stay listed so they can be removed.
   const choices = [
     ...tags,
@@ -40,12 +39,6 @@ export function SmartCategoryDialog({
       (tag) => !tags.some((t) => t.toLowerCase() === tag.toLowerCase()),
     ),
   ];
-  const addExtra = () => {
-    const tag = extra.trim().replace(/^#/, "");
-    if (tag && !chosen.some((t) => t.toLowerCase() === tag.toLowerCase()))
-      setChosen([...chosen, tag]);
-    setExtra("");
-  };
   const valid = name.trim() && [...name.trim()].length <= 40 && chosen.length;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -76,7 +69,7 @@ export function SmartCategoryDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          {choices.length > 0 && (
+          {choices.length > 0 ? (
             <ToggleGroup
               multiple
               aria-label="所需标签"
@@ -92,19 +85,11 @@ export function SmartCategoryDialog({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              请先给论文加上一个标签吧！
+            </p>
           )}
-          <Input
-            aria-label="添加标签"
-            placeholder="输入其他标签，回车添加"
-            value={extra}
-            onChange={(e) => setExtra(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                addExtra();
-              }
-            }}
-          />
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

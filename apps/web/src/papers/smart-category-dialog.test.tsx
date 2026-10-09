@@ -36,12 +36,13 @@ const setValue = (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 };
 
-it("saves a name with the chosen and typed tags", async () => {
+it("saves a name with the chosen existing tags", async () => {
   const dialog = document.querySelector('[role="dialog"]')!;
   const create = [...dialog.querySelectorAll("button")].find(
     (b) => b.textContent === "创建",
   )!;
   expect(create.disabled).toBe(true);
+  expect(dialog.querySelector('input[aria-label="添加标签"]')).toBeNull();
   await act(async () =>
     setValue(dialog.querySelector('input[aria-label="分类名"]')!, "RLHF"),
   );
@@ -49,19 +50,27 @@ it("saves a name with the chosen and typed tags", async () => {
     (b) => b.textContent === "#RL",
   )!;
   await act(async () => rl.click());
-  const extra = dialog.querySelector<HTMLInputElement>(
-    'input[aria-label="添加标签"]',
-  )!;
-  await act(async () => setValue(extra, "#Reward"));
-  await act(async () =>
-    extra.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    ),
-  );
   await act(async () => create.click());
   expect(onSave).toHaveBeenCalledExactlyOnceWith({
     id: "s",
     name: "RLHF",
-    tags: ["RL", "Reward"],
+    tags: ["RL"],
   });
+});
+
+it("asks for a paper tag when the library has none", async () => {
+  await act(async () =>
+    root.render(
+      <SmartCategoryDialog
+        smart={{ id: "s", name: "", tags: [] }}
+        tags={[]}
+        isNew
+        onSave={onSave}
+        onClose={() => {}}
+      />,
+    ),
+  );
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("请先给论文加上一个标签吧！");
+  expect(dialog.querySelector('[aria-label="所需标签"]')).toBeNull();
 });
