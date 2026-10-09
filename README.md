@@ -1,59 +1,59 @@
 # Reader
 
-**English** | [简体中文](README.zh-CN.md) | [Website](https://cynicalight.github.io/reader/)
+**简体中文** | [English](README.en.md) | [官网](https://cynicalight.github.io/reader/)
 
-A local-first EPUB / PDF reader for books and papers, with annotations and AI assistance grounded in the text you are reading.
+一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
-  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader reading a PDF, with contents on the left and AI assistance on the right" />
+  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader 的 PDF 阅读界面：左侧目录，右侧 AI 助读" />
 </picture>
 </p>
 
-Reader treats EPUB and PDF as core document formats. It provides a shared library, table of contents, annotation tools, and chat interface, with Readium and PDF.js powering their respective reading experiences. Documents, reading progress, and notes stay on your machine. AI features use an already authenticated Claude Code or Codex CLI, without requiring a separate API key in Reader.
+Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与文献库分开管理，并通过 Readium 和 PDF.js 提供目录、搜索、批注与阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code、Codex CLI 或 Kimi Code CLI 调用，无需在 Reader 中另填 API Key。
 
-Run from source, or use installers built by CI after a Release is published: DMG for Apple Silicon Macs and EXE for Windows x64. Installers have no developer certificate and may require approval in your system security settings. See the [packaging and release guide (Chinese)](docs/releasing.md) for the workflow and validation scope. Windows installation still requires manual acceptance; Linux installers are not provided.
+可从[官网](https://cynicalight.github.io/reader/)了解项目，或在 [GitHub Releases](https://github.com/cynicalight/reader/releases) 下载已发布的安装包。也支持从源码运行；发布 Release 后，CI 会构建 macOS（Apple Silicon）的 DMG 和 Windows x64 的 EXE。安装包没有开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。尚未完成 Windows 安装后的人工验收，Linux 不提供安装包。
 
-## Features
+## 功能
 
-- **Local library**: import or drag in EPUB / PDF files, preserve originals, deduplicate by content, search your library, and browse recent reads and favorites.
-- **Shared reading interface**: contents and search on the left, the document in the center, and AI chat and notes on the right. Resize or hide the sidebars.
-- **Reading records**: bookmarks, highlights, underlines, notes, reading position restoration, and Markdown annotation export.
-- **AI assistance**: translate or explain selections, reference multiple excerpts, summarize the current EPUB chapter or PDF page, revisit conversation history, and cancel generation.
-- **CLI account integration**: detect local Claude Code / Codex CLI installations and login status, then use your existing account through the official CLI.
+- **图书库与文献库**：分别管理电子书和论文，可在两库间移动文档。图书库支持 EPUB / PDF；文献库只收 PDF，单个文件不超过 50 MB、150 页；页数无法读取时仅检查大小。
+- **文献管理**：编辑作者、年份、出处、DOI、arXiv、摘要等信息；通过编号、链接或标题导入论文，在线补全不覆盖手动修改。支持嵌套分类、标签、列表与表格视图、阅读状态、批量操作、重复论文检测与合并、相关文献关联。
+- **引用导出**：支持 GB/T 7714、APA、BibTeX 和 RIS，可复制单篇引用或批量导出。
+- **回收站**：删除后保留原文件、批注和对话，可撤销或恢复；确认彻底删除后才移除数据。
+- **统一阅读界面**：左侧目录与搜索，中间正文，右侧 AI 对话与笔记；可调整侧栏宽度或收起侧栏。
+- **PDF 导入处理**：学习中按页解析正文与版面，翻译中翻译正文和图题并把公式图片转为 LaTeX；进度收在书库封面浮层中，依次展示两步，完成后渐隐上浮并收起。可边处理边阅读，悬停已识别的图表／公式区域会显示整块提示。
+- **阅读记录**：书签、高亮、下划线、问题批注、批注标签、论文笔记与阅读位置恢复；支持按颜色和标签筛选、摘录批注、Markdown 导出及桌面 `reader://` 链接。PDF 内部引用支持悬停预览和返回阅读位置。
+- **AI 助读**：选区翻译与解释、多选区引用、EPUB 当前章节或 PDF 当前页总结、对话历史和生成取消。
+- **CLI 账户接入**：检测本机 Claude Code / Codex CLI / Kimi Code CLI 的安装与登录状态，通过官方 CLI 使用已有账户。
 
-Each format retains reading controls suited to its layout:
+文献库的收录限制、联网查找、重复合并与人工检查步骤见[文献库说明](docs/paper-library.md)。
 
-| Capability                | EPUB                                                                 | PDF                                              |
-| ------------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
-| Reading engine            | Readium Web + Go Toolkit                                             | PDF.js Viewer                                    |
-| Navigation                | Nested table of contents, chapter navigation                         | Document outline, page navigation                |
-| Layout                    | Paginated / scrolling, font size, font family, line spacing, margins | Continuous scrolling, zoom, fit to width         |
-| Search                    | SQLite FTS5 with literal substring matching                          | Per-page text search                             |
-| Positions and annotations | Readium locators and decorations                                     | Page numbers and normalized selection rectangles |
+两种格式各自保留适合其排版的阅读方式：
 
-In an empty library, click “先体验示例文档” (try sample documents) to load an original three-chapter EPUB and a two-page PDF included with the project.
+| 能力       | EPUB                                  | PDF                      |
+| ---------- | ------------------------------------- | ------------------------ |
+| 阅读内核   | Readium Web + Go Toolkit              | PDF.js Viewer            |
+| 导航       | 分级目录、章节跳转                    | Outline 目录、页码跳转   |
+| 排版       | 分页 / 滚动、字号、字体、行距、页边距 | 连续滚动、缩放、适合宽度 |
+| 搜索       | SQLite FTS5，配合字面子串匹配         | 逐页文本搜索             |
+| 定位与批注 | Readium locator 与装饰接口            | 页码与归一化选区矩形     |
 
-PDF processing appears as a quiet overlay on each library cover, showing **Learning** then **Translating**; completion fades upward, and the overlay disappears when finished. Learning extracts page text and layout locally; translating translates body text and captions and converts formula images to LaTeX. Hovering a detected figure or formula highlights the whole region without blocking text selection. Processing resumes after restart and reuses saved translations.
+空书库中可以点击“先体验示例文档”，加载项目附带的原创三章 EPUB 和两页 PDF。
 
-The first PDF analysis automatically downloads and verifies approximately 67 MB of layout-model weights, then caches them locally. Python and PaddlePaddle do not need to be installed. Select a primary agent in Settings and run the actual text/image capability test to enable translation and formula conversion. Without a verified connection, reading and detected-region hover remain available while translation waits. Scanned pages currently require OCR that is not implemented; incomplete text is explicitly labeled.
+界面支持浅色、深色与跟随系统，桌面窗口外观同步切换。
 
-**Formula conversion sends cropped PDF formula images to the selected agent.** Figures and tables are not sent for interpretation. Capability testing uses a synthetic image. Current chat still uses selected text or the current page/chapter; whole-document retrieval and image-click conversations are not implemented yet.
+## 截图
 
-Appearance supports light, dark, and system modes, including the desktop window.
+以下截图来自应用本身，使用项目自带的示例文档；图片会跟随 GitHub 的浅色 / 深色外观。
 
-## Screenshots
-
-Captured from the app with the bundled sample documents. Images follow GitHub's light / dark appearance.
-
-| Library | Agent settings |
+| 书库 | Agent 设置 |
 | --- | --- |
-| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="Library with a PDF processing overlay on its cover" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent settings with Codex, Claude Code and Kimi Code" /> |
+| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="书库，PDF 封面上显示后台处理进度" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent 设置：Codex、Claude Code 与 Kimi Code" /> |
 
-## Quick start
+## 快速开始
 
-Requires **Node.js 22+, pnpm 10.30.3, and Go 1.26.5+**.
+需要 **Node.js 22+、pnpm 10.30.3 和 Go 1.26.5+**。
 
 ```sh
 git clone https://github.com/cynicalight/reader.git
@@ -62,110 +62,109 @@ pnpm install
 pnpm desktop
 ```
 
-`pnpm desktop` builds the Go service, web interface, and Electron app, then opens the desktop window. The Go service listens only on a random loopback port and stops when the application closes.
+`pnpm desktop` 会构建 Go 服务、Web 界面和 Electron，然后打开桌面窗口。Go 服务只监听本机的随机端口，并随应用关闭。
 
-If the Electron binary was not downloaded successfully during installation, run the following command and try again:
+若安装时 Electron 二进制未成功下载，可运行以下命令后重试：
 
 ```sh
 node apps/desktop/node_modules/electron/install.js
 ```
 
-## Using AI
+## 使用 AI
 
-AI is optional. Local reading, search, and annotations do not require an AI account.
+AI 是可选功能。本地阅读、搜索和批注不需要登录 AI 账户。
 
-Install the official CLI you want to use and sign in from your terminal:
+先安装所需的官方 CLI，并在终端完成登录：
 
 ```sh
-# Use Codex
+# 使用 Codex
 codex login
 
-# Or use Claude Code
+# 或使用 Claude Code
 claude auth login
 ```
 
-Open Reader settings, choose a primary Agent, and run “测试可用性与识图” (test availability and vision). Successful real requests produce green capability badges and resume waiting PDF image jobs. Existing text conversations still select Codex or Claude in the AI panel. Reader does not install CLIs, read their credential files, or implement its own OAuth flow. Account permissions, quotas, model availability, and billing depend on the CLI login and the provider. Reader currently uses the CLI's default model. Older CLI versions may need an upgrade to support the integration's command-line options.
+打开 Reader 设置，指定主 Agent，并检查文字与图片能力检测结果。真实测试通过后显示绿色徽标，等待中的 PDF 翻译会自动继续。文字对话可使用 Codex、Claude Code 或 Kimi Code。Reader 不安装 CLI、不读取其凭据文件，也不自行实现 OAuth。账户权限、额度、模型可用性与计费方式由 CLI 登录和对应服务决定。问答与翻译可分别选择模型及支持的推理强度；未指定时使用对应任务的推荐模型。旧版 CLI 可能需要升级才能支持桥接参数。
 
-macOS 和 Windows 桌面版启动时读取手动系统代理，并通过环境变量传给 Go 服务和 Agent CLI；没有配置代理或代理关闭时正常直连，本机服务始终保留直连例外。Windows 读取当前用户、当前连接的配置，支持统一 HTTP 代理或按 HTTP/HTTPS 分别配置；同时开启自动发现时使用已配置的手动代理，不执行 WPAD。系统代理变化后需要重启 Reader，并在设置中点击“重新检测 Agent”更新旧检测结果。PAC、仅自动发现、Windows SOCKS 和无法转换的例外规则（如 `<local>`）暂不支持；读取或转换失败会提示并保留原有环境。其他平台保持继承原有环境。
+首次解析 PDF 会自动下载并校验约 67 MB 的版面模型，缓存后可离线定位图片区域；无需安装 Python 或 PaddlePaddle。未配置通过能力测试的主 Agent 时，正文阅读和图片 hover 仍可用，翻译显示等待配置。退出后会恢复任务并复用已保存译文；扫描页尚不支持 OCR，会明确标记正文不完整。
 
-The first PDF analysis downloads and verifies a roughly 67 MB layout model. The cached model locates image regions locally; Python and PaddlePaddle are not required. Without a verified connection, reading and region hover remain available while translation waits for configuration. Processing resumes after restart and reuses saved translations. Scanned pages are explicitly marked incomplete because OCR is not available.
+**调用 AI 时，相关内容会离开本机。** 图片能力测试使用合成图片；启用主 Agent 后，导入 PDF 的正文和图题会发送翻译，公式图片会发送转换为 LaTeX；图表和表格不会发送解析。触发翻译、解释、总结或发送问题后，Reader 会将选区或当前章节 / 页面上下文及最近对话交给 CLI，再由 CLI 请求对应 AI 服务。章节和上下文有长度限制；当前页总结不等于整篇论文总结。
 
-**Using AI sends relevant content off your machine.** Capability tests use a synthetic image. With a verified primary Agent configured, imported PDF body text and captions are sent for translation and formula images for LaTeX conversion. When you request a translation, explanation, summary, or send a question, Reader passes the selected excerpts or current chapter / page context, along with recent conversation history, to the CLI. The CLI then contacts its AI service. Chapter and context lengths are limited; a summary of the current page is not a summary of the entire paper.
+CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex 使用只读沙箱并禁用 shell 工具。CLI 的原始日志不会作为回答显示。Codex 通过 App Server 接收增量文字，Claude 使用 stream-json，Kimi 使用 ACP 消息片段；纯文字和图片对话均逐段传输。前端对接约定见 [Agent 流式输出文档](docs/agent-streaming-contract.md)。
 
-CLIs run in temporary empty directories. Claude is configured with tools and MCP disabled. Codex runs in a read-only sandbox with shell tools disabled. Raw CLI logs are not shown as answers. Codex streams text through App Server, Claude uses stream-json, and Kimi uses ACP message chunks. Text and image conversations both forward incremental output. See the [frontend integration contract (Chinese)](docs/agent-streaming-contract.md).
+## 本地数据
 
-## Local data
+原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Reader 没有内置云同步。论文元数据查找和在线导入会访问公开的文献服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。
 
-Original files are stored on the filesystem. Document metadata, progress, annotations, conversations, and settings are stored in SQLite. Reader has no built-in cloud sync.
-
-| Mode        | Data directory                                                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Desktop     | `library/` under Electron's `userData`; typically `~/Library/Application Support/Reader/library/` for macOS development builds |
-| Development | `.reader/` in the project root                                                                                                 |
+| 运行方式 | 数据目录                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| 桌面模式 | Electron `userData` 下的 `library/`；macOS 开发版通常为 `~/Library/Application Support/Reader/library/` |
+| 开发模式 | 项目根目录的 `.reader/`                                                                                 |
 
 ```text
 library/
-├── reader.sqlite       # Metadata, reading records, conversations, settings, and full-text index
-├── books/              # Original EPUB files
-├── papers/             # Original PDF files
-├── cache/              # Readium manifests, positions, and processed EPUB resources
-└── ai-work/            # Temporary CLI directories, removed after requests finish
+├── reader.sqlite       # 文档信息、阅读记录、对话、设置与全文索引
+├── books/              # EPUB 原文件
+├── papers/             # PDF 原文件
+├── models/             # 经校验的本地版面模型
+├── cache/              # EPUB 资源；PDF analysis 下的 Markdown、图片与解析稿
+└── ai-work/            # CLI 临时目录，请求结束后移除
 ```
 
-Close the application before backing up the entire data directory. The local API uses a randomly generated token for each launch and validates Host / Origin. EPUB imports check archive size and resource paths, and sanitize active content. Original files remain unchanged.
+备份前先关闭应用，再复制整个数据目录。本地 API 使用每次启动随机生成的 token，并校验 Host / Origin。EPUB 导入会检查压缩包大小、资源路径并清理活动内容；原文件保持原样。
 
-## Development
+## 开发
 
-Start the Go service and the web interface with hot reload:
+启动 Go 服务和带热更新的 Web 界面：
 
 ```sh
 pnpm dev
 ```
 
-The terminal prints a URL in the form `http://127.0.0.1:5173/#token=…`. Open the complete URL. Vite proxies requests to the Go service at `127.0.0.1:17840`. This token authenticates access to the local service; it is not an AI account credential. Do not share URLs containing the token.
+终端会输出 `http://127.0.0.1:5173/#token=…`，请用完整地址打开。Vite 将请求代理到 `127.0.0.1:17840` 的 Go 服务。该 token 用于本地服务鉴权，不是 AI 账户凭据，请勿分享带 token 的地址。
 
 ```sh
-pnpm typecheck     # TypeScript type checking
-pnpm test          # Go integration tests and Vitest
-pnpm build         # Build Go, web, and Electron
-pnpm api:generate  # Regenerate client types from OpenAPI
+pnpm typecheck     # TypeScript 类型检查
+pnpm test          # Go 集成测试与 Vitest
+pnpm build         # 构建 Go、Web 和 Electron
+pnpm api:generate  # 从 OpenAPI 重新生成客户端类型
 ```
 
-The project website lives in `website/` as static HTML, CSS and JavaScript with no build step. Preview it locally with `python3 -m http.server 4321 -d website` and open `http://127.0.0.1:4321/`.
+项目官网位于 `website/`，是无需构建的静态 HTML / CSS / JavaScript。本地预览：`python3 -m http.server 4321 -d website`，然后打开 `http://127.0.0.1:4321/`。
 
-Tests cover document imports, persistence, resource access boundaries, CLI protocols, PDF parsing, and selected frontend regressions. Passing builds and tests does not replace manual checks with real documents and the application UI. See the [verification notes](docs/verification.md) (Chinese).
+测试覆盖文档导入、持久化、资源访问边界、CLI 协议、PDF 解析与部分前端回归。构建和测试通过不能替代真实文档与界面的人工检查，详见[验证记录](docs/verification.md)。
 
-## Technology and structure
+## 技术与结构
 
-The frontend uses React, TypeScript, Vite, Tailwind CSS, shadcn/ui (Base UI), and Zustand. Electron manages windows, native file selection, and the Go service lifecycle. Go handles local documents, SQLite, search, and AI CLI calls.
+前端使用 React、TypeScript、Vite、Tailwind CSS、shadcn/ui（Base UI）和 Zustand。Electron 负责窗口、原生文件选择与 Go 服务生命周期。Go 管理本地文档、SQLite、搜索和 AI CLI 调用。
 
 ```text
 apps/
 ├── desktop/       # Electron main / preload
-├── web/           # React UI, PDF.js and Readium reader adapters
-└── server/        # Go local service
+├── web/           # React 界面、PDF.js 与 Readium 阅读适配器
+└── server/        # Go 本地服务
 packages/
-├── ui/            # shadcn/ui + Base UI components
-├── reader-core/   # Document, Location, TOC, Annotation, ReaderAdapter
-└── api-client/    # OpenAPI types and API client
-docs/              # Scope, roadmap, API contract, and verification notes
-website/           # Static project website and README screenshots
+├── ui/            # shadcn/ui + Base UI 组件
+├── reader-core/   # Document、Location、TOC、Annotation、ReaderAdapter
+└── api-client/    # OpenAPI 类型与 API 客户端
+docs/              # 范围、路线图、接口与验证记录
+website/           # 项目官网静态页面与 README 截图
 ```
 
-The domain model centers on `Document`. PDF positions use page numbers and coordinates; EPUB positions use chapter resources and locators. The reading interface accesses each engine through `ReaderAdapter`. The project uses pnpm workspaces without Nx or Turborepo.
+业务模型围绕 `Document` 组织。PDF 用页码和坐标定位；EPUB 使用章节资源和 locator 定位。阅读界面通过 `ReaderAdapter` 调用各自的引擎。项目使用 pnpm workspace，不依赖 Nx 或 Turborepo。
 
-## Current limitations and next steps
+## 当前限制与后续计划
 
-The current version primarily targets DRM-free reflowable EPUBs and PDFs with text. OCR, password entry for protected PDFs, PDF thumbnails, background PDF full-text indexing, batch translation, cross-document AI retrieval, independent conversation management, Ollama, API-provider settings UI, and reading statistics are not yet supported. Backend API fallback configuration is available through the local API. Highlights are not created for complex PDF selections spanning multiple pages.
+当前主要面向无 DRM 的可重排 EPUB 与含文本的 PDF。尚未支持 OCR、密码 PDF 输入、PDF 缩略图、后台 PDF 全文索引、批量翻译、跨文档 AI 检索、独立多会话管理、Ollama、API 连接设置界面和阅读统计。API fallback 已有本地后端接口。复杂跨页 PDF 选区暂不创建高亮。
 
-Fixed-layout EPUBs, vertical text, RTL, complex footnotes, and large files need more testing with real documents. The desktop app handles macOS file-open events, but system file associations are not registered. Installers are built by CI; developer certificate signing, notarization, and automatic updates are not provided.
+固定版式 EPUB、竖排、RTL、复杂脚注和大文件仍需更多真实样本验证。桌面端已接入 macOS 文件打开事件，但尚未注册系统文件关联，安装包由 CI 构建；尚未提供受系统信任的开发者签名或 macOS 公证。已提供应用内更新检查；macOS 固定证书版本支持原地更新，其他情况下载并安装新版本，具体条件见[发版与更新说明](docs/releasing.md)。
 
-The next priority is improving the reading experience with real documents, followed by search, data export, and AI features. See the [roadmap](docs/roadmap.md) (Chinese).
+接下来优先完善真实文档的阅读体验，再扩展搜索、数据导出和 AI 功能。详细计划见[路线图](docs/roadmap.md)。
 
-## References and acknowledgments
+## 参考与致谢
 
-The product interaction design draws on [EasyRead](https://github.com/Edwardxlai/easyread), particularly its local AI reading workflow and CLI account integration. Reader was independently implemented from an empty directory using React / TypeScript and Go.
+产品交互参考了 [EasyRead](https://github.com/Edwardxlai/easyread) 的本地 AI 阅读与 CLI 账户接入方式。Reader 从空目录独立实现，使用 React / TypeScript 与 Go 构建。
 
-Thanks to [Readium](https://github.com/readium), [PDF.js](https://github.com/mozilla/pdf.js), [shadcn/ui](https://github.com/shadcn-ui/ui), and [Base UI](https://github.com/mui/base-ui). The shadcn components are included in `packages/ui`; their license is available in [packages/ui/LICENSE.md](packages/ui/LICENSE.md). See [third-party sources](docs/sources.md) (Chinese) for further attribution.
+感谢 [Readium](https://github.com/readium)、[PDF.js](https://github.com/mozilla/pdf.js)、[shadcn/ui](https://github.com/shadcn-ui/ui) 和 [Base UI](https://github.com/mui/base-ui)。shadcn 组件保留在 `packages/ui`，相关许可见 [packages/ui/LICENSE.md](packages/ui/LICENSE.md)。更多技术来源与归属见[第三方来源](docs/sources.md)。
 
-[Project scope](docs/spec.md) · [Roadmap](docs/roadmap.md) · [OpenAPI](docs/openapi.yaml) · [Verification notes](docs/verification.md)
+[项目范围](docs/spec.md) · [路线图](docs/roadmap.md) · [OpenAPI](docs/openapi.yaml) · [验证记录](docs/verification.md)
