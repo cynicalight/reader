@@ -80,7 +80,11 @@ export function SmartCategoryDialog({
               onValueChange={(value: string[]) => setChosen(value)}
             >
               {choices.map((tag) => (
-                <ToggleGroupItem key={tag} value={tag} className="px-2 text-xs">
+                <ToggleGroupItem
+                  key={tag}
+                  value={tag}
+                  className="px-2 text-xs aria-pressed:border-emerald-300 aria-pressed:bg-emerald-100 aria-pressed:text-emerald-900 dark:aria-pressed:border-emerald-500/40 dark:aria-pressed:bg-emerald-500/20 dark:aria-pressed:text-emerald-200"
+                >
                   #{tag}
                 </ToggleGroupItem>
               ))}
