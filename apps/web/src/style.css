@@ -2319,7 +2319,11 @@ kbd {
   border-bottom: none;
 }
 .paper-library .library-content {
+  /* Flex column parent: auto block margins would center short lists vertically. */
+  flex: 1;
+  min-height: 0;
   width: 100%;
+  margin: 0 auto;
   overflow: auto;
 }
 .paper-search {
