@@ -254,6 +254,8 @@ export interface ReaderTheme {
   translationFontWeight?: "normal" | "bold";
   /** The highlight palette, in order; the defaults apply when unset. */
   highlightColors?: HighlightColor[];
+  /** Reflowable EPUB text scrolls vertically unless pages are chosen. */
+  epubFlow?: "scroll" | "paginated";
 }
 export interface HighlightColor {
   /** #rrggbb */
@@ -273,6 +275,7 @@ export const defaultTheme: ReaderTheme = {
   translationFontFamily: "serif",
   translationFontWeight: "bold",
   linkTranslationAnnotations: true,
+  epubFlow: "scroll",
 };
 export type PDFBlockAction = "attach" | "preview" | "explain" | "translate";
 export interface PDFReadingAnchor {
@@ -326,6 +329,8 @@ export interface ReaderAdapter {
   clearSelection(): void;
   highlight(annotations: Annotation[]): Promise<void>;
   setTheme(theme: ReaderTheme): Promise<void>;
+  /** Layout choices that must apply before the first page is shown. */
+  preferTheme?(theme: ReaderTheme): void;
   getContext(): Promise<string>;
   /** Whether most of a remembered viewport position is on screen again. */
   isNear?(location: DocumentLocation): boolean;

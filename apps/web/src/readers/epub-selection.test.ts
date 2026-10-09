@@ -19,6 +19,8 @@ const bridge = vi.hoisted(() => ({
   go: vi.fn(),
   load: vi.fn(),
   preferences: vi.fn(),
+  forward: vi.fn(),
+  update: vi.fn(async (..._args: unknown[]) => {}),
 }));
 vi.mock("@readium/navigator", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@readium/navigator")>()),
@@ -35,6 +37,11 @@ vi.mock("@readium/navigator", async (importOriginal) => ({
     ) {
       bridge.preferences(options.preferences);
       bridge.listeners = listeners;
+    }
+    framePool = { update: bridge.update };
+    goForward(_animated: boolean, callback: (ok: boolean) => void) {
+      bridge.forward();
+      callback(true);
     }
     go(locator: Locator, _animated: boolean, callback: (ok: boolean) => void) {
       bridge.go(locator);
@@ -96,6 +103,8 @@ beforeEach(async () => {
   bridge.go.mockClear();
   bridge.load.mockReturnValue(true);
   bridge.preferences.mockClear();
+  bridge.forward.mockClear();
+  bridge.update.mockClear();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -112,6 +121,7 @@ beforeEach(async () => {
         metadata: { title: "Test book" },
         readingOrder: [
           { href: "chapter.xhtml", type: "application/xhtml+xml" },
+          { href: "next.xhtml", type: "application/xhtml+xml" },
         ],
       }),
     }),
@@ -495,7 +505,15 @@ it("restores each translated source slice and maps decoration clicks to the save
   expect(bridge.apply).toHaveBeenLastCalledWith([], "annotations");
 });
 
-it("always uses Readium scrolling even when an old saved theme requested pagination", async () => {
+const fade = () => {
+  const animate = vi.fn((_frames: Keyframe[], _options?: unknown) => ({
+    finished: Promise.resolve(),
+    cancel: vi.fn(),
+  }));
+  host.animate = animate as unknown as typeof host.animate;
+  return animate;
+};
+it("scrolls by default even when an old saved theme requested pagination", async () => {
   expect(bridge.preferences).toHaveBeenCalledWith(
     expect.objectContaining({ scroll: true }),
   );
@@ -505,4 +523,71 @@ it("always uses Readium scrolling even when an old saved theme requested paginat
   );
   expect(bridge.listeners!.click({} as never)).toBe(true);
   expect(bridge.listeners!.tap({} as never)).toBe(true);
+});
+
+it("turns chosen pages behind a horizontal fade instead of a bare jump", async () => {
+  const animate = fade();
+  await adapter.setTheme({ ...defaultTheme, epubFlow: "paginated" });
+  expect(bridge.preferences).toHaveBeenLastCalledWith(
+    expect.objectContaining({ scroll: false }),
+  );
+  // The relayout between scrolling and pages is hidden too.
+  expect(animate).toHaveBeenCalledTimes(2);
+  animate.mockClear();
+  await adapter.next();
+  expect(bridge.forward).toHaveBeenCalledOnce();
+  expect(animate).toHaveBeenCalledTimes(2);
+  const [exit, enter] = animate.mock.calls.map((call) => call[0]);
+  expect(exit.at(-1)).toMatchObject({ opacity: 0 });
+  expect(String(exit.at(-1)!.transform)).toContain("-16px, 0");
+  expect(enter[0]).toMatchObject({ opacity: 0 });
+  expect(String(enter[0].transform)).toContain("16px, 0");
+  expect(enter.at(-1)).toMatchObject({ opacity: 1 });
+  // Clicks never turn pages by accident; keys, wheel and swipes do.
+  expect(bridge.listeners!.click({} as never)).toBe(true);
+});
+
+it("fades chapter replacements but leaves same-chapter updates alone", async () => {
+  const animate = fade();
+  bridge.listeners!.positionChanged(
+    Locator.deserialize({
+      href: "chapter.xhtml",
+      type: "application/xhtml+xml",
+      locations: { progression: 0.5 },
+    })!,
+  );
+  const pool = (
+    adapter as unknown as {
+      navigator: {
+        framePool: { update: (...args: unknown[]) => Promise<void> };
+      };
+    }
+  ).navigator.framePool;
+  const locator = (href: string) =>
+    Locator.deserialize({ href, type: "application/xhtml+xml" })!;
+  await pool.update(undefined, locator("chapter.xhtml"), []);
+  expect(animate).not.toHaveBeenCalled();
+  expect(bridge.update).toHaveBeenCalledOnce();
+  await pool.update(undefined, locator("next.xhtml"), []);
+  expect(bridge.update).toHaveBeenCalledTimes(2);
+  expect(animate).toHaveBeenCalledTimes(2);
+  // Scrolling continues upward into the next chapter.
+  expect(String(animate.mock.calls[0][0].at(-1)!.transform)).toContain(
+    "0, -16px",
+  );
+  expect(String(animate.mock.calls[1][0][0].transform)).toContain("0, 16px");
+});
+
+it("lays out the first chapter in the saved flow before it is shown", async () => {
+  bridge.preferences.mockClear();
+  const paged = new EPUBReaderAdapter(document.createElement("div"), {
+    location: vi.fn(),
+    selection: vi.fn(),
+  });
+  paged.preferTheme({ ...defaultTheme, epubFlow: "paginated" });
+  await paged.open({ id: "paged", type: "epub" } as ReaderDocument);
+  expect(bridge.preferences).toHaveBeenCalledWith(
+    expect.objectContaining({ scroll: false }),
+  );
+  await paged.destroy();
 });

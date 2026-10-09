@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { installEPUBScroll, type EPUBScrollState } from "./epub-scroll";
+import {
+  installEPUBPaging,
+  installEPUBScroll,
+  type EPUBScrollState,
+} from "./epub-scroll";
 let cleanup: () => void;
 let state: EPUBScrollState;
 const turn = vi.fn(async (_direction: number) => {});
@@ -125,5 +129,69 @@ it("ignores inactive frames and removes listeners on disposal", () => {
   active = true;
   cleanup();
   wheel(40);
+  expect(turn).not.toHaveBeenCalled();
+});
+
+function key(name: string, init: KeyboardEventInit = {}) {
+  const event = new KeyboardEvent("keydown", {
+    key: name,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  document.body.dispatchEvent(event);
+  return event;
+}
+it("turns one page per wheel gesture and never lets pages scroll natively", async () => {
+  cleanup();
+  cleanup = installEPUBPaging(window, state, () => active, turn, error);
+  // Mid-chapter: paging ignores the scroll position entirely.
+  document.documentElement.scrollTop = 600;
+  expect(wheel(40).defaultPrevented).toBe(true);
+  expect(turn).toHaveBeenLastCalledWith(1);
+  await vi.waitFor(() => expect(state.busy).toBe(false));
+  // Momentum from the same gesture, including tiny tail deltas, is swallowed.
+  wheel(30);
+  expect(wheel(2).defaultPrevented).toBe(true);
+  expect(turn).toHaveBeenCalledOnce();
+  // A horizontal trackpad swipe reads its dominant axis.
+  state.lastInput = Date.now() - 200;
+  document.body.dispatchEvent(
+    new WheelEvent("wheel", {
+      deltaX: -50,
+      deltaY: 5,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  expect(turn).toHaveBeenLastCalledWith(-1);
+});
+it("turns pages from arrow, page and space keys, one per press", async () => {
+  cleanup();
+  cleanup = installEPUBPaging(window, state, () => active, turn, error);
+  expect(key("ArrowRight").defaultPrevented).toBe(true);
+  expect(turn).toHaveBeenLastCalledWith(1);
+  await vi.waitFor(() => expect(state.busy).toBe(false));
+  key("ArrowLeft");
+  expect(turn).toHaveBeenLastCalledWith(-1);
+  await vi.waitFor(() => expect(state.busy).toBe(false));
+  key(" ", { shiftKey: true });
+  expect(turn).toHaveBeenLastCalledWith(-1);
+  expect(turn).toHaveBeenCalledTimes(3);
+  // Shortcuts and editing keep their own meaning.
+  key("ArrowRight", { metaKey: true });
+  const input = document.createElement("textarea");
+  document.body.append(input);
+  input.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+  );
+  expect(turn).toHaveBeenCalledTimes(3);
+});
+it("leaves scrolling frames to the scroll handler", () => {
+  cleanup();
+  active = false;
+  cleanup = installEPUBPaging(window, state, () => active, turn, error);
+  expect(wheel(40).defaultPrevented).toBe(false);
+  expect(key("ArrowRight").defaultPrevented).toBe(false);
   expect(turn).not.toHaveBeenCalled();
 });

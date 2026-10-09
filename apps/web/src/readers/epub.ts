@@ -1,4 +1,9 @@
-import { installEPUBScroll, type EPUBScrollState } from "./epub-scroll";
+import {
+  installEPUBPaging,
+  installEPUBScroll,
+  type EPUBScrollState,
+} from "./epub-scroll";
+import { EPUBTransition } from "./epub-transition";
 import { toast } from "sonner";
 import { selectionAnchor, isSelectionToolbar } from "./selection-anchor";
 import {
@@ -62,6 +67,9 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     lastInput: 0,
     direction: 0,
   };
+  private paginated = false;
+  private loaded = false;
+  private transition: EPUBTransition;
   private frameCleanups = new Map<Window, () => void>();
   private pointers = new WeakMap<Window, { x: number; y: number }>();
   private selectedWindow?: Window;
@@ -177,6 +185,11 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     document.addEventListener("keydown", this.onKeyDown);
     this.resize = new ResizeObserver(this.clearSelection);
     this.resize.observe(container);
+    this.transition = new EPUBTransition(container);
+  }
+  /** Read before open so the first layout already uses the saved flow. */
+  preferTheme(theme: ReaderTheme) {
+    this.paginated = theme.epubFlow === "paginated";
   }
   private clearState = () => {
     this.selectedWindow = undefined;
@@ -253,17 +266,28 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       this.clearAnnotationHover();
     };
     const removeScrollbars = installScrollbars(doc);
+    const current = () =>
+      !this.disposed &&
+      !!this.navigator?._cframes.some((f) => f?.iframe.contentWindow === wnd);
+    const turn = (direction: number) =>
+      direction > 0 ? this.next() : this.previous();
+    const failed = (reason: unknown) =>
+      toast.error(
+        reason instanceof Error ? reason.message : "无法读取相邻章节",
+      );
     const removeContinuousScroll = installEPUBScroll(
       wnd,
       this.scrollState,
-      () =>
-        !this.disposed &&
-        !!this.navigator?._cframes.some((f) => f?.iframe.contentWindow === wnd),
-      (direction) => (direction > 0 ? this.next() : this.previous()),
-      (reason) =>
-        toast.error(
-          reason instanceof Error ? reason.message : "无法读取相邻章节",
-        ),
+      () => current() && !this.paginated,
+      turn,
+      failed,
+    );
+    const removePaging = installEPUBPaging(
+      wnd,
+      this.scrollState,
+      () => current() && this.paginated,
+      turn,
+      failed,
     );
     const changed = () => {
       const selected = wnd.getSelection();
@@ -329,6 +353,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     const cleanup = () => {
       removeScrollbars();
       removeContinuousScroll();
+      removePaging();
       doc.removeEventListener("pointerdown", annotationPress, true);
       doc.removeEventListener("pointerup", annotationRelease, true);
       doc.removeEventListener("pointermove", annotationMove, true);
@@ -504,7 +529,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
         this.events.location(this.location, percent);
       },
       timelineItemChanged: () => {},
-      // Consume edge taps so Readium never turns a chapter horizontally.
+      // Consume edge taps: a click clears a selection or opens a note, and
+      // never turns a page by accident. Pages turn by key, wheel or swipe.
       tap: () => true,
       click: () => true,
       zoom: () => {},
@@ -578,7 +604,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
           fontSize: 1.15,
           lineHeight: 1.8,
           columnCount: 1,
-          scroll: true,
+          scroll: !this.paginated,
         },
         defaults: {},
       },
@@ -587,9 +613,37 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       "annotations",
       this.annotationObserver,
     );
+    this.fadeChapterChanges();
     const loaded = await this.navigator.load();
     if (!this.disposed && !loaded)
       throw new Error("EPUB 正文加载失败，请重新打开这本书");
+    this.loaded = true;
+  }
+  // Every chapter change, including Readium's own swipe and boundary
+  // handling, replaces the visible frame through the frame pool.
+  private fadeChapterChanges() {
+    const pool = (
+      this.navigator as unknown as {
+        framePool?: { update?: (...args: unknown[]) => Promise<void> };
+      }
+    ).framePool;
+    if (typeof pool?.update !== "function") return;
+    const update = pool.update.bind(pool);
+    pool.update = (...args: unknown[]) => {
+      const target = (args[1] as Locator | undefined)?.href.split("#")[0];
+      const source = this.location.href.split("#")[0];
+      if (!this.loaded || !target || !source || target === source)
+        return update(...args);
+      const order = this.publication!.readingOrder.items.map(
+        (l) => l.href.split("#")[0],
+      );
+      const direction = Math.sign(
+        order.indexOf(target) - order.indexOf(source),
+      );
+      return this.transition.run(direction, this.paginated ? "x" : "y", () =>
+        update(...args),
+      );
+    };
   }
   async getTOC(): Promise<TOCItem[]> {
     const map = (items: Link[], prefix = ""): TOCItem[] =>
@@ -615,17 +669,23 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     if (this.disposed) return;
     await this.navigate(locator);
   }
+  private step(direction: 1 | -1) {
+    const move = () =>
+      new Promise<void>((resolve) =>
+        direction > 0
+          ? this.navigator?.goForward(false, () => resolve())
+          : this.navigator?.goBackward(false, () => resolve()),
+      );
+    // Scrolling moves continuously; only page turns need the cross-fade.
+    return this.paginated ? this.transition.run(direction, "x", move) : move();
+  }
   async next() {
     this.clearSelection();
-    await new Promise<void>((resolve) =>
-      this.navigator?.goForward(false, () => resolve()),
-    );
+    await this.step(1);
   }
   async previous() {
     this.clearSelection();
-    await new Promise<void>((resolve) =>
-      this.navigator?.goBackward(false, () => resolve()),
-    );
+    await this.step(-1);
   }
   async search(query: string): Promise<SearchResult[]> {
     if (!this.doc || !query.trim()) return [];
@@ -735,25 +795,34 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   }
   async setTheme(theme: ReaderTheme) {
     this.clearSelection();
+    const paginated = theme.epubFlow === "paginated";
+    const flowChanged = paginated !== this.paginated;
+    this.paginated = paginated;
     const palette = {
       light: ["#ffffff", "#27272a"],
       sepia: ["#f7f6f2", "#1f1e1d"],
       dark: ["#202020", "#dededb"],
     }[theme.mode];
-    await this.navigator?.submitPreferences(
-      new EpubPreferences({
-        fontSize: theme.fontSize,
-        fontFamily: theme.fontFamily,
-        lineHeight: theme.lineHeight,
-        pageGutter: theme.margin,
-        scrollPaddingLeft: theme.margin,
-        scrollPaddingRight: theme.margin,
-        scroll: true,
-        backgroundColor: palette[0],
-        textColor: palette[1],
-        columnCount: 1,
-      }),
-    );
+    const submit = async () => {
+      await this.navigator?.submitPreferences(
+        new EpubPreferences({
+          fontSize: theme.fontSize,
+          fontFamily: theme.fontFamily,
+          lineHeight: theme.lineHeight,
+          pageGutter: theme.margin,
+          scrollPaddingLeft: theme.margin,
+          scrollPaddingRight: theme.margin,
+          scroll: !paginated,
+          backgroundColor: palette[0],
+          textColor: palette[1],
+          columnCount: 1,
+        }),
+      );
+    };
+    // Switching between pages and scrolling relayouts the whole chapter.
+    await (flowChanged && this.loaded
+      ? this.transition.run(0, "x", submit)
+      : submit());
   }
   async getContext() {
     if (!this.doc || !this.location.href) return "";

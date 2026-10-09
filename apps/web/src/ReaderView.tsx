@@ -86,6 +86,7 @@ export function ReaderView({
           if (!disposed) latest.current.events.internalLink?.(origin);
         },
       });
+      engine.preferTheme?.(latest.current.theme);
       await engine.open(doc);
       if (disposed) return;
       await engine.setTheme(latest.current.theme);

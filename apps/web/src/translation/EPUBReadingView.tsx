@@ -1,5 +1,11 @@
 import { useTranslations } from "./useTranslations";
-import { useEffect, useRef, useState, type ComponentProps } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type {
   DocumentLocation,
@@ -35,9 +41,11 @@ export function EPUBReadingView({
   onReady,
   toolbarHost,
   processing,
+  pageNavigation,
 }: ComponentProps<typeof ReaderView> & {
   toolbarHost?: HTMLElement | null;
   processing?: Processing;
+  pageNavigation?: ReactNode;
 }) {
   const [mode, setMode] = useState<Mode>("source");
   const [swapped, setSwapped] = useState(false);
@@ -453,6 +461,11 @@ export function EPUBReadingView({
                 },
               }}
             />
+            {theme.epubFlow === "paginated" && mode !== "translation" && (
+              <div className="pdf-reading-controls">
+                <div className="pdf-page-navigation">{pageNavigation}</div>
+              </div>
+            )}
           </div>
         }
         translation={

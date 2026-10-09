@@ -174,7 +174,8 @@
   height: 24px;
   background: transparent;
 }
-.pdf-reading[data-theme="sepia"] .pdf-page-navigation {
+.pdf-reading[data-theme="sepia"] .pdf-page-navigation,
+.epub-reading[data-theme="sepia"] .pdf-page-navigation {
   background: #f7f6f2;
   color: #1f1e1d;
 }

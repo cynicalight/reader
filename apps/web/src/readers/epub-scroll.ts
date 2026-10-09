@@ -7,6 +7,93 @@ export type EPUBScrollState = {
   direction: number;
 };
 
+const editable = (target: EventTarget | null) =>
+  !!(target as Element | null)?.closest?.(
+    'input, textarea, select, [contenteditable="true"]',
+  );
+
+/**
+ * Paginated reading turns one page per wheel or trackpad gesture and per key.
+ * Touch swipes stay with Readium, which drags the page under the finger.
+ */
+export function installEPUBPaging(
+  wnd: Window,
+  state: EPUBScrollState,
+  active: () => boolean,
+  turn: (direction: number) => Promise<void>,
+  error: (reason: unknown) => void,
+) {
+  const doc = wnd.document;
+  let disposed = false;
+  const move = (direction: number, event: Event) => {
+    if (disposed || !active() || !direction || editable(event.target)) return;
+    event.preventDefault();
+    const now = Date.now();
+    if (now - state.lastInput > 180 || direction !== state.direction)
+      state.locked = false;
+    state.lastInput = now;
+    state.direction = direction;
+    if (state.busy || state.locked) return;
+    state.busy = true;
+    state.locked = true;
+    void turn(direction)
+      .catch((reason) => {
+        if (!disposed) error(reason);
+      })
+      .finally(() => {
+        state.busy = false;
+      });
+  };
+  const wheel = (event: WheelEvent) => {
+    if (event.ctrlKey || wnd.getSelection()?.toString().trim()) return;
+    const delta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
+    // Ignore the tail of momentum and tiny jitter; a deliberate gesture
+    // continues to refresh the lock until it settles.
+    if (Math.abs(delta) < 4) {
+      if (disposed || !active()) return;
+      // Pages never scroll natively; only the turn below moves them.
+      event.preventDefault();
+      if (Math.abs(delta) > 0) state.lastInput = Date.now();
+      return;
+    }
+    move(Math.sign(delta), event);
+  };
+  const key = (event: KeyboardEvent) => {
+    if (
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.isComposing ||
+      (event.shiftKey && event.key !== " ")
+    )
+      return;
+    const direction = ["ArrowRight", "ArrowDown", "PageDown"].includes(
+      event.key,
+    )
+      ? 1
+      : ["ArrowLeft", "ArrowUp", "PageUp"].includes(event.key)
+        ? -1
+        : event.key === " "
+          ? event.shiftKey
+            ? -1
+            : 1
+          : 0;
+    // A key press is a single intent; never let a held gesture lock swallow it.
+    if (direction && !event.repeat) state.locked = false;
+    move(direction, event);
+  };
+  doc.addEventListener("wheel", wheel, { passive: false });
+  doc.addEventListener("keydown", key);
+  return () => {
+    disposed = true;
+    doc.removeEventListener("wheel", wheel);
+    doc.removeEventListener("keydown", key);
+  };
+}
+
 export function installEPUBScroll(
   wnd: Window,
   state: EPUBScrollState,
@@ -17,10 +104,6 @@ export function installEPUBScroll(
   const doc = wnd.document;
   let disposed = false;
   let touchY: number | undefined;
-  const editable = (target: EventTarget | null) =>
-    !!(target as Element | null)?.closest?.(
-      'input, textarea, select, [contenteditable="true"]',
-    );
   const move = (delta: number, event: Event) => {
     if (
       disposed ||
