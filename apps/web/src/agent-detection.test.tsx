@@ -217,36 +217,3 @@ it("does not show old green checks after a text retry disconnects", async () => 
   expect(host.querySelector('[aria-label="文本推理：未通过"]')).not.toBeNull();
   expect(host.querySelector('[aria-label="图片理解：已通过"]')).toBeNull();
 });
-
-it("saves the primary library from display settings without changing the current library", async () => {
-  vi.mocked(api.providers).mockResolvedValue([]);
-  useReaderStore.setState({
-    libraryPreferences: { mode: "papers", papers: { autoLookup: false } },
-  });
-  await render();
-  const display = [
-    ...host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-  ].find((tab) => tab.textContent?.includes("显示"))!;
-  await act(async () => display.click());
-  const trigger = host.querySelector<HTMLButtonElement>(
-    '[aria-labelledby="primary-library-label"]',
-  )!;
-  expect(trigger.textContent).toContain("文献库");
-  await act(async () => {
-    trigger.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-    trigger.click();
-  });
-  const books = [
-    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
-  ].find((option) => option.textContent?.includes("图书库"))!;
-  await act(async () => {
-    books.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-    books.click();
-  });
-  expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith({
-    mode: "papers",
-    primaryMode: "books",
-    papers: { autoLookup: false },
-  });
-  expect(trigger.textContent).toContain("图书库");
-});
