@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -119,6 +127,13 @@ import { MergeDialog } from "./MergeDialog";
 import { SmartCategoryDialog } from "./SmartCategoryDialog";
 import { copyCitations, exportCitations } from "./CitationMenu";
 import { PAPER_DRAG_TYPE } from "./PaperSidebar";
+import {
+  clampDetailWidth,
+  detailWidthRange,
+  dragHorizontally,
+  resizeBoundary,
+  resizeStep,
+} from "./resize";
 
 export interface PaperLibraryProps {
   documents: Document[];
@@ -281,6 +296,79 @@ export function PaperLibrary({
     main.addEventListener("pointerdown", away);
     return () => main.removeEventListener("pointerdown", away);
   }, [selectedId, ui]);
+  // Widths follow the pointer locally and are saved once the drag ends.
+  const [draftWidths, setDraftWidths] =
+    useState<Partial<Record<PaperColumn, number>>>();
+  const [draftDetail, setDraftDetail] = useState<number>();
+  const columnWidths = { ...prefs.columnWidths, ...draftWidths };
+  const detailWidth = draftDetail ?? prefs.detailWidth;
+  const saveColumnWidths = (next: Partial<Record<PaperColumn, number>>) =>
+    void savePaperPreferences((p) => ({
+      ...p,
+      columnWidths: { ...p.columnWidths, ...next },
+    }));
+  const headerWidths = (cell: Element) =>
+    Object.fromEntries(
+      Array.from(
+        cell.closest("tr")?.querySelectorAll<HTMLElement>("th[data-column]") ??
+          [],
+      ).map((th) => [th.dataset.column, th.getBoundingClientRect().width]),
+    );
+  const resizeColumn = (
+    e: ReactPointerEvent<HTMLElement>,
+    left: "title" | PaperColumn,
+    right: PaperColumn,
+  ) => {
+    const start = headerWidths(e.currentTarget);
+    let next: Partial<Record<PaperColumn, number>> = {};
+    dragHorizontally(
+      e,
+      (dx) => {
+        next = resizeBoundary(start, left, right, dx);
+        setDraftWidths(next);
+      },
+      () => {
+        if (Object.keys(next).length) saveColumnWidths(next);
+        setDraftWidths(undefined);
+      },
+    );
+  };
+  const nudgeColumn = (
+    e: ReactKeyboardEvent<HTMLElement>,
+    left: "title" | PaperColumn,
+    right: PaperColumn,
+  ) => {
+    const dx = { ArrowLeft: -resizeStep, ArrowRight: resizeStep }[e.key];
+    if (!dx) return;
+    e.preventDefault();
+    saveColumnWidths(
+      resizeBoundary(headerWidths(e.currentTarget), left, right, dx),
+    );
+  };
+  const saveDetailWidth = (width: number) =>
+    void savePaperPreferences((p) => ({ ...p, detailWidth: width }));
+  const resizeDetail = (e: ReactPointerEvent<HTMLElement>) => {
+    const start =
+      e.currentTarget.nextElementSibling?.getBoundingClientRect().width ?? 0;
+    let width: number | undefined;
+    dragHorizontally(
+      e,
+      // The panel sits on the right: dragging left widens it.
+      (dx) => setDraftDetail((width = clampDetailWidth(start - dx))),
+      () => {
+        if (width !== undefined) saveDetailWidth(width);
+        setDraftDetail(undefined);
+      },
+    );
+  };
+  const nudgeDetail = (e: ReactKeyboardEvent<HTMLElement>) => {
+    const dx = { ArrowLeft: resizeStep, ArrowRight: -resizeStep }[e.key];
+    if (!dx) return;
+    e.preventDefault();
+    const current =
+      e.currentTarget.nextElementSibling?.getBoundingClientRect().width ?? 0;
+    saveDetailWidth(clampDetailWidth(current + dx));
+  };
   const actions: PaperMenuActions = {
     open: openDocument,
     move: moveToBooks,
@@ -505,7 +593,16 @@ export function PaperLibrary({
           <TrashView documents={trash} />
         </div>
       ) : (
-        <div className="paper-library-body">
+        <div
+          className="paper-library-body"
+          style={
+            detailWidth
+              ? ({
+                  "--paper-detail-width": `${detailWidth}px`,
+                } as CSSProperties)
+              : undefined
+          }
+        >
           <section
             className="paper-list-pane"
             aria-label="论文列表"
@@ -747,7 +844,8 @@ export function PaperLibrary({
                     <TableHeader>
                       <TableRow>
                         {picking && <TableHead className="w-8" />}
-                        {(["title", ...columns] as const).map((c) => {
+                        {(["title", ...columns] as const).map((c, i, order) => {
+                          const next = order[i + 1] as PaperColumn | undefined;
                           const active = sort === columnSort[c];
                           const descending =
                             descendingSorts.has(sort) !== reverse;
@@ -756,6 +854,11 @@ export function PaperLibrary({
                             <TableHead
                               key={c}
                               data-column={c}
+                              style={
+                                c === "title"
+                                  ? undefined
+                                  : { width: columnWidths[c] }
+                              }
                               aria-sort={
                                 active
                                   ? descending
@@ -773,6 +876,20 @@ export function PaperLibrary({
                                 {c === "title" ? "标题" : columnLabels[c]}
                                 {active && <Arrow />}
                               </Button>
+                              {/* The last column borders the menu column; the title absorbs its changes. */}
+                              {next && (
+                                <span
+                                  role="separator"
+                                  aria-orientation="vertical"
+                                  aria-label={`调整${c === "title" ? "标题" : columnLabels[c]}列宽度`}
+                                  tabIndex={0}
+                                  className="paper-column-resizer"
+                                  onPointerDown={(e) =>
+                                    resizeColumn(e, c, next)
+                                  }
+                                  onKeyDown={(e) => nudgeColumn(e, c, next)}
+                                />
+                              )}
                             </TableHead>
                           );
                         })}
@@ -807,7 +924,21 @@ export function PaperLibrary({
             )}
           </section>
           {selected && !picking && (
-            <PaperDetail key={selected.id} doc={selected} actions={actions} />
+            <>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="调整论文详情宽度"
+                aria-valuemin={detailWidthRange.min}
+                aria-valuemax={detailWidthRange.max}
+                aria-valuenow={detailWidth}
+                tabIndex={0}
+                className="paper-detail-resizer"
+                onPointerDown={resizeDetail}
+                onKeyDown={nudgeDetail}
+              />
+              <PaperDetail key={selected.id} doc={selected} actions={actions} />
+            </>
           )}
         </div>
       )}
