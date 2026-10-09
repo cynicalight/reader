@@ -1,9 +1,9 @@
 name: CI
 
+# Direct pushes to main skip CI; pull requests, releases and manual runs keep the full checks.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
   workflow_call:
     inputs:
       ref:
