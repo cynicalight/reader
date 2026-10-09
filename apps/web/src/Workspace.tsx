@@ -454,9 +454,6 @@ export function Workspace({
     if (!target || annotationSaving.current) return;
     annotationSaving.current = true;
     setNoteSaving(written);
-    // Start clipboard access inside the user's click, before network awaits.
-    const copying =
-      kind !== "bookmark" && source?.text ? copyText(source.text) : undefined;
     try {
       const prepared =
         source && kind !== "bookmark" && !editingAnnotation
@@ -479,15 +476,8 @@ export function Workspace({
             });
       setAnnotations((items) => applySavedAnnotation(items, a));
       adapter?.clearSelection();
-      const copied = await copying;
-      toast.success(
-        kind === "bookmark"
-          ? "已添加书签"
-          : copied
-            ? "已保存，已复制"
-            : "已保存",
-        { id: "reader-annotation-save" },
-      );
+      if (kind === "bookmark")
+        toast.success("已添加书签", { id: "reader-annotation-save" });
       setNoteOpen(false);
       setNoteSelection(null);
       setEditingAnnotation(null);
