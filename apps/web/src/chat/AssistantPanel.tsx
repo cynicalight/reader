@@ -1,5 +1,5 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, Copy, LoaderCircle } from "lucide-react";
+import { ArrowDown, LoaderCircle } from "lucide-react";
 import { ProviderGlyph } from "../ProviderIdentity";
 import type { Message } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
@@ -9,18 +9,13 @@ import {
   type ChatSnapshot,
   type PendingAnswer,
 } from "./chat-session";
-import { copyText } from "./clipboard";
+import { AnswerActions } from "./AnswerActions";
 const MessageMarkdown = lazy(() =>
   import("./MessageMarkdown").then((module) => ({
     default: module.MessageMarkdown,
   })),
 );
 import { useChatScroll } from "./useChatScroll";
-const messageTimeFormat = new Intl.DateTimeFormat("en", {
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-});
 export type ChatRow = {
   key: string;
   message?: Message;
@@ -139,25 +134,7 @@ export function AssistantPanel({
                   </p>
                 )}
                 {assistant && !!content && (
-                  <div className="chat-message-actions">
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      aria-label="复制回答"
-                      title="复制回答"
-                      onClick={() => void copyText(content)}
-                    >
-                      <Copy aria-hidden="true" />
-                    </Button>
-                    {timestamp && !Number.isNaN(timestamp.getTime()) && (
-                      <time
-                        dateTime={timestamp.toISOString()}
-                        title={timestamp.toLocaleString()}
-                      >
-                        {messageTimeFormat.format(timestamp)}
-                      </time>
-                    )}
-                  </div>
+                  <AnswerActions content={content} timestamp={timestamp} />
                 )}
                 {message && extras(message)}
               </div>

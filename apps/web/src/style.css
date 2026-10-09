@@ -847,14 +847,17 @@ kbd {
   align-items: center;
   gap: 6px;
   margin-top: 0;
+  padding-bottom: 10px;
   color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1;
   opacity: 0;
   pointer-events: none;
+  transition: opacity 150ms ease;
 }
 .chat-message.assistant:hover .chat-message-actions,
-.chat-message.assistant:focus-within .chat-message-actions {
+.chat-message.assistant:focus-within .chat-message-actions,
+.chat-message-actions[data-copied] {
   opacity: 1;
   pointer-events: auto;
 }
@@ -864,8 +867,44 @@ kbd {
     pointer-events: auto;
   }
 }
+/* After the copied hold, stay hidden until the pointer leaves the answer. */
+@media (hover: hover) {
+  .chat-message.assistant .chat-message-actions[data-dismissed] {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 .chat-message-actions button {
   color: inherit;
+}
+.chat-copy-button {
+  transition: transform 120ms ease;
+}
+.chat-copy-button:active {
+  transform: scale(0.85);
+}
+.chat-copy-check {
+  animation: chat-copy-check 320ms ease-out;
+}
+@keyframes chat-copy-check {
+  35% {
+    transform: scale(0.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-message-actions,
+  .chat-copy-button {
+    transition: none;
+  }
+  .chat-copy-button:active {
+    transform: none;
+  }
+  .chat-copy-check {
+    animation: none;
+  }
 }
 .chat-message.user {
   background: var(--muted);
