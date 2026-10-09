@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MessageMarkdown } from "./chat/MessageMarkdown";
-import { ReadingLinkNavigation } from "./reading-links";
+import type { Root } from "mdast";
+import { ReadingLinkNavigation, remarkReadingCitations } from "./reading-links";
 import { installPDFExternalLinks } from "./readers/pdf-external-links";
 vi.mock("./chat/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 const openExternal = vi.fn(async () => {});
@@ -110,4 +111,59 @@ it("renders citation-linked text containing inline math", async () => {
   } finally {
     await act(async () => root.unmount());
   }
+});
+
+const paragraph = (...children: unknown[]) =>
+  ({
+    type: "root",
+    children: [{ type: "paragraph", children }],
+  }) as Root;
+const run = (tree: Root) => {
+  remarkReadingCitations({ blockId: "p1-b1" })(tree);
+  return tree;
+};
+const plain = (node: unknown): string => {
+  const n = node as { value?: string; children?: unknown[] };
+  return n.value ?? n.children?.map(plain).join("") ?? "";
+};
+const citations = (node: unknown): string[] => {
+  const n = node as { type: string; url?: string; children?: unknown[] };
+  if (n.type === "link" && n.url?.startsWith("#reader-citation?"))
+    return [new URLSearchParams(n.url.split("?")[1]).get("label")!];
+  return n.children?.flatMap(citations) ?? [];
+};
+it("expands citation ranges and keeps the written separators", () => {
+  const tree = run(
+    paragraph({ type: "text", value: "见 [3–5, 8] 与 [1，2]。" }),
+  );
+  expect(plain(tree)).toBe("见 [3, 4, 5, 8] 与 [1，2]。");
+  expect(citations(tree)).toEqual(["3", "4", "5", "8", "1", "2"]);
+});
+it("links only the ends of descending or very long ranges", () => {
+  const tree = run(paragraph({ type: "text", value: "[1-100] [9–7]" }));
+  expect(plain(tree)).toBe("[1-100] [9–7]");
+  expect(citations(tree)).toEqual(["1", "100", "9", "7"]);
+});
+it("finds citations inside emphasis but leaves math, code and links alone", () => {
+  const math = { type: "inlineMath", value: "x_[1]" };
+  const tree = run(
+    paragraph(
+      { type: "strong", children: [{ type: "text", value: "[2]" }] },
+      math,
+      { type: "inlineCode", value: "[8]" },
+      {
+        type: "link",
+        url: "https://example.com",
+        children: [{ type: "text", value: "[9]" }],
+      },
+    ),
+  );
+  expect(citations(tree)).toEqual(["2"]);
+  expect(math).toEqual({ type: "inlineMath", value: "x_[1]" });
+  expect(plain(tree)).toBe("[2]x_[1][8][9]");
+});
+it("leaves the tree unchanged without a source block", () => {
+  const tree = paragraph({ type: "text", value: "[3]" });
+  remarkReadingCitations({})(tree);
+  expect(citations(tree)).toEqual([]);
 });
