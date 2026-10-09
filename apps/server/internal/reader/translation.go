@@ -10,8 +10,12 @@ import (
 )
 
 type TranslationSentence struct {
+	// Source is the model's sentence, which may repair extraction errors.
 	Source string `json:"source"`
 	Target string `json:"target"`
+	// Anchor is the extracted text the sentence covers, set when it differs
+	// from Source. Readers locate sentences in the PDF text layer by it.
+	Anchor string `json:"anchor,omitempty"`
 }
 type TranslationBlock struct {
 	BlockID         string                `json:"blockId"`
@@ -240,8 +244,14 @@ func parseTranslation(raw, source string) ([]TranslationSentence, error) {
 		joined.WriteByte(' ')
 	}
 	normalize := func(v string) string { return strings.Join(strings.Fields(v), "") }
-	if normalize(joined.String()) != normalize(source) {
+	if normalize(joined.String()) == normalize(source) {
+		return out.Sentences, nil
+	}
+	if !similarText(joined.String(), source) {
 		return nil, errors.New("原文句子未完整对应，请重试此段")
+	}
+	for i, anchor := range alignAnchors(source, out.Sentences) {
+		out.Sentences[i].Anchor = anchor
 	}
 	return out.Sentences, nil
 }

@@ -35,10 +35,10 @@ func translationFixture(t *testing.T) (*Server, Processing, layoutManifest) {
 	}
 	return s, p, m
 }
-func TestTranslationRejectsMissingReorderedOrEmptySentences(t *testing.T) {
+func TestTranslationRejectsMissingUnrelatedOrEmptySentences(t *testing.T) {
 	cases := []string{
 		`{"sentences":[{"source":"First sentence.","target":"第一句。"}]}`,
-		`{"sentences":[{"source":"Second sentence.","target":"第二句。"},{"source":"First sentence.","target":"第一句。"}]}`,
+		`{"sentences":[{"source":"Unrelated words here.","target":"无关。"}]}`,
 		`{"sentences":[{"source":"First sentence. Second sentence.","target":""}]}`,
 		`{"sentences":[`,
 	}
@@ -62,7 +62,7 @@ func TestTranslationPartialFailureAndRetryPreservesCompletedBlocks(t *testing.T)
 		n := calls.Add(1)
 		text := translationLine(m.Blocks[1])
 		if n == 1 {
-			text = translationLine(m.Blocks[0]) + strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Wrong paragraph.", 1)
+			text = translationLine(m.Blocks[0]) + strings.Replace(translationLine(m.Blocks[1]), "Another paragraph.", "Unrelated words here.", 1)
 		}
 
 		writeAPIReply(w, text)

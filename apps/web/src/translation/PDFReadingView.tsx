@@ -21,7 +21,11 @@ import type {
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
-import { defaultTheme, isPDFPageDecoration } from "@reader/core";
+import {
+  defaultTheme,
+  isPDFPageDecoration,
+  sentenceAnchor,
+} from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
@@ -599,7 +603,9 @@ export function PDFReadingView({
         if (!t) return [];
         const needle = value.text.replace(/\s/g, "").toLowerCase();
         const matches = t.sentences.flatMap((s, i) =>
-          s.source.replace(/\s/g, "").toLowerCase().includes(needle) ? [i] : [],
+          sentenceAnchor(s).replace(/\s/g, "").toLowerCase().includes(needle)
+            ? [i]
+            : [],
         );
         return [
           {

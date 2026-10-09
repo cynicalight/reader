@@ -2553,8 +2553,11 @@ export interface components {
       };
     };
     TranslationSentence: {
+      /** @description The model's sentence; it may repair PDF extraction errors. */
       source: string;
       target: string;
+      /** @description Extracted text this sentence covers when it differs from source; used to locate the sentence in the PDF text layer. */
+      anchor?: string;
     };
     TranslationBlock: {
       blockId: string;

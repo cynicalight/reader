@@ -421,8 +421,15 @@ export interface PDFBlock {
   caption?: string;
 }
 export interface TranslationSentence {
+  /** The model's sentence; it may repair PDF extraction errors. */
   source: string;
   target: string;
+  /** Extracted text the sentence covers, when it differs from `source`. */
+  anchor?: string;
+}
+/** Text used to find a sentence in the PDF text layer. */
+export function sentenceAnchor(sentence: TranslationSentence): string {
+  return sentence.anchor || sentence.source;
 }
 export interface TranslationBlock {
   blockId: string;
