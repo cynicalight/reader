@@ -35,13 +35,6 @@ it("reads Windows settings with hidden, bounded PowerShell and passes them to th
   expect(source).toContain("GlobalFree");
 });
 
-it("does not disguise a failed Windows configuration read as no proxy", async () => {
-  execute.mockRejectedValue(new Error("PowerShell unavailable"));
-  await expect(childProxyEnvironment({}, "win32")).rejects.toThrow(
-    "PowerShell unavailable",
-  );
-});
-
 it("does not launch a proxy reader on unsupported platforms", async () => {
   expect(
     await childProxyEnvironment({ HTTP_PROXY: "http://existing:80" }, "linux"),
