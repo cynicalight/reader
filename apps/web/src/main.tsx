@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import { configureAPI } from "@reader/api";
 import { App } from "./App";
+import { installCloseFlush } from "./close-flush";
 import "./style.css";
 import { installScrollbars } from "./scrollbars";
 const removeScrollbars = installScrollbars(document);
@@ -31,4 +32,8 @@ if (import.meta.env.DEV && location.pathname === "/__streaming-benchmark") {
   void import("./CoverProcessingPreview").then(({ default: Preview }) =>
     root.render(<Preview />),
   );
-} else root.render(<App />);
+} else {
+  const removeCloseFlush = installCloseFlush();
+  if (import.meta.hot) import.meta.hot.dispose(removeCloseFlush);
+  root.render(<App />);
+}

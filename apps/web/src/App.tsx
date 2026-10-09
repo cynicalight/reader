@@ -52,7 +52,6 @@ import { Settings } from "./Settings";
 import { Workspace } from "./Workspace";
 import { useProcessing } from "./ProcessingStatus";
 import { useResolvedTheme } from "./appearance";
-import { flushProgress } from "./progress";
 import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
@@ -142,21 +141,6 @@ export function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, []);
-  useEffect(
-    () =>
-      window.readerDesktop?.onBeforeClose(async () => {
-        await flushProgress();
-        await api.saveSettings(useReaderStore.getState().theme);
-      }),
-    [],
-  );
-  useEffect(() => {
-    const flush = () => {
-      void flushProgress().catch(() => {});
-    };
-    window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
   }, []);
   const chooseFiles = () => {
     if (window.readerDesktop) {
