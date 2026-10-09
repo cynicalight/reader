@@ -33,6 +33,14 @@ function MessageMarkdown({
 }
 
 /** A paragraph that fails to render shows a notice instead of taking down the reader. */
+// Algorithms render as a code block; the fence outgrows any backtick run inside.
+const algorithmMarkdown = (text: string) => {
+  const fence = "`".repeat(
+    Math.max(3, ...Array.from(text.matchAll(/`+/g), (m) => m[0].length + 1)),
+  );
+  return `${fence}algorithm\n${text}\n${fence}`;
+};
+
 export function TranslationText(props: TranslationTextProps) {
   return (
     <ErrorBoundary
@@ -145,7 +153,9 @@ function TranslationContent({
       {preserve ? (
         !asset &&
         (block.label === "algorithm" ? (
-          <pre>{block.text}</pre>
+          <div className="translation-algorithm">
+            <MessageMarkdown content={algorithmMarkdown(block.text)} />
+          </div>
         ) : (
           <MessageMarkdown
             content={block.text}
