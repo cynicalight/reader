@@ -1830,10 +1830,11 @@ kbd {
 .image-preview-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
-.image-preview-controls > span {
-  margin-left: auto;
+.image-preview-loading {
+  text-align: center;
   font-size: 12px;
   color: var(--muted-foreground);
 }
