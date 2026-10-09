@@ -6,14 +6,14 @@
     <title>Reader — 本地优先的 EPUB / PDF 阅读器</title>
     <meta
       name="description"
-      content="Reader 是一个本地优先的 EPUB / PDF 阅读器：书库、批注、全文搜索，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
+      content="Reader 是一个本地优先的 EPUB / PDF 阅读器：论文库与图书库、原文译文对照、批注与引用导出，以及通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用的 AI 助读。"
     />
     <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="Reader — 本地优先的 EPUB / PDF 阅读器" />
-    <meta property="og:description" content="读书与读论文，批注与 AI 助读都回到原文。" />
+    <meta property="og:description" content="读论文与读书，译文、批注与 AI 助读都回到原文。" />
     <meta property="og:url" content="https://cynicalight.github.io/reader/" />
-    <meta property="og:image" content="https://cynicalight.github.io/reader/assets/screenshots/library-light.webp" />
+    <meta property="og:image" content="https://cynicalight.github.io/reader/assets/screenshots/pdf-bilingual-ai.webp" />
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -108,20 +108,20 @@
           <path d="M320 136h120" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" opacity="0.6" />
         </svg>
         <div class="hero-copy wrap">
-          <span class="eyebrow reveal"><b>EPUB · PDF</b><span data-en="Books and papers, read on your Mac">为书籍与论文而做的桌面阅读器</span></span>
+          <span class="eyebrow reveal"><b>PDF · EPUB</b><span data-en="A desktop reader for papers and books">为论文与书籍而做的桌面阅读器</span></span>
           <h1 class="reveal" data-en="Read deeper.<br /><em>Stay with the text.</em>">读得更深，<br /><em>始终回到原文。</em></h1>
-          <p class="hero-sub reveal" data-en="A local-first EPUB / PDF reader. Highlights, search and AI help all stay anchored to the page you are reading — documents never leave your machine, and AI runs through the Claude Code, Codex or Kimi CLI you already use.">
-            本地优先的 EPUB / PDF 阅读器。批注、搜索与 AI 助读都锚定在你正在读的那一页——文档留在本机，AI 通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用。
+          <p class="hero-sub reveal" data-en="A local-first PDF / EPUB reader with a paper library and a book library. Papers read side by side with their translation, and highlights, search and AI help stay anchored to the source — documents stay on your machine, and AI runs through the Claude Code, Codex or Kimi CLI you already use.">
+            本地优先的 PDF / EPUB 阅读器，分论文库与图书库。论文可以原文译文逐段对照，批注、搜索与 AI 助读都锚定在原文——文档留在本机，AI 通过你已登录的 Claude Code、Codex 或 Kimi CLI 调用。
           </p>
           <div class="hero-cta reveal">
             <a class="btn btn-primary" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener">
-              <svg class="icon"><use href="#i-download" /></svg><span data-en="Download for macOS">下载 macOS 版</span>
+              <svg class="icon"><use href="#i-download" /></svg><span data-en="Download">下载安装包</span>
             </a>
             <a class="btn btn-ghost" href="https://github.com/cynicalight/reader" target="_blank" rel="noopener">
               <svg class="icon"><use href="#i-github" /></svg><span data-en="View on GitHub">在 GitHub 查看</span>
             </a>
           </div>
-          <p class="hero-meta reveal" data-en="Free · Apple Silicon · or build from source">免费使用 · Apple Silicon · 也可从源码运行</p>
+          <p class="hero-meta reveal" data-en="Free · macOS (Apple Silicon) · Windows x64 · or build from source">免费使用 · macOS（Apple Silicon）· Windows x64 · 也可从源码运行</p>
         </div>
         <div class="hero-scroll" aria-hidden="true"></div>
       </section>
@@ -214,18 +214,34 @@
         <div class="wrap">
           <div class="section-head reveal">
             <div class="kicker">Features</div>
-            <h2 data-en="Built for long reading,<br />not for skimming.">为长时间阅读而设计，<br />而不是为了略读。</h2>
-            <p class="lead" data-en="A shared library and reading interface for two very different formats — each keeps the controls that suit its layout.">两种排版迥异的格式，共用一个书库与阅读界面；各自保留适合自己的阅读方式。</p>
+            <h2 data-en="Take one paper,<br />from import to citation.">以一篇论文为例，<br />从导入读到引用。</h2>
+            <p class="lead" data-en="Reader has two modes: a paper library for PDFs, organized, translated and cited as papers, and a book library for EPUBs and long PDFs. Here is one paper, read in the paper library.">Reader 分论文库与图书库两种模式：论文库只收 PDF，按论文整理、翻译与引用；图书库放 EPUB 与长篇 PDF。下面以在论文库中读一篇 PDF 为例。</p>
           </div>
           <div class="bento">
+            <article class="card span-2 reveal">
+              <h3 data-en="A paper library that sorts itself out">论文库：导入即整理</h3>
+              <p data-en="Drop in a PDF, or paste a DOI, arXiv ID, link or title. Authors, year and venue fill in without overwriting your edits. Nested categories, tags, reading status, a table view and duplicate merging are built in.">拖入 PDF，或粘贴 DOI、arXiv 编号、链接或标题导入；作者、年份与出处自动补全，不覆盖手动修改。支持嵌套分类、标签、阅读状态、表格视图与重复合并。</p>
+              <div class="viz">
+                <div class="plib">
+                  <div class="sbox"><svg class="icon"><use href="#i-search" /></svg><span class="pid">arXiv:1706.03762</span><span class="pgo" data-en="Import">导入</span></div>
+                  <div class="ptable">
+                    <div class="prow phead"><span data-en="Title">标题</span><span data-en="Year">年份</span><span data-en="Tags">标签</span><span data-en="Status">状态</span></div>
+                    <div class="prow pnew"><span class="pt"><i style="background: var(--accent)"></i><b>Attention Is All You Need</b><small>Vaswani et al. · NeurIPS</small></span><span>2017</span><span><span class="chip">Transformer</span></span><span class="st" data-en="Unread">未读</span></div>
+                    <div class="prow"><span class="pt"><i style="background: var(--green)"></i><b>Deep Residual Learning for Image Recognition</b><small>He et al. · CVPR</small></span><span>2016</span><span><span class="chip">Vision</span></span><span class="st on" data-en="Reading">在读</span></div>
+                    <div class="prow"><span class="pt"><i style="background: var(--accent)"></i><b>BERT: Pre-training of Deep Bidirectional Transformers</b><small>Devlin et al. · NAACL</small></span><span>2019</span><span><span class="chip">NLP</span></span><span class="st done" data-en="Read">已读</span></div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
             <article class="card reveal">
               <h3 data-en="Processing, quietly on the cover">后台处理，安静地留在封面上</h3>
-              <p data-en="PDFs are learned page by page, then consolidated. One stage at a time; finished stages fade upward and disappear. Keep reading meanwhile.">PDF 先“学习”页面正文与版面，再“沉淀”图片文字稿。一次只显示一个阶段，完成后向上淡出；处理期间照常阅读。</p>
+              <p data-en="An imported paper is learned page by page, then translated. One stage at a time; finished stages fade upward and disappear. Keep reading meanwhile.">导入后先“学习”页面正文与版面，再“翻译”正文与图题。一次只显示一个阶段，完成后向上淡出；处理期间照常阅读。</p>
               <div class="viz">
                 <div class="covers">
                   <div class="cover" id="cover">
                     <span class="fmt">PDF</span>
-                    <span class="ttl">reading-notes</span>
+                    <span class="ttl">attention-is-all-you-need</span>
                     <div class="stage-panel" id="stage-panel">
                       <div class="lab"><span id="stage-label">学习中</span><span id="stage-pct">0%</span></div>
                       <div class="bar"><i id="stage-bar"></i></div>
@@ -236,8 +252,8 @@
             </article>
 
             <article class="card span-2 reveal">
-              <h3 data-en="Figures and formulas, understood">图表与公式，也能被读懂</h3>
-              <p data-en="A local layout model finds figures and formulas in a PDF. Hover one to highlight the whole region; your selected agent writes a transcript for each image, so AI can talk about it later.">本地版面模型识别 PDF 中的图表与公式。悬停即可高亮整块区域；所选 Agent 为每张图生成文字稿，之后的对话就能“看见”它。</p>
+              <h3 data-en="Source and translation, paragraph by paragraph">原文译文，逐段对照</h3>
+              <p data-en="A local layout model finds text, figures and formulas. Your selected agent translates paragraphs and captions, and turns formulas into LaTeX. The original stays in PDF.js; hover and selections line up sentence by sentence, and both panes scroll together.">本地版面模型识别正文、图表与公式；所选 Agent 逐段翻译正文和图题，公式转为 LaTeX。原文仍由 PDF.js 渲染，两侧悬停与划词按句对应，滚动保持同步。</p>
               <div class="viz">
                 <div class="pdf">
                   <div class="col">
@@ -261,16 +277,31 @@
                     <div class="ln"></div><div class="ln"></div><div class="ln m"></div><div class="ln"></div><div class="ln s"></div>
                   </div>
                   <div class="transcript">
-                    <b><svg class="icon"><use href="#i-scan" /></svg><span data-en="Image transcript">图片文字稿</span></b>
-                    <span data-en="Bar chart comparing three methods across two datasets; the proposed method scores highest on both.">柱状图对比三种方法在两个数据集上的得分，所提方法在两组中均最高。</span>
+                    <b><svg class="icon"><use href="#i-languages" /></svg><span data-en="Translation">译文</span></b>
+                    <span>图 3：三种方法在两个数据集上的得分，所提方法在两组中均最高。</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card reveal">
+              <h3 data-en="Search inside the document">在文档中搜索</h3>
+              <p data-en="PDFs search page by page; EPUBs use SQLite FTS5 full-text search with literal substring matching.">PDF 按页搜索；EPUB 通过 SQLite FTS5 全文检索并支持字面子串匹配。</p>
+              <div class="viz">
+                <div class="search-viz">
+                  <div class="sbox"><svg class="icon"><use href="#i-search" /></svg><span class="typed" id="typed"></span></div>
+                  <div class="results" id="results">
+                    <div class="res"><small>02 · 区分主张与证据</small>为这个主张提供了什么<mark>证据</mark>？</div>
+                    <div class="res"><small>01 · 从问题开始</small>再到方法和实验中核对<mark>证据</mark>。</div>
+                    <div class="res"><small>02 · 区分主张与证据</small>推测则写出下一步需要的<mark>证据</mark>。</div>
                   </div>
                 </div>
               </div>
             </article>
 
             <article class="card span-2 reveal">
-              <h3 data-en="Highlights, underlines, notes — exported as Markdown">高亮、下划线、笔记，导出为 Markdown</h3>
-              <p data-en="Annotations keep their exact location: Readium locators for EPUB, page and normalized rectangles for PDF. Reading position restores where you left off.">批注保留精确位置：EPUB 使用 Readium 定位符，PDF 使用页码与归一化选区。重新打开时恢复到上次读到的地方。</p>
+              <h3 data-en="Highlights, questions and a paper note — exported as Markdown">高亮、批注与论文笔记，导出为 Markdown</h3>
+              <p data-en="Colored highlights, underlines, questions and tags, filterable by color or tag. Quotes in the paper note link back to the source, and notes made on the translation stay tied to the original.">彩色高亮、下划线、问题与标签，可按颜色或标签筛选。摘录进论文笔记的批注带着回到原文的链接，在译文中划出的批注也关联原文位置。</p>
               <div class="viz">
                 <div class="annot">
                   <div class="text">
@@ -286,8 +317,19 @@
             </article>
 
             <article class="card reveal">
+              <h3 data-en="Citations, ready to paste">引用，一键导出</h3>
+              <p data-en="Copy one citation or export many as GB/T 7714, APA, BibTeX or RIS.">复制单篇引用或批量导出，支持 GB/T 7714、APA、BibTeX 与 RIS。</p>
+              <div class="viz">
+                <div class="cite" id="cite">
+                  <div class="fmts"><span class="on">GB/T 7714</span><span>APA</span><span>BibTeX</span><span>RIS</span></div>
+                  <div class="md" id="cite-text">[1] VASWANI A, SHAZEER N, PARMAR N, et al. Attention is all you need[C]//Advances in Neural Information Processing Systems 30. 2017.</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card reveal">
               <h3 data-en="The AI account you already have">用你已有的 AI 账户</h3>
-              <p data-en="Reader detects locally installed CLIs and runs a real text and vision test. No API key, no unofficial OAuth.">检测本机已安装的 CLI，用真实请求测试文本与识图能力。无需 API Key，不读取凭据文件。</p>
+              <p data-en="Reader detects locally installed CLIs and runs a real text and vision test. Pick separate models for chat and translation. No API key, no unofficial OAuth.">检测本机已安装的 CLI，用真实请求测试文本与识图能力；问答与翻译可分别选择模型。无需 API Key，不读取凭据文件。</p>
               <div class="viz">
                 <div class="providers" id="providers">
                   <div class="prov"><span class="mono-logo">C</span><span class="name">Claude Code</span><span class="caps"><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Text">文本</span></span><span class="cap"><i class="spin"></i><svg class="icon"><use href="#i-check" /></svg><span data-en="Vision">识图</span></span></span></div>
@@ -299,27 +341,12 @@
             </article>
 
             <article class="card reveal">
-              <h3 data-en="Search inside the book">在书中搜索</h3>
-              <p data-en="EPUB full-text search via SQLite FTS5 with literal substring matching; PDFs search page by page.">EPUB 通过 SQLite FTS5 全文检索并支持字面子串匹配；PDF 按页搜索。</p>
-              <div class="viz">
-                <div class="search-viz">
-                  <div class="sbox"><svg class="icon"><use href="#i-search" /></svg><span class="typed" id="typed"></span></div>
-                  <div class="results" id="results">
-                    <div class="res"><small>02 · 区分主张与证据</small>为这个主张提供了什么<mark>证据</mark>？</div>
-                    <div class="res"><small>01 · 从问题开始</small>再到方法和实验中核对<mark>证据</mark>。</div>
-                    <div class="res"><small>02 · 区分主张与证据</small>推测则写出下一步需要的<mark>证据</mark>。</div>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article class="card reveal">
-              <h3 data-en="Two engines, no compromise">两个引擎，各尽其长</h3>
-              <p data-en="EPUB navigation belongs to Readium; PDF rendering belongs to PDF.js. Positions are never reduced to page numbers.">EPUB 导航交给 Readium，PDF 渲染交给 PDF.js。电子书的位置从不被简化成页码。</p>
+              <h3 data-en="Papers and books, two libraries">论文库与图书库</h3>
+              <p data-en="Switch at the top of the sidebar. Both share one reading interface, and documents move between them at any time.">在侧栏顶部切换，两库共用阅读界面，文档可随时在两库间移动。</p>
               <div class="viz">
                 <div class="engines">
-                  <div class="engine"><span class="tag">EPUB</span><div><b>Readium</b><span data-en="Paginated or scrolling, typography controls">分页 / 滚动，字号、行距、页边距</span></div></div>
-                  <div class="engine"><span class="tag tag-pdf">PDF</span><div><b>PDF.js</b><span data-en="Continuous scroll, zoom, fit to width">连续滚动，缩放，适合宽度</span></div></div>
+                  <div class="engine"><span class="tag tag-pdf">PDF</span><div><b data-en="Paper library">论文库</b><span data-en="PDF.js rendering, paper details, full translation">PDF.js 渲染，论文信息与全文对照翻译</span></div></div>
+                  <div class="engine"><span class="tag">EPUB</span><div><b data-en="Book library">图书库</b><span data-en="EPUBs and long PDFs, translated by chapter">EPUB 与长篇 PDF，按章翻译</span></div></div>
                 </div>
               </div>
             </article>
@@ -344,14 +371,16 @@
           <div class="table-wrap reveal">
             <table class="formats">
               <thead>
-                <tr><th data-en="Capability">能力</th><th>EPUB</th><th>PDF</th></tr>
+                <tr><th data-en="Capability">能力</th><th>PDF</th><th>EPUB</th></tr>
               </thead>
               <tbody>
-                <tr><td data-en="Reading engine">阅读引擎</td><td>Readium Web + Go Toolkit</td><td>PDF.js Viewer</td></tr>
-                <tr><td data-en="Navigation">导航</td><td data-en="Nested table of contents, chapter navigation">多级目录，章节跳转</td><td data-en="Document outline, page navigation">文档大纲，页码跳转</td></tr>
-                <tr><td data-en="Layout">排版</td><td data-en="Paginated / scrolling, font size, family, line spacing, margins">分页 / 滚动，字号、字体、行距、页边距</td><td data-en="Continuous scrolling, zoom, fit to width">连续滚动，缩放，适合宽度</td></tr>
-                <tr><td data-en="Search">搜索</td><td data-en="SQLite FTS5 with literal substring matching">SQLite FTS5，支持字面子串匹配</td><td data-en="Per-page text search">按页文本搜索</td></tr>
-                <tr><td data-en="AI context">AI 上下文</td><td data-en="Selections or the current chapter">选区或当前章节</td><td data-en="Selections, current page, image transcripts">选区、当前页、图片文字稿</td></tr>
+                <tr><td data-en="Library">所在书库</td><td data-en="Paper library or book library">论文库或图书库</td><td data-en="Book library">图书库</td></tr>
+                <tr><td data-en="Reading engine">阅读引擎</td><td>PDF.js Viewer</td><td data-en="Parsed by Readium Go Toolkit, rendered in the app">Readium Go Toolkit 解析，应用内渲染</td></tr>
+                <tr><td data-en="Navigation">导航</td><td data-en="Document outline, page navigation">文档大纲，页码跳转</td><td data-en="Nested table of contents, chapter navigation">多级目录，章节跳转</td></tr>
+                <tr><td data-en="Layout">排版</td><td data-en="Continuous scrolling, zoom, fit to width">连续滚动，缩放，适合宽度</td><td data-en="Continuous scrolling, font size, family, line spacing, margins">连续滚动，字号、字体、行距、页边距</td></tr>
+                <tr><td data-en="Translation">翻译</td><td data-en="Whole paper after import (can be turned off), captions and formulas included">导入后全文翻译（可关闭），含图题与公式</td><td data-en="By chapter, on request">按章手动翻译</td></tr>
+                <tr><td data-en="Search">搜索</td><td data-en="Per-page text search">按页文本搜索</td><td data-en="SQLite FTS5 with literal substring matching">SQLite FTS5，支持字面子串匹配</td></tr>
+                <tr><td data-en="AI context">AI 上下文</td><td data-en="Selections or the current page">选区或当前页</td><td data-en="Selections or the current chapter">选区或当前章节</td></tr>
               </tbody>
             </table>
           </div>
@@ -366,16 +395,18 @@
             <p class="lead" data-en="Captured from the app with the bundled sample documents.">以下截图来自应用本身，使用项目自带的示例文档。</p>
           </div>
           <div class="gallery-tabs reveal" role="tablist" id="gallery-tabs">
-            <button role="tab" aria-selected="true" data-shot="library" data-en="Library">书库</button>
+            <button role="tab" aria-selected="true" data-shot="bilingual" data-en="Paper translation">论文对照</button>
+            <button role="tab" aria-selected="false" data-shot="library" data-en="Library">书库</button>
             <button role="tab" aria-selected="false" data-shot="pdf" data-en="PDF reading">PDF 阅读</button>
             <button role="tab" aria-selected="false" data-shot="settings" data-en="Agent settings">Agent 设置</button>
           </div>
           <div class="shot-frame reveal" id="shot-frame">
-            <img class="on" data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="Reader 书库" loading="lazy" />
+            <img class="on" data-shot="bilingual" data-light="assets/screenshots/pdf-bilingual-ai.webp" data-dark="assets/screenshots/pdf-bilingual-ai.webp" src="assets/screenshots/pdf-bilingual-ai.webp" alt="Reader 论文对照阅读：左侧目录，中间原文与译文，右侧 AI 助读" loading="lazy" />
+            <img data-shot="library" data-light="assets/screenshots/library-light.webp" data-dark="assets/screenshots/library-dark.webp" src="assets/screenshots/library-light.webp" alt="Reader 书库" loading="lazy" />
             <img data-shot="pdf" data-light="assets/screenshots/pdf-light.webp" data-dark="assets/screenshots/pdf-dark.webp" src="assets/screenshots/pdf-light.webp" alt="Reader PDF 阅读界面" loading="lazy" />
             <img data-shot="settings" data-light="assets/screenshots/settings-light.webp" data-dark="assets/screenshots/settings-light.webp" src="assets/screenshots/settings-light.webp" alt="Reader Agent 设置" loading="lazy" />
           </div>
-          <p class="shot-caption" data-en="Screenshots follow the page's light / dark appearance.">截图会跟随本页的浅色 / 深色外观切换。</p>
+          <p class="shot-caption" data-en="Screenshots with a dark version follow the page's appearance.">有深色版本的截图会跟随本页外观切换。</p>
           <div class="video reveal">
             <div>
               <div class="play"><svg class="icon"><use href="#i-play" /></svg></div>
@@ -391,11 +422,12 @@
           <div class="reveal">
             <div class="kicker">Local-first</div>
             <h2 data-en="Your library stays<br />on your machine.">你的书库，<br />只留在你的电脑上。</h2>
-            <p class="lead" data-en="Original files live on the filesystem; progress, annotations, conversations and settings live in SQLite. No built-in cloud sync.">原始文件存放在文件系统，进度、批注、对话与设置存放在 SQLite。没有内置云同步。</p>
+            <p class="lead" data-en="Original files live on the filesystem; paper details, progress, annotations, conversations and settings live in SQLite. No built-in cloud sync.">原始文件存放在文件系统，论文信息、进度、批注、对话与设置存放在 SQLite。没有内置云同步。</p>
             <ul class="list">
               <li><svg class="icon"><use href="#i-shield" /></svg><div><b data-en="Loopback only">只监听本机回环地址</b><span data-en="The Go service binds to a random 127.0.0.1 port with a per-launch token, and stops when the app closes.">Go 服务绑定 127.0.0.1 的随机端口，每次启动生成新令牌，应用关闭即停止。</span></div></li>
               <li><svg class="icon"><use href="#i-file" /></svg><div><b data-en="Untrusted documents, sanitized">文档内容按不可信处理</b><span data-en="EPUB imports check archive size and paths, and active content is removed before rendering.">EPUB 导入时检查压缩包大小与资源路径，并在渲染前移除活动内容。</span></div></li>
-              <li><svg class="icon"><use href="#i-terminal" /></svg><div><b data-en="You decide what AI sees">由你决定 AI 看到什么</b><span data-en="Only selected excerpts, the current chapter or page, and recent conversation are sent — through the official CLI, from an empty temporary directory.">只发送所选片段、当前章节或页面与近期对话；经由官方 CLI，在临时空目录中运行。</span></div></li>
+              <li><svg class="icon"><use href="#i-terminal" /></svg><div><b data-en="You decide what AI sees">由你决定 AI 看到什么</b><span data-en="Questions send the selection, current chapter or page, and recent conversation; translation sends text and captions. Everything goes through the official CLI, from an empty temporary directory.">提问时只发送选区、当前章节或页面与近期对话，翻译时发送正文与图题；均经由官方 CLI，在临时空目录中运行。</span></div></li>
+              <li><svg class="icon"><use href="#i-search" /></svg><div><b data-en="Lookups send identifiers only">在线补全只发编号</b><span data-en="Automatic paper lookup sends only the DOI or arXiv ID found in the file, and can be turned off in Settings.">自动补全论文信息只发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。</span></div></li>
             </ul>
           </div>
           <div class="tree reveal" id="tree">
@@ -403,7 +435,8 @@
             <div class="row">├── reader.sqlite   <span class="c" data-en="# metadata, notes, chats, FTS index"># 元数据、批注、对话、全文索引</span></div>
             <div class="row">├── books/          <span class="c" data-en="# original EPUB files"># 原始 EPUB</span></div>
             <div class="row">├── papers/         <span class="c" data-en="# original PDF files"># 原始 PDF</span></div>
-            <div class="row">├── cache/          <span class="c" data-en="# Readium manifests, positions"># Readium 清单与位置</span></div>
+            <div class="row">├── models/         <span class="c" data-en="# verified local layout model"># 经校验的本地版面模型</span></div>
+            <div class="row">├── cache/          <span class="c" data-en="# EPUB resources, PDF analysis"># EPUB 资源、PDF 解析稿</span></div>
             <div class="row">└── ai-work/        <span class="c" data-en="# temporary CLI dirs, removed after use"># 临时 CLI 目录，用完即删</span></div>
             <div class="host"><i></i>127.0.0.1:<span id="port">49213</span> · token ••••••••</div>
           </div>
@@ -421,7 +454,7 @@
             <div class="qs-card reveal">
               <span class="n">1</span>
               <h3 data-en="Install">安装</h3>
-              <p data-en="The DMG for Apple Silicon is unsigned — allow it once in System Settings › Privacy & Security.">Apple Silicon 的 DMG 没有开发者签名，首次打开需在“系统设置 › 隐私与安全性”中允许。</p>
+              <p data-en="Download the DMG for Apple Silicon or the EXE for Windows x64. Neither has a developer certificate, so allow the system security prompt the first time. Updates are checked in the app.">macOS（Apple Silicon）下载 DMG，Windows x64 下载 EXE。安装包没有开发者证书，首次打开需允许系统安全提示；之后可在应用内检查更新。</p>
               <div class="code"><button class="icon-btn copy" type="button" aria-label="复制"><svg class="icon"><use href="#i-copy" /></svg></button><span class="c"># or from source</span>
 git clone https://github.com/cynicalight/reader.git
 cd reader && pnpm install
@@ -437,8 +470,8 @@ codex login</div>
             </div>
             <div class="qs-card reveal">
               <span class="n">3</span>
-              <h3 data-en="Open a book">打开一本书</h3>
-              <p data-en="Drag in an EPUB or PDF, or press ⌘O. An empty library offers sample documents to try first.">拖入 EPUB / PDF，或按 ⌘O 导入。空书库里可以先体验示例文档。</p>
+              <h3 data-en="Open a paper">打开一篇论文</h3>
+              <p data-en="Drag a PDF into the paper library, press ⌘O, or import by DOI or arXiv ID. PDFs over 50 pages ask whether they belong in the book library.">把 PDF 拖入论文库、按 ⌘O，或用 DOI、arXiv 编号导入。超过 50 页的 PDF 会询问是否放入图书库。</p>
               <div class="code"><button class="icon-btn copy" type="button" aria-label="复制"><svg class="icon"><use href="#i-copy" /></svg></button>⌘ O   <span class="c" data-en="import documents">导入文档</span>
 ⌘ K   <span class="c" data-en="quick find">快速查找</span></div>
             </div>
@@ -459,11 +492,15 @@ codex login</div>
             </details>
             <details>
               <summary data-en="Are my documents uploaded?">我的文档会被上传吗？</summary>
-              <p data-en="Documents stay local. When you use AI, the selected excerpts or current chapter / page and recent conversation are sent through the CLI. If you enable a verified vision agent, cropped PDF figures and formulas are sent for transcription.">文档本身留在本机。使用 AI 时，所选片段或当前章节 / 页面以及近期对话会经由 CLI 发送；启用已验证识图能力的 Agent 后，PDF 中裁剪出的图表与公式会被发送去生成文字稿。</p>
+              <p data-en="Documents stay local. With a main agent enabled, the text and captions of imported PDFs are sent for translation and formula images are sent for conversion to LaTeX; figures and tables are not sent. Questions, explanations and summaries send the selection or current chapter / page and recent conversation through the CLI. Paper lookup sends only the DOI or arXiv ID.">文档本身留在本机。启用主 Agent 后，导入 PDF 的正文与图题会发送翻译，公式图片会发送转换为 LaTeX，图表和表格不会发送；提问、解释或总结时，选区或当前章节 / 页面以及近期对话会经由 CLI 发送。论文信息补全只发送 DOI 或 arXiv 编号。</p>
+            </details>
+            <details>
+              <summary data-en="How do the paper and book libraries differ?">论文库和图书库有什么区别？</summary>
+              <p data-en="The paper library takes PDFs up to 50 MB and 150 pages, with paper details, categories, tags, citations and whole-paper translation. The book library holds EPUBs and long PDFs, translated by chapter on request. Both share one reading interface, and you choose which one opens at startup.">论文库只收 PDF，单个文件不超过 50 MB、150 页，提供论文信息、分类、标签、引用导出与全文翻译；图书库放 EPUB 与长篇 PDF，按章手动翻译。两库共用阅读界面，启动时进入哪个库可在设置中选择。</p>
             </details>
             <details>
               <summary data-en="Which platforms are supported?">支持哪些平台？</summary>
-              <p data-en="Installers are built for Apple Silicon Macs. Other platforms can run from source; Linux installers are not provided.">安装包面向 Apple Silicon Mac。其他平台可以从源码运行，暂不提供 Linux 安装包。</p>
+              <p data-en="Installers are provided for Apple Silicon Macs and Windows x64, without developer certificates. The Windows build has not had a full manual check after installation yet. Linux installers are not provided; you can run from source.">提供 macOS（Apple Silicon）与 Windows x64 安装包，均没有开发者证书；Windows 版尚未完成安装后的人工验收。暂不提供 Linux 安装包，可以从源码运行。</p>
             </details>
             <details>
               <summary data-en="What about scanned PDFs?">扫描版 PDF 可以用吗？</summary>
@@ -479,9 +516,9 @@ codex login</div>
 
       <section class="final">
         <div class="wrap reveal">
-          <h2 data-en="Open a book.<br />Keep the thread.">打开一本书，<br />把思路留在原文旁边。</h2>
+          <h2 data-en="Open a paper.<br />Keep the thread.">打开一篇论文，<br />把思路留在原文旁边。</h2>
           <div class="hero-cta">
-            <a class="btn btn-primary" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener"><svg class="icon"><use href="#i-download" /></svg><span data-en="Download for macOS">下载 macOS 版</span></a>
+            <a class="btn btn-primary" href="https://github.com/cynicalight/reader/releases/latest" target="_blank" rel="noopener"><svg class="icon"><use href="#i-download" /></svg><span data-en="Download">下载安装包</span></a>
             <a class="btn btn-ghost" href="https://github.com/cynicalight/reader" target="_blank" rel="noopener"><svg class="icon"><use href="#i-github" /></svg>GitHub</a>
           </div>
         </div>
