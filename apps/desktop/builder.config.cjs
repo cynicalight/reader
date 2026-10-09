@@ -5,6 +5,8 @@ module.exports = {
   files: ["dist/**/*", "package.json"],
   extraResources: [{ from: "staging", to: ".", filter: ["**/*"] }],
   asar: true,
+  // Solid LZMA for NSIS and maximum zip compression.
+  compression: "maximum",
   npmRebuild: false,
   publish: null,
   protocols: [{ name: "Reader", schemes: ["reader"] }],
@@ -19,7 +21,13 @@ module.exports = {
     notarize: false,
     artifactName: "Reader-${version}-mac-${arch}.${ext}",
   },
-  dmg: { sign: false },
+  dmg: {
+    sign: false,
+    // scripts/package.mjs recompresses this uncompressed image to ULMO (LZMA),
+    // which the builder schema does not accept. The blockmap would be stale.
+    format: "UDRO",
+    writeUpdateInfo: false,
+  },
   win: {
     target: ["nsis"],
     signAndEditExecutable: false,
