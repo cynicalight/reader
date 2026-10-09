@@ -231,7 +231,89 @@ func (s *Server) readerChapter(id, href string) (string, epubTranslationDocument
 var epubUnsupportedCSS = regexp.MustCompile(`(?i)(?:^|[;{])\s*(?:(?:-epub-|-webkit-)?writing-mode\s*:\s*(?:vertical-(?:rl|lr)|tb(?:-rl|-lr)?)|direction\s*:\s*rtl)(?:\s|[;!}]|$)`)
 var epubCSSComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
 var epubCSSRule = regexp.MustCompile(`([^{}]*)\{([^{}]*)\}`)
-var epubRootSelector = regexp.MustCompile(`(?i)(?:^|[\s,>+~(])(?:html|body)\b|:root\b`)
+var epubRootSubject = regexp.MustCompile(`(?i)^(?:html|body)(?:$|[.#:\[])|:root(?:$|[.#:\[])`)
+var epubPseudoElement = regexp.MustCompile(`(?i)::|:(?:before|after|first-line|first-letter)(?:$|[.#:\[])`)
+
+// Inspect only the final compound of each selector, not an ancestor such as
+// "body .quote". Attribute values and functional pseudo-class arguments must
+// not introduce fake combinators, commas, root names, or pseudo-elements.
+// This is a declaration guard, not a CSS cascade or selector evaluator.
+func epubSelectorTargetsRoot(selector string) bool {
+	var compound strings.Builder
+	subject := ""
+	brackets, parentheses := 0, 0
+	var quote byte
+	finish := func() {
+		if compound.Len() > 0 {
+			subject = compound.String()
+			compound.Reset()
+		}
+	}
+	root := func() bool {
+		return epubRootSubject.MatchString(subject) && !epubPseudoElement.MatchString(subject)
+	}
+	for i := 0; i < len(selector); i++ {
+		c := selector[i]
+		if c == '\\' {
+			// An escaped delimiter is part of an identifier, not syntax.
+			if brackets == 0 && parentheses == 0 && quote == 0 {
+				compound.WriteByte('_')
+			}
+			i++
+			continue
+		}
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			quote = c
+			continue
+		}
+		switch c {
+		case '[':
+			if brackets == 0 && parentheses == 0 {
+				compound.WriteByte('[')
+			}
+			brackets++
+			continue
+		case ']':
+			if brackets > 0 {
+				brackets--
+			}
+			continue
+		case '(':
+			if brackets == 0 {
+				parentheses++
+			}
+			continue
+		case ')':
+			if brackets == 0 && parentheses > 0 {
+				parentheses--
+			}
+			continue
+		}
+		if brackets > 0 || parentheses > 0 {
+			continue
+		}
+		switch c {
+		case ',':
+			finish()
+			if root() {
+				return true
+			}
+			subject = ""
+		case ' ', '\t', '\n', '\r', '\f', '>', '+', '~', '|':
+			finish()
+		default:
+			compound.WriteByte(c)
+		}
+	}
+	finish()
+	return root()
+}
 
 type epubLayoutProperties struct {
 	ReadingProgression string `json:"readingProgression"`
@@ -258,7 +340,7 @@ func unsupportedEPUBStyle(source string, markup bool) bool {
 	css := func(value string) bool {
 		value = epubCSSComment.ReplaceAllString(value, "")
 		for _, rule := range epubCSSRule.FindAllStringSubmatch(value, -1) {
-			if epubRootSelector.MatchString(rule[1]) && epubUnsupportedCSS.MatchString("{"+rule[2]) {
+			if epubSelectorTargetsRoot(rule[1]) && epubUnsupportedCSS.MatchString("{"+rule[2]) {
 				return true
 			}
 		}

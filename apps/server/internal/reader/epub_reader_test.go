@@ -247,3 +247,31 @@ func TestEPUBReaderLayoutDeclarations(t *testing.T) {
 		}
 	}
 }
+
+func TestEPUBReaderLayoutDeclarationsSelectorSubjects(t *testing.T) {
+	for _, selector := range []string{
+		"html > body", "html.book", "body#reader", ":root.book", "p, body.book",
+		`body[data-title="a > b, :before"]`, `html:not(.aside, .quote) > body`,
+		`body:has(.quote > span, .note)`, `body[data-title="a\" > b"]`,
+	} {
+		t.Run(selector, func(t *testing.T) {
+			if !unsupportedEPUBStyle(selector+" { direction: rtl }", false) {
+				t.Fatal("accepted root declaration", selector)
+			}
+		})
+	}
+	for _, selector := range []string{
+		"body .quote", "html .vertical", ":root > h1", "body + aside", "body ~ p",
+		"body::before", "body:after", "html::first-letter", "body::part(title)",
+		`[data-label="body"]`, `.quote:not(body, :root)`, `.quote:has(body > p)`,
+		`body [data-label="a,b"]`, `body [data-label="body > :root"]`,
+		`body[data-title="a,b"] .quote`, `body\.quote`, `body-custom`,
+		"body .quote, :root > h1", `p[data-label="x, body::before"]`,
+	} {
+		t.Run(selector, func(t *testing.T) {
+			if unsupportedEPUBStyle(selector+" { writing-mode: vertical-rl }", false) {
+				t.Fatal("rejected descendant or pseudo-element declaration", selector)
+			}
+		})
+	}
+}
