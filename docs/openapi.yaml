@@ -1433,7 +1433,7 @@
         {
           "post":
             {
-              "description": "Queue untranslated paragraphs and formulas in a page range, in reading order, up to 40000 source characters. Also resumes paused processing.",
+              "description": "Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing.",
               "parameters":
                 [
                   {
@@ -1477,7 +1477,12 @@
                                 {
                                   "type": "object",
                                   "required":
-                                    ["queued", "characters", "nextPage"],
+                                    [
+                                      "queued",
+                                      "characters",
+                                      "nextPage",
+                                      "parsing",
+                                    ],
                                   "properties":
                                     {
                                       "queued": { "type": "integer" },
@@ -1485,7 +1490,12 @@
                                       "nextPage":
                                         {
                                           "type": "integer",
-                                          "description": "Page where the character limit stopped the request; 0 when the range is fully queued.",
+                                          "description": "Page where the character or 30-page limit stopped the request; 0 when the range is fully queued.",
+                                        },
+                                      "parsing":
+                                        {
+                                          "type": "boolean",
+                                          "description": "Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes.",
                                         },
                                     },
                                 },

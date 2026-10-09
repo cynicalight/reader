@@ -1220,7 +1220,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, up to 40000 source characters. Also resumes paused processing. */
+    /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing. */
     post: {
       parameters: {
         query?: never;
@@ -1248,8 +1248,10 @@ export interface paths {
             "application/json": {
               queued: number;
               characters: number;
-              /** @description Page where the character limit stopped the request; 0 when the range is fully queued. */
+              /** @description Page where the character or 30-page limit stopped the request; 0 when the range is fully queued. */
               nextPage: number;
+              /** @description Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes. */
+              parsing: boolean;
             };
           };
         };

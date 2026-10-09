@@ -1,16 +1,12 @@
 package reader
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -24,7 +20,9 @@ type ProcessingStage struct {
 	Warning string `json:"warning,omitempty"`
 }
 type Processing struct {
-	Enabled           bool             `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// Chapter is a book chapter waiting for its pages to be parsed.
+	Chapter           *PageRange       `json:"chapter,omitempty"`
 	Translating       *ProcessingStage `json:"translating,omitempty"`
 	lane              string
 	resetStages       bool
@@ -65,9 +63,11 @@ type layoutManifest struct {
 	// PDF document information (Title, Author, …) as read by PDF.js.
 	Metadata        map[string]any `json:"metadata"`
 	IncompletePages []int          `json:"incompletePages"`
-	Pages           int            `json:"pages"`
-	Blocks          []PDFBlock     `json:"blocks"`
-	Warnings        []string       `json:"warnings"`
+	// ParsedPages lists the pages of a book parsed so far; empty means all.
+	ParsedPages []int      `json:"parsedPages,omitempty"`
+	Pages       int        `json:"pages"`
+	Blocks      []PDFBlock `json:"blocks"`
+	Warnings    []string   `json:"warnings"`
 }
 
 var blockIDPattern = regexp.MustCompile(`^p[1-9][0-9]*-b[1-9][0-9]*$`)
@@ -117,7 +117,14 @@ func importedProcessing(id, library, value string) Processing {
 	var settings struct {
 		AutoTranslatePDF *bool `json:"autoTranslatePDF"`
 	}
-	if library == "books" || ((value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF)) {
+	if library == "books" {
+		// Book chapters are parsed and translated when the reader asks.
+		p.Enabled = true
+		p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
+		aggregateProcessing(&p)
+		return p
+	}
+	if (value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF) {
 		p.Enabled, p.Status, p.Detail = true, "queued", "等待解析 PDF"
 	}
 	return p
@@ -393,74 +400,16 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 	if e != nil {
 		return e
 	}
-	m, e := s.readLayout(d.ID)
-	if e != nil {
-		worker := os.Getenv("READER_PROCESSOR")
-		node := os.Getenv("READER_NODE")
-		if worker == "" || node == "" {
-			return errors.New("本地解析程序未启动，请重新构建并打开 Reader")
-		}
-		work := filepath.Join(s.Store.Root, "cache", d.ID, "analysis-work")
-		if e = os.RemoveAll(work); e != nil {
-			return errors.New("无法清理未完成的解析")
-		}
-		child, cancel := context.WithTimeout(ctx, 30*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(child, node, worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models"))
-		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1", "NODE_USE_ENV_PROXY=1")
-		cmd.WaitDelay = 3 * time.Second
-		cmd.Dir = s.Store.Root
-		cmd.Stderr = io.Discard
-		out, e := cmd.StdoutPipe()
-		if e != nil {
+	if d.Library == "books" {
+		if e = s.learnBookChapter(ctx, d, p); e != nil {
 			return e
 		}
-		if e = cmd.Start(); e != nil {
-			return errors.New("无法启动本地 PDF 解析程序")
-		}
-		scan := bufio.NewScanner(out)
-		scan.Buffer(make([]byte, 4096), 1<<20)
-		var saveErr error
-		for scan.Scan() {
-			var event struct {
-				Event      string `json:"event"`
-				Page       int    `json:"page"`
-				Total      int    `json:"total"`
-				Downloaded int64  `json:"downloaded"`
-				Bytes      int64  `json:"bytes"`
-			}
-			if json.Unmarshal(scan.Bytes(), &event) != nil {
-				continue
-			}
-			switch event.Event {
-			case "model-download":
-				p.Detail = "首次准备版面模型（约 67 MB）"
-			case "model-progress":
-				p.Detail = fmt.Sprintf("正在下载版面模型 %.0f / %.0f MB", float64(event.Downloaded)/1e6, float64(event.Bytes)/1e6)
-			case "page":
-				p.PagesDone = event.Page
-				p.PagesTotal = event.Total
-				p.Detail = fmt.Sprintf("已解析 %d / %d 页", event.Page, event.Total)
-			default:
-				continue
-			}
-			if saveErr = s.Store.saveProcessing(*p); saveErr != nil {
-				cancel()
-				break
-			}
-		}
-		if scan.Err() != nil {
-			cancel()
-		}
-		e = cmd.Wait()
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if saveErr != nil {
-			return errors.New("无法保存解析进度")
-		}
-		if e != nil || scan.Err() != nil {
-			return errors.New("PDF 解析未完成。请检查网络、模型缓存或文件后重试")
+	}
+	m, e := s.readLayout(d.ID)
+	if e != nil && d.Library != "books" {
+		work := filepath.Join(s.Store.Root, "cache", d.ID, "analysis-work")
+		if e = s.runLayout(ctx, d, work, 0, 0, p); e != nil {
+			return e
 		}
 		// A successful worker writes its manifest last. Publish the directory once.
 		if _, e = os.Stat(s.analysisDir(d.ID)); e == nil {
@@ -470,9 +419,15 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			return errors.New("无法保存解析附件")
 		}
 		m, e = s.readLayout(d.ID)
-		if e != nil {
-			return e
-		}
+	}
+	if e != nil && d.Library == "books" {
+		// No chapter has been parsed yet; nothing waits for translation.
+		p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
+		aggregateProcessing(p)
+		return s.Store.saveProcessing(*p)
+	}
+	if e != nil {
+		return e
 	}
 	p.PagesDone = m.Pages
 	p.PagesTotal = m.Pages

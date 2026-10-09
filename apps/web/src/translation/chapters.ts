@@ -8,9 +8,11 @@ export interface PageRange {
 /**
  * The outline chapter containing `page`, as an inclusive page range. A single
  * root entry (the book title) is skipped for its children. Without an outline
- * the PDF adapter lists every page; the range then runs from `page` to the end
- * and the server's character limit decides where the request stops.
+ * (the PDF adapter then lists every page) the book is cut into fixed sections.
  */
+/** Pages per section of a book without an outline. */
+export const sectionPages = 20;
+
 export function chapterRange(
   toc: TOCItem[],
   page: number,
@@ -27,7 +29,11 @@ export function chapterRange(
     ),
   ].sort((a, b) => a - b);
   const current = Math.min(Math.max(1, page), pages);
-  if (!starts.length) return { fromPage: current, toPage: pages };
+  if (!starts.length) {
+    const fromPage =
+      Math.floor((current - 1) / sectionPages) * sectionPages + 1;
+    return { fromPage, toPage: Math.min(pages, fromPage + sectionPages - 1) };
+  }
   const fromPage = starts.filter((start) => start <= current).at(-1) ?? 1;
   const next = starts.find((start) => start > current);
   return { fromPage, toPage: next ? Math.max(fromPage, next - 1) : pages };

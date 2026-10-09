@@ -117,6 +117,7 @@ it("a book translates the current chapter instead of the whole document", async 
     queued: 12,
     characters: 39000,
     nextPage: 31,
+    parsing: false,
   });
   vi.mocked(api.assistance)
     .mockResolvedValueOnce(ready)

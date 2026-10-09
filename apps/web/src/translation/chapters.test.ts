@@ -35,8 +35,9 @@ it("keeps a chapter sharing its start page with the next one", () => {
   expect(chapterRange(toc, 10, 20)).toEqual({ fromPage: 10, toPage: 11 });
 });
 
-it("runs to the end when the PDF has no outline", () => {
+it("cuts a PDF without an outline into 20-page sections", () => {
   const pages = [1, 2, 3].map((page) => entry(`page-${page}`, page));
-  expect(chapterRange(pages, 2, 3)).toEqual({ fromPage: 2, toPage: 3 });
-  expect(chapterRange([], 2, 3)).toEqual({ fromPage: 2, toPage: 3 });
+  expect(chapterRange(pages, 2, 3)).toEqual({ fromPage: 1, toPage: 3 });
+  expect(chapterRange([], 25, 90)).toEqual({ fromPage: 21, toPage: 40 });
+  expect(chapterRange([], 85, 90)).toEqual({ fromPage: 81, toPage: 90 });
 });

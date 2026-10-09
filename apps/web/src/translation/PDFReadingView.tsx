@@ -941,7 +941,11 @@ export function PDFReadingView({
             >
               {error && <p role="alert">{error}</p>}
               {!visibleBlocks.length && (
-                <p role="status">正文仍在解析中，完成的段落会在这里显示。</p>
+                <p role="status">
+                  {doc.library === "books"
+                    ? "尚未翻译任何章节，可在工具栏翻译本章。"
+                    : "正文仍在解析中，完成的段落会在这里显示。"}
+                </p>
               )}
               {processing?.incomplete && (
                 <p className="translation-warning">

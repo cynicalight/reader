@@ -138,10 +138,16 @@ export const api = {
     }),
   /** Queues a page range, capped by the server; nextPage is where it stopped. */
   translateRange: (id: string, fromPage: number, toPage: number) =>
-    request<{ queued: number; characters: number; nextPage: number }>(
-      `/api/documents/${id}/translations/range`,
-      { method: "POST", body: JSON.stringify({ fromPage, toPage }) },
-    ),
+    request<{
+      queued: number;
+      characters: number;
+      nextPage: number;
+      /** The chapter's pages are parsed first, then translated. */
+      parsing: boolean;
+    }>(`/api/documents/${id}/translations/range`, {
+      method: "POST",
+      body: JSON.stringify({ fromPage, toPage }),
+    }),
   assistance: (id: string) =>
     request<Processing>(`/api/documents/${id}/assistance`),
   setAssistance: (id: string, action: "start" | "pause" | "resume") =>

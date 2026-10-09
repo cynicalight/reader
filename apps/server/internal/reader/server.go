@@ -307,6 +307,10 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string,
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}
 	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags, d.Folders = "article", "default", "pending", []string{}, []string{}
+	if kind == "pdf" && library == "books" {
+		// Classification reads parsed text, which books gain chapter by chapter.
+		d.ClassificationStatus = "idle"
+	}
 	if kind == "epub" {
 		d.Category = "book"
 	}

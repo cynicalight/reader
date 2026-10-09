@@ -71,7 +71,8 @@ export function AssistanceControls({
       range.fromPage,
       range.toPage,
     );
-    if (!result.queued) toast("本章已翻译");
+    if (result.parsing) toast("正在解析本章，完成后开始翻译");
+    else if (!result.queued) toast("本章已翻译");
     else if (result.nextPage)
       toast(
         `本章较长，本次翻译至第 ${result.nextPage} 页，完成后可再次翻译本章`,
