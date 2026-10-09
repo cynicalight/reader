@@ -53,6 +53,7 @@ func newTranslation(b PDFBlock) TranslationBlock {
 	}
 	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
+
 // Book paragraphs stay idle until a reader requests them; papers translate in full.
 func (s *Server) translations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
 	d, err := s.Store.Document(documentID)
