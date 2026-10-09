@@ -16,6 +16,8 @@ import (
 const (
 	maxPaperBytes = 50 << 20
 	maxPaperPages = 150
+	// Longer papers ask whether to import as a book, translated by chapter.
+	largePaperPages = 50
 )
 
 func validLibrary(library string) bool { return library == "books" || library == "papers" }

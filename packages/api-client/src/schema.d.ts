@@ -58,6 +58,11 @@ export interface paths {
                          * @enum {unknown}
                          */
                         library?: "books" | "papers";
+                        /**
+                         * @description Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.
+                         * @enum {unknown}
+                         */
+                        allowLarge?: "1";
                     };
                 };
             };
@@ -259,6 +264,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/annotations/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Undo the latest annotation mutation from this window and document. Restores merged/deleted marks and original IDs atomically; rejects changes superseded by another client. History is in-memory, bounded to the latest 100 operations and 16 MiB across the server. */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Reader-Undo-Session": string;
+                };
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Undo result; use the returned annotations only when undone is true */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            undone: boolean;
+                            annotations: components["schemas"]["Annotation"][];
+                        };
+                    };
+                };
+                /** @description An affected annotation changed outside this history; no data was overwritten and this document's window history was cleared */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/annotations": {
         parameters: {
             query?: never;
@@ -301,7 +367,10 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                 };
@@ -362,7 +431,10 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                     annotation: string;
@@ -396,7 +468,10 @@ export interface paths {
         patch: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                     annotation: string;
@@ -756,6 +831,89 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/assistance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved assistance state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "start" | "pause" | "resume";
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved assistance state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Processing"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1238,6 +1396,133 @@ export interface paths {
                     content: {
                         "application/json": {
                             queued: boolean;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations/chapter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue the EPUB chapter at this location. Top-level TOC boundaries (children of a sole book-title parent) take precedence; without a TOC use the spine file. Queues at most approximately 40000 Unicode source characters, retaining whole paragraphs and completed results. Resumes paused work. No PDF page numbers. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        location: {
+                            /** @enum {string} */
+                            type: "epub";
+                            href: string;
+                            blockId?: string;
+                            locator?: string;
+                            start?: number;
+                            end?: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Chapter queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            queued: number;
+                            characters: number;
+                            /** @description Request this chapter again to queue the remaining text after the character limit. */
+                            hasMore: boolean;
+                        };
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/translations/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        fromPage: number;
+                        toPage: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Range queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            queued: number;
+                            characters: number;
+                            /** @description Page where the character or 30-page limit stopped the request; 0 when the range is fully queued. */
+                            nextPage: number;
+                            /** @description Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes. */
+                            parsing: boolean;
                         };
                     };
                 };
@@ -2288,7 +2573,7 @@ export interface components {
             /** @enum {unknown} */
             categorySource: "default" | "ai" | "manual";
             /** @enum {unknown} */
-            classificationStatus: "pending" | "running" | "failed" | "done";
+            classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
             classificationError: string;
             tags: string[];
             /** @description Paper-library categories; a/b is nested in a */
@@ -2419,12 +2704,15 @@ export interface components {
             warning?: string;
         };
         Processing: {
+            enabled?: boolean;
+            /** @description EPUB work uses explicit chapter requests; the legacy automatic queue has been migrated. */
+            readonly epubManual?: boolean;
             translating?: components["schemas"]["ProcessingStage"];
             documentId: string;
             /** @enum {string} */
             phase: "learning" | "translating" | "ready";
             /** @enum {string} */
-            status: "queued" | "running" | "waiting" | "failed" | "complete";
+            status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
             pagesDone: number;
             pagesTotal: number;
             translationsDone: number;
@@ -2506,14 +2794,20 @@ export interface components {
             };
         };
         TranslationSentence: {
+            /** @description The model's sentence; it may repair PDF extraction errors. */
             source: string;
             target: string;
+            /** @description Extracted text this sentence covers when it differs from source; used to locate the sentence in the PDF text layer. */
+            anchor?: string;
         };
         TranslationBlock: {
             blockId: string;
             sourceHash: string;
-            /** @enum {unknown} */
-            status: "pending" | "running" | "complete" | "failed";
+            /**
+             * @description idle: a book paragraph that has not been requested.
+             * @enum {unknown}
+             */
+            status: "idle" | "pending" | "running" | "complete" | "failed";
             sentences: components["schemas"]["TranslationSentence"][];
             /** @description Formula-only Markdown converted asynchronously from the original image during translation. */
             formulaMarkdown?: string;

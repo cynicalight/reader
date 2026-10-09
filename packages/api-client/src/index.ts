@@ -48,6 +48,16 @@ client.use({
     return request;
   },
 });
+/** A failed request; `code` and `pages` identify a long paper to confirm. */
+export class RequestError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly pages?: number,
+  ) {
+    super(message);
+  }
+}
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -61,9 +71,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `请求失败 (${response.status})`);
+    throw new RequestError(
+      data.error || `请求失败 (${response.status})`,
+      data.code,
+      data.pages,
+    );
   }
   return response.status === 204 ? (undefined as T) : response.json();
+}
+// Keep annotation writes and undo in the same client order, including failures.
+let annotationQueue = Promise.resolve();
+let annotationSession = "";
+function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
+  annotationSession ||= crypto.randomUUID();
+  const operation = annotationQueue.then(() =>
+    request<T>(path, {
+      ...init,
+      headers: { ...init.headers, "X-Reader-Undo-Session": annotationSession },
+    }),
+  );
+  annotationQueue = operation.then(
+    () => {},
+    () => {},
+  );
+  return operation;
 }
 export const api = {
   chatUsage: (id: string) =>
@@ -136,6 +167,45 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ blockId }),
     }),
+  /** Queues a page range, capped by the server; nextPage is where it stopped. */
+  translateRange: (id: string, fromPage: number, toPage: number) =>
+    request<{
+      queued: number;
+      characters: number;
+      nextPage: number;
+      /** The chapter's pages are parsed first, then translated. */
+      parsing: boolean;
+    }>(`/api/documents/${id}/translations/range`, {
+      method: "POST",
+      body: JSON.stringify({ fromPage, toPage }),
+    }),
+  translateEPUBChapter: (
+    id: string,
+    location: import("@reader/core").EPUBLocation,
+  ) =>
+    request<{ queued: number; characters: number; hasMore: boolean }>(
+      `/api/documents/${id}/translations/chapter`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          location: {
+            type: "epub",
+            href: location.href,
+            blockId: location.blockId,
+            locator: location.locator,
+            start: location.start,
+            end: location.end,
+          },
+        }),
+      },
+    ),
+  assistance: (id: string) =>
+    request<Processing>(`/api/documents/${id}/assistance`),
+  setAssistance: (id: string, action: "start" | "pause" | "resume") =>
+    request<Processing>(`/api/documents/${id}/assistance`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
   processing: () => request<Processing[]>("/api/processing"),
   process: (id: string) =>
     request<Processing>(`/api/documents/${id}/processing`, { method: "POST" }),
@@ -161,9 +231,11 @@ export const api = {
     if (error) throw new Error(error.error);
     return data;
   },
-  import: (file: File, library: LibraryMode = "books") => {
+  /** Papers over 50 pages fail with code "large-paper" unless allowLarge. */
+  import: (file: File, library: LibraryMode = "books", allowLarge = false) => {
     const form = new FormData();
     form.append("library", library);
+    if (allowLarge) form.append("allowLarge", "1");
     form.append("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
@@ -244,7 +316,7 @@ export const api = {
       "kind" | "location" | "quote" | "note" | "color"
     >,
   ) =>
-    request<components["schemas"]["SavedAnnotation"]>(
+    annotationRequest<components["schemas"]["SavedAnnotation"]>(
       `/api/documents/${id}/annotations`,
       {
         method: "POST",
@@ -252,10 +324,13 @@ export const api = {
       },
     ),
   updateAnnotationNote: (id: string, annotation: string, note: string) =>
-    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
-      method: "PATCH",
-      body: JSON.stringify({ note }),
-    }),
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ note }),
+      },
+    ),
   updateAnnotation: (
     id: string,
     annotation: string,
@@ -267,10 +342,13 @@ export const api = {
       tags?: string[];
     },
   ) =>
-    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    }),
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    ),
   documentNote: (id: string) =>
     request<{ body: string; updatedAt?: string }>(
       `/api/documents/${encodeURIComponent(id)}/note`,
@@ -280,8 +358,13 @@ export const api = {
       `/api/documents/${encodeURIComponent(id)}/note`,
       { method: "PUT", body: JSON.stringify({ body }) },
     ),
+  undoAnnotation: (id: string) =>
+    annotationRequest<{ undone: boolean; annotations: Annotation[] }>(
+      `/api/documents/${encodeURIComponent(id)}/annotations/undo`,
+      { method: "POST" },
+    ),
   removeAnnotation: (id: string, annotation: string) =>
-    request<void>(`/api/documents/${id}/annotations/${annotation}`, {
+    annotationRequest<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",
     }),
   search: (id: string, query: string) =>

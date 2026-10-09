@@ -41,8 +41,8 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 		t.Fatal(response.Body.String())
 	}
 	p, err := s.Store.processing(doc.ID)
-	if err != nil || p.Phase != "translating" || p.Translating == nil || p.Translating.Status != "queued" {
-		t.Fatalf("EPUB not queued: %+v %v", p, err)
+	if err != nil || !p.Enabled || p.Status != "complete" || p.Translating == nil || p.Translating.Status != "complete" {
+		t.Fatalf("EPUB did not wait for a chapter request: %+v %v", p, err)
 	}
 	blocks, err := s.readEPUBBlocks(doc.ID)
 	if err != nil || len(blocks) == 0 {
@@ -52,6 +52,17 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 	if response.Code != 200 || strings.Contains(response.Body.String(), `"page":`) {
 		t.Fatal(response.Body.String())
 	}
+	// Explicit requests select the work exercised by this retry test.
+	for _, block := range blocks {
+		if block.Image != "" {
+			continue
+		}
+		response = request(t, s, "POST", "/api/documents/"+doc.ID+"/translations", strings.NewReader(`{"blockId":"`+block.ID+`"}`))
+		if response.Code != 202 {
+			t.Fatal(response.Body.String())
+		}
+	}
+	p, _ = s.Store.processing(doc.ID)
 	calls := 0
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -95,14 +106,16 @@ func TestEPUBTranslationUsesSharedQueueAndPersistsAcrossRetries(t *testing.T) {
 	// A source change invalidates only the affected paragraph's cached translation.
 	blocks[0].Text = "Changed."
 	changed, _ := s.translations(doc.ID, blocks)
-	if changed[0].Status != "pending" || changed[1].Status != "complete" {
+	if changed[0].Status != "idle" || changed[1].Status != "complete" {
 		t.Fatal("source versions mixed")
 	}
-	// Existing imports with no job are queued without deleting translations.
+	// Existing imports get an idle job without deleting translations.
 	_, _ = s.Store.DB.Exec("DELETE FROM document_processing WHERE document_id=?", doc.ID)
-	s.queueUntranslatedDocuments()
+	if err = s.Store.prepareManualEPUBProcessing(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = s.Store.processing(doc.ID); err != nil {
-		t.Fatal("legacy EPUB not queued")
+		t.Fatal("legacy EPUB did not wait for a chapter request")
 	}
 }
 

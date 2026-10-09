@@ -1,16 +1,12 @@
 package reader
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -24,12 +20,17 @@ type ProcessingStage struct {
 	Warning string `json:"warning,omitempty"`
 }
 type Processing struct {
+	Enabled    bool `json:"enabled"`
+	EPUBManual bool `json:"epubManual,omitempty"`
+	// Chapter is a book chapter waiting for its pages to be parsed.
+	Chapter           *PageRange       `json:"chapter,omitempty"`
 	Translating       *ProcessingStage `json:"translating,omitempty"`
 	lane              string
 	resetStages       bool
 	wakeStages        bool
 	recoverStages     bool
 	queueTranslation  bool
+	enable            bool
 	UsageTracked      bool   `json:"usageTracked,omitempty"`
 	StartedAt         string `json:"startedAt,omitempty"`
 	CompletedAt       string `json:"completedAt,omitempty"`
@@ -63,9 +64,11 @@ type layoutManifest struct {
 	// PDF document information (Title, Author, …) as read by PDF.js.
 	Metadata        map[string]any `json:"metadata"`
 	IncompletePages []int          `json:"incompletePages"`
-	Pages           int            `json:"pages"`
-	Blocks          []PDFBlock     `json:"blocks"`
-	Warnings        []string       `json:"warnings"`
+	// ParsedPages lists the pages of a book parsed so far; empty means all.
+	ParsedPages []int      `json:"parsedPages,omitempty"`
+	Pages       int        `json:"pages"`
+	Blocks      []PDFBlock `json:"blocks"`
+	Warnings    []string   `json:"warnings"`
 }
 
 var blockIDPattern = regexp.MustCompile(`^p[1-9][0-9]*-b[1-9][0-9]*$`)
@@ -82,7 +85,7 @@ func (s *Store) processing(id string) (Processing, error) {
 func (s *Store) saveProcessing(p Processing) error {
 	s.processingWriteMu.Lock()
 	defer s.processingWriteMu.Unlock()
-	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation {
+	if p.lane != "" || p.resetStages || p.wakeStages || p.recoverStages || p.queueTranslation || p.enable {
 		current, err := s.processing(p.DocumentID)
 		if err != nil {
 			return err
@@ -98,20 +101,52 @@ func (s *Store) saveProcessing(p Processing) error {
 	return e
 }
 func initialProcessing(id string) Processing {
-	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "queued", Detail: "等待解析文档", UpdatedAt: now()}
+	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "paused", Detail: "翻译未开始", UpdatedAt: now()}
 }
 
-// EPUB text needs no layout pass; it enters the translation lane directly.
-func initialDocumentProcessing(d Document) Processing {
-	p := initialProcessing(d.ID)
-	if d.Type == "epub" {
-		p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文"}
+// Rows written before pause controls always ran; keep them runnable so queued,
+// interrupted and retried work still continues.
+func (s *Store) enableLegacyProcessing() error {
+	_, err := s.DB.Exec("UPDATE document_processing SET body=json_set(body,'$.enabled',json('true')) WHERE json_type(body,'$.enabled') IS NULL")
+	return err
+}
+
+// Only document creation reads this preference; updating settings never wakes a job.
+// PDF books wait for an explicit chapter request before layout or translation.
+func importedProcessing(id, library, value string) Processing {
+	p := initialProcessing(id)
+	var settings struct {
+		AutoTranslatePDF *bool `json:"autoTranslatePDF"`
+	}
+	if library == "books" {
+		// Book chapters are parsed and translated when the reader asks.
+		p.Enabled = true
+		p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
 		aggregateProcessing(&p)
+		return p
+	}
+	if (value == "" || json.Unmarshal([]byte(value), &settings) == nil) && (settings.AutoTranslatePDF == nil || *settings.AutoTranslatePDF) {
+		p.Enabled, p.Status, p.Detail = true, "queued", "等待解析 PDF"
 	}
 	return p
 }
+
+// EPUB has no layout pass and waits for explicit chapter requests.
+func initialDocumentProcessing(d Document, settings string) Processing {
+	if d.Type == "pdf" {
+		return importedProcessing(d.ID, d.Library, settings)
+	}
+	p := initialProcessing(d.ID)
+	p.Enabled = true
+	p.EPUBManual = true
+	p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
+	aggregateProcessing(&p)
+	return p
+}
 func (s *Store) enqueueDocument(d Document) error {
-	p := initialDocumentProcessing(d)
+	var value string
+	_ = s.DB.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&value)
+	p := initialDocumentProcessing(d, value)
 	b, _ := json.Marshal(p)
 	_, e := s.DB.Exec("INSERT OR IGNORE INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	return e
@@ -152,6 +187,10 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 	}
 	if e != nil {
 		fail(w, 500, "无法创建解析任务")
+		return
+	}
+	if !p.Enabled {
+		fail(w, 409, "请先开始翻译")
 		return
 	}
 	if p.Status == "complete" || (p.Status == "running" && !hasFailedStage(p)) {
@@ -230,7 +269,13 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	if err := s.Store.dropSettlingState(); err != nil {
 		log.Printf("cannot migrate processing state: %v", err)
 	}
-	s.queueUntranslatedDocuments()
+	if err := s.Store.enableLegacyProcessing(); err != nil {
+		log.Printf("cannot migrate processing state: %v", err)
+	}
+	if err := s.Store.prepareManualEPUBProcessing(); err != nil {
+		log.Printf("cannot prepare EPUB processing: %v", err)
+		return cancel
+	}
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running' OR json_extract(body,'$.translating.status')='running'")
 	if e == nil {
@@ -244,6 +289,9 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 		}
 		rows.Close()
 		for _, p := range pending {
+			if !p.Enabled {
+				continue
+			}
 			p.Status = "queued"
 			p.Detail = "继续上次的处理"
 			p.recoverStages = true
@@ -265,12 +313,23 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				s.processingMu.Lock()
 				var body string
 				// Documents in the trash keep their queue position until restored.
-				e := s.Store.DB.QueryRow("SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id WHERE p.phase=? AND p.status='queued' AND d.deleted_at='' ORDER BY p.rowid LIMIT 1", phase).Scan(&body)
+				e := s.Store.DB.QueryRow("SELECT p.body FROM document_processing p JOIN documents d ON d.id=p.document_id WHERE p.phase=? AND p.status='queued' AND json_extract(p.body,'$.enabled')=1 AND d.deleted_at='' ORDER BY p.rowid LIMIT 1", phase).Scan(&body)
 				var p Processing
 				if e == nil {
 					e = json.Unmarshal([]byte(body), &p)
 				}
+				if e == nil && (s.activeProcessing[p.DocumentID] != nil || s.blockedProcessing[p.DocumentID]) {
+					e = errors.New("processing still finishing")
+				}
+				var task *documentTask
+				workContext := ctx
 				if e == nil {
+					task = &documentTask{done: make(chan struct{})}
+					workContext, task.cancel = context.WithCancel(ctx)
+					if s.activeProcessing == nil {
+						s.activeProcessing = map[string]*documentTask{}
+					}
+					s.activeProcessing[p.DocumentID] = task
 					p.Status = "running"
 					if p.StartedAt == "" {
 						p.StartedAt = now()
@@ -280,10 +339,12 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 				}
 				s.processingMu.Unlock()
 				if e != nil {
+					s.finishProcessingTask(p.DocumentID, task)
 					continue
 				}
-				work, finish, startErr := s.beginDocumentTask(ctx, p.DocumentID)
+				work, finish, startErr := s.beginDocumentTask(workContext, p.DocumentID)
 				if startErr != nil {
+					s.finishProcessingTask(p.DocumentID, task)
 					continue
 				}
 				if phase == "learning" {
@@ -310,6 +371,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 					_ = s.Store.saveProcessing(p)
 				}
 				finish()
+				s.finishProcessingTask(p.DocumentID, task)
 			}
 		}(phase)
 	}
@@ -337,6 +399,9 @@ func (s *Server) wakeProcessing() {
 	}
 	rows.Close()
 	for _, p := range pending {
+		if !p.Enabled {
+			continue
+		}
 		p.Status = "queued"
 		p.Detail = "等待继续处理"
 		p.wakeStages = true
@@ -348,74 +413,16 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 	if e != nil {
 		return e
 	}
-	m, e := s.readLayout(d.ID)
-	if e != nil {
-		worker := os.Getenv("READER_PROCESSOR")
-		node := os.Getenv("READER_NODE")
-		if worker == "" || node == "" {
-			return errors.New("本地解析程序未启动，请重新构建并打开 Reader")
-		}
-		work := filepath.Join(s.Store.Root, "cache", d.ID, "analysis-work")
-		if e = os.RemoveAll(work); e != nil {
-			return errors.New("无法清理未完成的解析")
-		}
-		child, cancel := context.WithTimeout(ctx, 30*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(child, node, worker, "--input", s.Store.File(d), "--output", work, "--model-cache", filepath.Join(s.Store.Root, "models"))
-		cmd.Env = append(os.Environ(), "ELECTRON_RUN_AS_NODE=1", "NODE_USE_ENV_PROXY=1")
-		cmd.WaitDelay = 3 * time.Second
-		cmd.Dir = s.Store.Root
-		cmd.Stderr = io.Discard
-		out, e := cmd.StdoutPipe()
-		if e != nil {
+	if d.Library == "books" {
+		if e = s.learnBookChapter(ctx, d, p); e != nil {
 			return e
 		}
-		if e = cmd.Start(); e != nil {
-			return errors.New("无法启动本地 PDF 解析程序")
-		}
-		scan := bufio.NewScanner(out)
-		scan.Buffer(make([]byte, 4096), 1<<20)
-		var saveErr error
-		for scan.Scan() {
-			var event struct {
-				Event      string `json:"event"`
-				Page       int    `json:"page"`
-				Total      int    `json:"total"`
-				Downloaded int64  `json:"downloaded"`
-				Bytes      int64  `json:"bytes"`
-			}
-			if json.Unmarshal(scan.Bytes(), &event) != nil {
-				continue
-			}
-			switch event.Event {
-			case "model-download":
-				p.Detail = "首次准备版面模型（约 67 MB）"
-			case "model-progress":
-				p.Detail = fmt.Sprintf("正在下载版面模型 %.0f / %.0f MB", float64(event.Downloaded)/1e6, float64(event.Bytes)/1e6)
-			case "page":
-				p.PagesDone = event.Page
-				p.PagesTotal = event.Total
-				p.Detail = fmt.Sprintf("已解析 %d / %d 页", event.Page, event.Total)
-			default:
-				continue
-			}
-			if saveErr = s.Store.saveProcessing(*p); saveErr != nil {
-				cancel()
-				break
-			}
-		}
-		if scan.Err() != nil {
-			cancel()
-		}
-		e = cmd.Wait()
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if saveErr != nil {
-			return errors.New("无法保存解析进度")
-		}
-		if e != nil || scan.Err() != nil {
-			return errors.New("PDF 解析未完成。请检查网络、模型缓存或文件后重试")
+	}
+	m, e := s.readLayout(d.ID)
+	if e != nil && d.Library != "books" {
+		work := filepath.Join(s.Store.Root, "cache", d.ID, "analysis-work")
+		if e = s.runLayout(ctx, d, work, 0, 0, p); e != nil {
+			return e
 		}
 		// A successful worker writes its manifest last. Publish the directory once.
 		if _, e = os.Stat(s.analysisDir(d.ID)); e == nil {
@@ -425,9 +432,15 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 			return errors.New("无法保存解析附件")
 		}
 		m, e = s.readLayout(d.ID)
-		if e != nil {
-			return e
-		}
+	}
+	if e != nil && d.Library == "books" {
+		// No chapter has been parsed yet; nothing waits for translation.
+		p.Translating = &ProcessingStage{Status: "complete", Detail: "可按章节翻译"}
+		aggregateProcessing(p)
+		return s.Store.saveProcessing(*p)
+	}
+	if e != nil {
+		return e
 	}
 	p.PagesDone = m.Pages
 	p.PagesTotal = m.Pages
@@ -435,14 +448,13 @@ func (s *Server) learnPDF(ctx context.Context, p *Processing) error {
 		p.Warning = strings.Join(m.Warnings, " ")
 	}
 	p.Incomplete = len(m.IncompletePages) > 0 || strings.Contains(p.Warning, "无可提取文字")
-	p.TranslationsTotal = 0
-	for _, b := range m.Blocks {
-		if needsTranslation(b) {
-			p.TranslationsTotal++
-		}
+	items, e := s.translations(d.ID, m)
+	if e != nil {
+		return e
 	}
+	p.TranslationsDone, p.TranslationsTotal = translationCounts(items)
 	p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文与公式"}
-	if p.TranslationsTotal == 0 {
+	if p.TranslationsDone == p.TranslationsTotal {
 		p.Translating.Status = "complete"
 	}
 	aggregateProcessing(p)

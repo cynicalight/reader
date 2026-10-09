@@ -110,6 +110,7 @@ export function CoverProcessing({
     const timer = setTimeout(() => setPhase(nextPhase), 750);
     return () => clearTimeout(timer);
   }, [leaving, nextPhase]);
+  if (job.status === "paused") return null;
   if (phase === "ready")
     return job.incomplete ? (
       <span className="cover-incomplete" title={job.warning || job.detail}>

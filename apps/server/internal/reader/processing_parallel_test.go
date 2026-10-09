@@ -52,16 +52,16 @@ func TestStartupDropsLegacyConsolidationState(t *testing.T) {
 		wantPhase, wantStatus     string
 	}{
 		{"waiting consolidation, translated", "settling", "waiting",
-			`{"documentId":"doc","phase":"settling","status":"waiting","settling":{"status":"waiting","detail":"请选择主 Agent"},"translating":{"status":"complete","detail":"已完成"},"assetsDone":0,"assetsTotal":3}`,
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"waiting","settling":{"status":"waiting","detail":"请选择主 Agent"},"translating":{"status":"complete","detail":"已完成"},"assetsDone":0,"assetsTotal":3}`,
 			"ready", "complete"},
 		{"failed consolidation, translation running", "settling", "failed",
-			`{"documentId":"doc","phase":"settling","status":"failed","settling":{"status":"failed","detail":"image failed"},"translating":{"status":"running","detail":"翻译中"}}`,
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"failed","settling":{"status":"failed","detail":"image failed"},"translating":{"status":"running","detail":"翻译中"}}`,
 			"translating", "queued"},
 		{"queued before translation lane existed", "settling", "queued",
-			`{"documentId":"doc","phase":"settling","status":"queued","detail":"等待解析图表"}`,
+			`{"enabled":true,"documentId":"doc","phase":"settling","status":"queued","detail":"等待解析图表"}`,
 			"translating", "queued"},
 		{"completed before translation lane existed", "ready", "complete",
-			`{"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
+			`{"enabled":true,"documentId":"doc","phase":"ready","status":"complete","completedAt":"2026-01-01T00:00:00Z","settling":{"status":"complete"}}`,
 			"ready", "complete"},
 	}
 	for _, c := range cases {

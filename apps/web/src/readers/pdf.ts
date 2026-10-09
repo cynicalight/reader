@@ -209,6 +209,9 @@ export class PDFReaderAdapter implements ReaderAdapter {
           children: [],
         }));
   }
+  getPageCount() {
+    return this.pdf?.numPages ?? 0;
+  }
   getLocation(): PDFLocation {
     const page = this.viewer.getPageView(this.location.page - 1)?.div as
       HTMLElement | undefined;

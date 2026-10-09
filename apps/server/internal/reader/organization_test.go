@@ -139,6 +139,9 @@ func TestClassificationCompletionAndManualRace(t *testing.T) {
 				}
 				return GenerateResult{Text: text, FinishReason: "stop"}, nil
 			})}}}
+			if _, err := s.Store.DB.Exec("UPDATE documents SET classification_status='pending' WHERE id=?", d.ID); err != nil {
+				t.Fatal(err)
+			}
 			s.classifyDocument(ctx, d.ID, service)
 			got, err := s.Store.Document(d.ID)
 			if err != nil {

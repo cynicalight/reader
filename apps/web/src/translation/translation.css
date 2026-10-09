@@ -256,6 +256,13 @@
   }
 }
 
+.assistance-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .translation-formula-source {
   margin-top: 0.5em;
   font-size: 0.85em;

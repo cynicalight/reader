@@ -113,3 +113,24 @@ it("does not bind a stale selection to a new source and retains snapshots while 
     ]),
   ).toBe(captured);
 });
+
+it("locates repaired sentences by their extracted anchor", () => {
+  const t: TranslationBlock = {
+    blockId: "p1-b1",
+    sourceHash: "h",
+    status: "complete",
+    sentences: [
+      {
+        source: "The AGENT reads.",
+        target: "代理阅读。",
+        anchor: "The A GENT reads.",
+      },
+      { source: "It writes.", target: "它写作。" },
+    ],
+  };
+  expect(sourcePassage(t, 0).sources).toEqual(["The A GENT reads."]);
+  expect(sourcePassage(t, 1)).toMatchObject({
+    sources: ["It writes."],
+    sourceOffset: "theagentreads.".length,
+  });
+});

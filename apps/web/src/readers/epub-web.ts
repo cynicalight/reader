@@ -538,6 +538,25 @@ export class EPUBReaderAdapter implements ReaderAdapter {
           legacy.locations?.textRange)
       )
         throw new Error("未能唯一定位这段原文，笔记已保留。请使用书内搜索。");
+      if (fragment && !target) throw new Error("未能定位此目录条目");
+      const fragmentNode =
+        target &&
+        (target.closest<HTMLElement>("[data-epub-block]") ??
+          Array.from(
+            chapter.node.querySelectorAll<HTMLElement>("[data-epub-block]"),
+          ).find(
+            (node) =>
+              target.contains(node) ||
+              !!(
+                target.compareDocumentPosition(node) &
+                Node.DOCUMENT_POSITION_FOLLOWING
+              ),
+          ));
+      const fragmentBlock =
+        fragmentNode &&
+        chapter.info.blocks.find(
+          (block) => block.id === fragmentNode.dataset.epubBlock,
+        );
       const element = slices[0] && this.blockElement(slices[0].block.id);
       const top =
         range && range.getClientRects().length
@@ -552,6 +571,13 @@ export class EPUBReaderAdapter implements ReaderAdapter {
           chapter.node.getBoundingClientRect().height * progression;
       this.location = {
         ...canonical,
+        ...(fragmentBlock
+          ? {
+              blockId: fragmentBlock.id,
+              start: 0,
+              end: Math.min(1, fragmentBlock.text.length),
+            }
+          : {}),
         progression:
           progression ??
           (slices[0]

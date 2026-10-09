@@ -100,6 +100,11 @@
                                       "enum": ["books", "papers"],
                                       "description": "Target library. Papers accept PDFs up to 50 MB and 150 pages. Defaults to books.",
                                     },
+                                  "allowLarge":
+                                    {
+                                      "enum": ["1"],
+                                      "description": "Confirms a paper over 50 pages. Without it such a paper fails with 409, code large-paper and its page count.",
+                                    },
                                 },
                               "required": ["file"],
                             },
@@ -342,6 +347,83 @@
                 },
             },
         },
+      "/api/documents/{id}/annotations/undo":
+        {
+          "post":
+            {
+              "description": "Undo the latest annotation mutation from this window and document. Restores merged/deleted marks and original IDs atomically; rejects changes superseded by another client. History is in-memory, bounded to the latest 100 operations and 16 MiB across the server.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "required": true,
+                    "schema":
+                      { "type": "string", "minLength": 1, "maxLength": 128 },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Undo result; use the returned annotations only when undone is true",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["undone", "annotations"],
+                                  "properties":
+                                    {
+                                      "undone": { "type": "boolean" },
+                                      "annotations":
+                                        {
+                                          "type": "array",
+                                          "items":
+                                            {
+                                              "$ref": "#/components/schemas/Annotation",
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "An affected annotation changed outside this history; no data was overwritten and this document's window history was cleared",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/annotations":
         {
           "get":
@@ -423,6 +505,12 @@
               "parameters":
                 [
                   {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
+                  {
                     "in": "path",
                     "name": "id",
                     "required": true,
@@ -476,6 +564,12 @@
             {
               "parameters":
                 [
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
                   {
                     "in": "path",
                     "name": "id",
@@ -579,6 +673,12 @@
                 },
               "parameters":
                 [
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
                   {
                     "in": "path",
                     "name": "id",
@@ -957,6 +1057,110 @@
                             {
                               "schema":
                                 { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/assistance":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved assistance state",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Processing" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Saved assistance state",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Processing" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "required": ["action"],
+                              "properties":
+                                {
+                                  "action":
+                                    {
+                                      "type": "string",
+                                      "enum": ["start", "pause", "resume"],
+                                    },
+                                },
                             },
                         },
                     },
@@ -1450,6 +1654,189 @@
                                   "required": ["queued"],
                                   "properties":
                                     { "queued": { "type": "boolean" } },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/translations/chapter":
+        {
+          "post":
+            {
+              "description": "Queue the EPUB chapter at this location. Top-level TOC boundaries (children of a sole book-title parent) take precedence; without a TOC use the spine file. Queues at most approximately 40000 Unicode source characters, retaining whole paragraphs and completed results. Resumes paused work. No PDF page numbers.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "required": ["location"],
+                              "properties":
+                                {
+                                  "location":
+                                    {
+                                      "type": "object",
+                                      "required": ["type", "href"],
+                                      "properties":
+                                        {
+                                          "type":
+                                            {
+                                              "type": "string",
+                                              "enum": ["epub"],
+                                            },
+                                          "href": { "type": "string" },
+                                          "blockId": { "type": "string" },
+                                          "locator": { "type": "string" },
+                                          "start":
+                                            { "type": "integer", "minimum": 0 },
+                                          "end":
+                                            { "type": "integer", "minimum": 0 },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Chapter queued",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required":
+                                    ["queued", "characters", "hasMore"],
+                                  "properties":
+                                    {
+                                      "queued": { "type": "integer" },
+                                      "characters": { "type": "integer" },
+                                      "hasMore":
+                                        {
+                                          "type": "boolean",
+                                          "description": "Request this chapter again to queue the remaining text after the character limit.",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/translations/range":
+        {
+          "post":
+            {
+              "description": "Queue untranslated paragraphs and formulas in a page range, in reading order, starting at the first unfinished page and covering at most 30 pages and 40000 source characters. Book pages that were never parsed are parsed first. Also resumes paused processing.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "required": ["fromPage", "toPage"],
+                              "properties":
+                                {
+                                  "fromPage":
+                                    { "type": "integer", "minimum": 1 },
+                                  "toPage": { "type": "integer", "minimum": 1 },
+                                },
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "202":
+                    {
+                      "description": "Range queued",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required":
+                                    [
+                                      "queued",
+                                      "characters",
+                                      "nextPage",
+                                      "parsing",
+                                    ],
+                                  "properties":
+                                    {
+                                      "queued": { "type": "integer" },
+                                      "characters": { "type": "integer" },
+                                      "nextPage":
+                                        {
+                                          "type": "integer",
+                                          "description": "Page where the character or 30-page limit stopped the request; 0 when the range is fully queued.",
+                                        },
+                                      "parsing":
+                                        {
+                                          "type": "boolean",
+                                          "description": "Book pages in the window are parsed first (at most 30 pages); translation is queued when parsing finishes.",
+                                        },
+                                    },
                                 },
                             },
                         },
@@ -2619,7 +3006,9 @@
                   "category": { "enum": ["book", "article", "paper"] },
                   "categorySource": { "enum": ["default", "ai", "manual"] },
                   "classificationStatus":
-                    { "enum": ["pending", "running", "failed", "done"] },
+                    {
+                      "enum": ["idle", "pending", "running", "failed", "done"],
+                    },
                   "classificationError": { "type": "string" },
                   "tags":
                     {
@@ -2961,6 +3350,13 @@
               "type": "object",
               "properties":
                 {
+                  "enabled": { "type": "boolean" },
+                  "epubManual":
+                    {
+                      "type": "boolean",
+                      "readOnly": true,
+                      "description": "EPUB work uses explicit chapter requests; the legacy automatic queue has been migrated.",
+                    },
                   "translating":
                     { "$ref": "#/components/schemas/ProcessingStage" },
                   "documentId": { "type": "string" },
@@ -2973,7 +3369,14 @@
                     {
                       "type": "string",
                       "enum":
-                        ["queued", "running", "waiting", "failed", "complete"],
+                        [
+                          "queued",
+                          "running",
+                          "waiting",
+                          "failed",
+                          "complete",
+                          "paused",
+                        ],
                     },
                   "pagesDone": { "type": "integer" },
                   "pagesTotal": { "type": "integer" },
@@ -3135,8 +3538,17 @@
               "required": ["source", "target"],
               "properties":
                 {
-                  "source": { "type": "string" },
+                  "source":
+                    {
+                      "type": "string",
+                      "description": "The model's sentence; it may repair PDF extraction errors.",
+                    },
                   "target": { "type": "string" },
+                  "anchor":
+                    {
+                      "type": "string",
+                      "description": "Extracted text this sentence covers when it differs from source; used to locate the sentence in the PDF text layer.",
+                    },
                 },
             },
           "TranslationBlock":
@@ -3148,7 +3560,11 @@
                   "blockId": { "type": "string" },
                   "sourceHash": { "type": "string" },
                   "status":
-                    { "enum": ["pending", "running", "complete", "failed"] },
+                    {
+                      "enum":
+                        ["idle", "pending", "running", "complete", "failed"],
+                      "description": "idle: a book paragraph that has not been requested.",
+                    },
                   "sentences":
                     {
                       "type": "array",

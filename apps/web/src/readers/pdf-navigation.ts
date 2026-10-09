@@ -2,7 +2,7 @@ import { animatePDFScroll } from "./pdf-scroll";
 import { sentenceTextRanges } from "./pdf-sentence-matching";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
-import { isPDFPageDecoration } from "@reader/core";
+import { isPDFPageDecoration, sentenceAnchor } from "@reader/core";
 import type {
   PDFBlock,
   PDFReadingAnchor,
@@ -387,11 +387,11 @@ export class PDFReadingNavigation {
           ? this.domSentenceBoxes(
               node,
               block,
-              [sentence.source],
+              [sentenceAnchor(sentence)],
               prefix.replace(/[\s\u00ad]/g, "").length,
             )
           : [];
-        prefix += sentence.source;
+        prefix += sentenceAnchor(sentence);
         if (!boxes.length) {
           reliable = false;
           break;
@@ -406,14 +406,14 @@ export class PDFReadingNavigation {
           text.toLowerCase().replace(/[\s\u00ad]/g, "");
         const needle = normalize(location.quote ?? "");
         const joined = translation.sentences
-          .map((s) => normalize(s.source))
+          .map((s) => normalize(sentenceAnchor(s)))
           .join("");
         const start = needle ? joined.indexOf(needle) : -1;
         // Missing geometry must not associate the entire paragraph or a repeated phrase.
         if (start < 0 || joined.indexOf(needle, start + 1) >= 0) continue;
         let offset = 0;
         const matches = translation.sentences.flatMap((sentence, i) => {
-          const end = offset + normalize(sentence.source).length;
+          const end = offset + normalize(sentenceAnchor(sentence)).length;
           const overlaps = offset < start + needle.length && end > start;
           offset = end;
           return overlaps ? [i] : [];

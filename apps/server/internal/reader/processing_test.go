@@ -18,7 +18,7 @@ func processingFixture(t *testing.T) (*Server, Processing) {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { store.DB.Close() })
-	_, e = store.DB.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at) VALUES('doc','pdf','test','',1,?,?)", now(), now())
+	_, e = store.DB.Exec("INSERT INTO documents(id,type,title,author,size,created_at,last_opened_at,library) VALUES('doc','pdf','test','',1,?,?,'papers')", now(), now())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -28,6 +28,11 @@ func processingFixture(t *testing.T) (*Server, Processing) {
 		t.Fatal(e)
 	}
 	p, _ := store.processing("doc")
+	p.Enabled = true
+	p.Status = "queued"
+	if e = store.saveProcessing(p); e != nil {
+		t.Fatal(e)
+	}
 	dir := s.analysisDir("doc")
 	if e = os.MkdirAll(filepath.Join(dir, "assets"), 0700); e != nil {
 		t.Fatal(e)

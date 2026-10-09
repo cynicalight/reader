@@ -10,8 +10,12 @@ import (
 )
 
 type TranslationSentence struct {
+	// Source is the model's sentence, which may repair extraction errors.
 	Source string `json:"source"`
 	Target string `json:"target"`
+	// Anchor is the extracted text the sentence covers, set when it differs
+	// from Source. Readers locate sentences in the PDF text layer by it.
+	Anchor string `json:"anchor,omitempty"`
 }
 type TranslationBlock struct {
 	BlockID         string                `json:"blockId"`
@@ -49,7 +53,13 @@ func newTranslation(b PDFBlock) TranslationBlock {
 	}
 	return TranslationBlock{BlockID: b.ID, SourceHash: translationHash(source), Status: "pending", Sentences: []TranslationSentence{}}
 }
+
+// Book paragraphs stay idle until requested; PDF papers translate in full.
 func (s *Server) translations(documentID string, m translationInput) ([]TranslationBlock, error) {
+	d, err := s.Store.Document(documentID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.Store.DB.Query("SELECT body FROM translations WHERE document_id=?", documentID)
 	if err != nil {
 		return nil, err
@@ -77,6 +87,8 @@ func (s *Server) translations(documentID string, m translationInput) ([]Translat
 	for _, t := range m.translationItems() {
 		if value, ok := saved[t.BlockID+":"+t.SourceHash]; ok {
 			t = value
+		} else if d.Library == "books" || d.Type == "epub" {
+			t.Status = "idle"
 		}
 		result = append(result, t)
 	}
@@ -104,40 +116,6 @@ func (s *Server) retryFailedTranslations(documentID string) error {
 	return nil
 }
 
-// Upgrade previously settled documents without changing their layout or notes.
-func (s *Server) queueUntranslatedDocuments() {
-	docs, err := s.Store.Documents()
-	if err != nil {
-		return
-	}
-	for _, doc := range docs {
-		if doc.Type == "epub" {
-			_ = s.Store.enqueueDocument(doc)
-		}
-		p, err := s.Store.processing(doc.ID)
-		if err != nil || p.Status != "complete" {
-			continue
-		}
-		m, err := s.readTranslationSource(doc.ID)
-		if err != nil {
-			continue
-		}
-		items, err := s.translations(doc.ID, m)
-		if err != nil {
-			continue
-		}
-		for _, t := range items {
-			if t.Status != "complete" {
-				p.Phase = "translating"
-				p.Status = "queued"
-				p.Detail = "等待翻译正文"
-				p.queueTranslation = true
-				_ = s.Store.saveProcessing(p)
-				break
-			}
-		}
-	}
-}
 func (s *Server) saveTranslation(documentID string, t TranslationBlock) error {
 	s.translationMu.Lock()
 	defer s.translationMu.Unlock()
@@ -184,6 +162,10 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
+	if req.BlockID == "" && (d.Library == "books" || d.Type == "epub") {
+		fail(w, 400, "图书请按章节翻译")
+		return
+	}
 	m, err := s.readTranslationSource(d.ID)
 	if err != nil {
 		fail(w, 409, "正文仍在解析中")
@@ -191,6 +173,11 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 	}
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
+	p, err := s.Store.processing(d.ID)
+	if err != nil || !p.Enabled {
+		fail(w, 409, "请先开始翻译")
+		return
+	}
 	items, err := s.translations(d.ID, m)
 	if err != nil {
 		fail(w, 500, "无法读取译文")
@@ -216,15 +203,6 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "没有可翻译的段落")
 		return
 	}
-	if err = s.Store.enqueueDocument(d); err != nil {
-		fail(w, 500, "无法安排翻译任务")
-		return
-	}
-	p, err := s.Store.processing(d.ID)
-	if err != nil {
-		fail(w, 500, "无法读取处理状态")
-		return
-	}
 	if p.Status != "running" || (p.Translating != nil && p.Translating.Status != "running") {
 		if p.Phase == "ready" {
 			p.Phase = "translating"
@@ -241,6 +219,10 @@ func (s *Server) requestTranslation(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseTranslation(raw, source string) ([]TranslationSentence, error) {
+	return parseTranslationSource(raw, source, true)
+}
+
+func parseTranslationSource(raw, source string, repairPDF bool) ([]TranslationSentence, error) {
 	raw = strings.TrimSpace(raw)
 	if strings.HasPrefix(raw, "```") {
 		if i := strings.IndexByte(raw, '\n'); i >= 0 {
@@ -255,7 +237,8 @@ func parseTranslation(raw, source string) ([]TranslationSentence, error) {
 		return nil, errors.New("译文格式不完整，请重试此段")
 	}
 	var joined strings.Builder
-	for _, sentence := range out.Sentences {
+	for i, sentence := range out.Sentences {
+		out.Sentences[i].Anchor = ""
 		if strings.TrimSpace(sentence.Source) == "" || strings.TrimSpace(sentence.Target) == "" {
 			return nil, errors.New("译文存在空句，请重试此段")
 		}
@@ -263,8 +246,14 @@ func parseTranslation(raw, source string) ([]TranslationSentence, error) {
 		joined.WriteByte(' ')
 	}
 	normalize := func(v string) string { return strings.Join(strings.Fields(v), "") }
-	if normalize(joined.String()) != normalize(source) {
+	if normalize(joined.String()) == normalize(source) {
+		return out.Sentences, nil
+	}
+	if !repairPDF || !similarText(joined.String(), source) {
 		return nil, errors.New("原文句子未完整对应，请重试此段")
+	}
+	for i, anchor := range alignAnchors(source, out.Sentences) {
+		out.Sentences[i].Anchor = anchor
 	}
 	return out.Sentences, nil
 }

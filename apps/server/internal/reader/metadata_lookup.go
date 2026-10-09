@@ -205,7 +205,7 @@ func (s *Server) resolveDocument(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "无法保存文件")
 		return
 	}
-	d, status, err := s.importFile(ctx, temp.Name(), result.Filename, "papers")
+	d, status, err := s.importFile(ctx, temp.Name(), result.Filename, "papers", true)
 	if err != nil {
 		fail(w, status, err.Error())
 		return

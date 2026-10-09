@@ -7,6 +7,8 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net"
@@ -21,6 +23,8 @@ import (
 )
 
 type Server struct {
+	annotationMu           sync.Mutex
+	annotationHistory      []annotationChange
 	codexChat              codexChatCache
 	Store                  *Store
 	Token                  string
@@ -34,6 +38,9 @@ type Server struct {
 	translationMu          sync.Mutex
 	translationSubscribers map[string]map[chan TranslationBlock]struct{}
 	processingMu           sync.Mutex
+	processingControlMu    sync.Mutex
+	activeProcessing       map[string]*documentTask
+	blockedProcessing      map[string]bool
 	modelMu                sync.Mutex
 	modelCache             map[string]modelCatalogEntry
 	scholarMu              sync.Mutex
@@ -82,6 +89,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/metadata/lookup", s.lookupMetadata)
 	mux.HandleFunc("GET /api/processing", s.processingList)
 	mux.HandleFunc("POST /api/documents/{id}/processing", s.retryProcessing)
+	mux.HandleFunc("GET /api/documents/{id}/assistance", s.getAssistance)
+	mux.HandleFunc("POST /api/documents/{id}/assistance", s.setAssistance)
+	mux.HandleFunc("POST /api/documents/{id}/translations/range", s.requestTranslationRange)
+	mux.HandleFunc("POST /api/documents/{id}/translations/chapter", s.requestEPUBTranslationChapter)
 	mux.HandleFunc("GET /api/documents/{id}/blocks", s.documentBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/epub-blocks", s.epubBlocks)
 	mux.HandleFunc("GET /api/documents/{id}/epub-chapters", s.epubChapters)
@@ -99,17 +110,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/trash", s.trashList)
 	mux.HandleFunc("DELETE /api/trash", s.emptyTrash)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
+	mux.HandleFunc("POST /api/documents/{id}/annotations/undo", s.undoAnnotation)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
-	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
-	mux.HandleFunc("PATCH /api/documents/{id}/annotations/{annotation}", s.updateAnnotationNote)
-	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/documents/{id}/annotations", s.recordAnnotation(s.saveAnnotation))
+	mux.HandleFunc("PATCH /api/documents/{id}/annotations/{annotation}", s.recordAnnotation(s.updateAnnotationNote))
+	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", s.recordAnnotation(func(w http.ResponseWriter, r *http.Request) {
 		_, err := s.Store.DB.Exec("DELETE FROM annotations WHERE id=? AND document_id=?", r.PathValue("annotation"), r.PathValue("id"))
 		if err != nil {
 			fail(w, 500, "删除失败")
 			return
 		}
 		w.WriteHeader(204)
-	})
+	}))
 	mux.HandleFunc("GET /api/documents/{id}/search", s.search)
 	mux.HandleFunc("GET /api/documents/{id}/messages", s.messages)
 	mux.HandleFunc("POST /api/documents/{id}/chat", s.chat)
@@ -137,6 +149,12 @@ func (s *Server) Handler() http.Handler {
 		var v map[string]any
 		if !decode(w, r, &v) {
 			return
+		}
+		if value, exists := v["autoTranslatePDF"]; exists {
+			if _, ok := value.(bool); !ok {
+				fail(w, 400, "自动翻译设置必须为布尔值")
+				return
+			}
 		}
 		b, _ := json.Marshal(v)
 		_, err := s.Store.DB.Exec("INSERT INTO settings VALUES('reader',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", string(b))
@@ -220,7 +238,12 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "保存失败")
 		return
 	}
-	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library)
+	d, status, err := s.importFile(r.Context(), temp.Name(), header.Filename, library, r.FormValue("allowLarge") == "1")
+	var large importError
+	if errors.As(err, &large) && large.code != "" {
+		respond(w, status, map[string]any{"error": large.message, "code": large.code, "pages": large.pages})
+		return
+	}
 	if err != nil {
 		fail(w, status, err.Error())
 		return
@@ -231,18 +254,22 @@ func (s *Server) importDocument(w http.ResponseWriter, r *http.Request) {
 type importError struct {
 	status  int
 	message string
+	// code and pages describe a long paper the reader may import as a book.
+	code  string
+	pages int
 }
 
 func (e importError) Error() string { return e.message }
 
 // importFile moves a completed temporary file into the library. An identical
 // file returns the existing document, whichever library holds it.
-func (s *Server) importFile(ctx context.Context, temp, filename, library string) (Document, int, error) {
+// A long paper is imported only after the reader confirms (allowLarge).
+func (s *Server) importFile(ctx context.Context, temp, filename, library string, allowLarge bool) (Document, int, error) {
 	s.importMu.Lock()
 	defer s.importMu.Unlock()
 	kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
 	failure := func(status int, message string) (Document, int, error) {
-		return Document{}, status, importError{status, message}
+		return Document{}, status, importError{status: status, message: message}
 	}
 	f, err := os.Open(temp)
 	if err != nil {
@@ -281,9 +308,16 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		if reason := paperLimit(kind, size, temp); reason != "" {
 			return failure(400, reason)
 		}
+		if pages, e := pdfPageCount(temp); e == nil && pages > largePaperPages && !allowLarge {
+			return Document{}, 409, importError{409, fmt.Sprintf("这份 PDF 有 %d 页，篇幅较大", pages), "large-paper", pages}
+		}
 	}
 	d := Document{ID: docID, Type: kind, Title: strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)), Size: size, CreatedAt: now(), LastOpenedAt: now(), Library: library}
 	d.Category, d.CategorySource, d.ClassificationStatus, d.Tags, d.Folders = "article", "default", "pending", []string{}, []string{}
+	if kind == "pdf" && library == "books" {
+		// Classification reads parsed text, which books gain chapter by chapter.
+		d.ClassificationStatus = "idle"
+	}
 	if kind == "epub" {
 		d.Category = "book"
 	}
@@ -347,7 +381,9 @@ func (s *Server) importFile(ctx context.Context, temp, filename, library string)
 		}
 	}
 	if err == nil {
-		p := initialDocumentProcessing(d)
+		var settings string
+		_ = tx.QueryRow("SELECT value FROM settings WHERE key='reader'").Scan(&settings)
+		p := initialDocumentProcessing(d, settings)
 		b, _ := json.Marshal(p)
 		_, err = tx.Exec("INSERT INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	}

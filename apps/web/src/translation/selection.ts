@@ -8,6 +8,7 @@ import type {
   TranslationBlock,
   TranslationLocation,
 } from "@reader/core";
+import { sentenceAnchor } from "@reader/core";
 
 export function translatedSelection(
   host: HTMLElement,
@@ -73,10 +74,12 @@ export function translatedSelection(
     });
     passages.push({
       blockId: block.id,
-      sources: sentenceIndexes.map((i) => translation.sentences[i].source),
+      sources: sentenceIndexes.map((i) =>
+        sentenceAnchor(translation.sentences[i]),
+      ),
       sourceOffset: translation.sentences
         .slice(0, sentenceIndexes[0])
-        .map((s) => s.source)
+        .map(sentenceAnchor)
         .join("")
         .toLowerCase()
         .replace(/[\s\u00ad]/g, "").length,

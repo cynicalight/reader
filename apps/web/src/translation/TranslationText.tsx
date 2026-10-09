@@ -36,6 +36,7 @@ export function TranslationText({
   translation,
   documentId,
   retry,
+  paused = false,
   linked = [],
   formulaNumber,
   onCitation,
@@ -46,7 +47,9 @@ export function TranslationText({
     Partial<PDFBlock>;
   translation?: TranslationBlock;
   documentId: string;
+  /** Requests this block; also used for blocks that were never requested. */
   retry: () => void;
+  paused?: boolean;
   linked?: number[];
   formulaNumber?: string;
   onCitation?: (blockId: string, label: string) => void;
@@ -54,6 +57,8 @@ export function TranslationText({
   imageURL?: string;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
+  const idle = translation?.status === "idle";
+  const halted = paused && translation?.status === "pending";
   const asset =
     !!block.image || ["table", "chart", "image"].includes(block.label);
   const image = block.image ? (
@@ -97,8 +102,12 @@ export function TranslationText({
                   重试公式
                 </Button>
               </>
+            ) : idle ? (
+              <Button variant="ghost" size="sm" onClick={retry}>
+                转换公式
+              </Button>
             ) : (
-              <span>公式转换中…</span>
+              <span>{halted ? "翻译已暂停" : "公式转换中…"}</span>
             )}
           </div>
         )}
@@ -153,11 +162,15 @@ export function TranslationText({
           <span>
             {translation?.status === "failed"
               ? translation.error || "此段翻译失败"
-              : "正在翻译中…"}
+              : idle
+                ? "未翻译"
+                : halted
+                  ? "翻译已暂停"
+                  : "正在翻译中…"}
           </span>
-          {translation?.status === "failed" && (
+          {(translation?.status === "failed" || idle) && (
             <Button variant="ghost" size="sm" onClick={retry}>
-              重试此段
+              {idle ? "翻译此段" : "重试此段"}
             </Button>
           )}
         </div>

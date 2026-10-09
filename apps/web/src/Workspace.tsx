@@ -99,6 +99,7 @@ import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
+import { useAnnotationUndo } from "./useAnnotationUndo";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
 import {
   activeAnnotation,
@@ -409,7 +410,7 @@ export function Workspace({
     return () => {
       alive = false;
     };
-  }, [doc.id, doc.type, processing?.phase]);
+  }, [doc.id, doc.type, processing?.phase, processing?.status]);
   const move = (next: DocumentLocation) => {
     void adapter?.goTo(next).catch((e) => toast.error(e.message));
   };
@@ -490,6 +491,17 @@ export function Workspace({
       setNoteSaving(false);
     }
   };
+  useAnnotationUndo(
+    doc.id,
+    (items) => {
+      setAnnotations(items);
+      setAnnotationTarget(null);
+      adapter?.clearSelection();
+      setSelection(null);
+    },
+    () => !annotationsLoaded || annotationSaving.current || noteOpen,
+  );
+
   const selectedAnnotation = annotationTarget
     ? activeAnnotation(annotations, annotationTarget.ids)
     : undefined;

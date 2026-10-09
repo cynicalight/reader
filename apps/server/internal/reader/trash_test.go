@@ -65,7 +65,7 @@ func TestTrashKeepsDataUntilPurged(t *testing.T) {
 }
 func TestTrashStopsAndRequeuesRunningWork(t *testing.T) {
 	s := testServer(t)
-	d := organizationDoc(t, s)
+	d := paperDoc(t, s, sample(t, "reading-notes.pdf"))
 	p, _ := s.Store.processing(d.ID)
 	p.Status = "running"
 	if err := s.Store.saveProcessing(p); err != nil {
@@ -145,7 +145,7 @@ func TestEmptyTrashPurgesOnlyThatLibrary(t *testing.T) {
 }
 func TestRestoreRequeuesWorkLeftRunning(t *testing.T) {
 	s := testServer(t)
-	d := organizationDoc(t, s)
+	d := paperDoc(t, s, sample(t, "reading-notes.pdf"))
 	request(t, s, "POST", "/api/documents/"+d.ID+"/trash", nil)
 	p, _ := s.Store.processing(d.ID)
 	p.Status = "running"

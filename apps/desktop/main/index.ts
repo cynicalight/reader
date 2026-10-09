@@ -13,6 +13,7 @@ import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
+import { annotationUndoShortcut } from "../../../packages/reader-core/src/undo-shortcut";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 import {
   READER_SCHEME,
@@ -130,25 +131,39 @@ function windowBackground(appearance: unknown) {
   if (appearance === "sepia") return "#eeede7";
   return nativeTheme.shouldUseDarkColors ? "#171717" : "#ffffff";
 }
+// Long papers wait for the reader's choice. The renderer refers to them by
+// one-time IDs, never by path.
+const largePapers = new Map<string, string>();
 async function importPaths(
   paths: string[],
   library: "books" | "papers" = "books",
+  allowLarge = false,
 ) {
   const accepted = library === "papers" ? /\.pdf$/i : /\.(epub|pdf)$/i;
+  const large: Array<{ id: string; name: string; pages: number }> = [];
   for (const path of paths) {
     if (!accepted.test(path)) continue;
     const data = await readFile(path);
+    const name = path.split(/[\\/]/).pop()!;
     const form = new FormData();
     form.append("library", library);
-    form.append("file", new Blob([data]), path.split(/[\\/]/).pop()!);
+    if (allowLarge) form.append("allowLarge", "1");
+    form.append("file", new Blob([data]), name);
     const response = await fetch(`${serverURL}/api/documents`, {
       method: "POST",
       headers: { Authorization: `Bearer ${serverToken}` },
       body: form,
     });
-    if (!response.ok) throw new Error((await response.json()).error);
+    if (!response.ok) {
+      const failure = await response.json();
+      if (failure.code !== "large-paper") throw new Error(failure.error);
+      const id = randomBytes(16).toString("hex");
+      largePapers.set(id, path);
+      large.push({ id, name, pages: failure.pages });
+    }
   }
   window?.webContents.send("reader:library-changed");
+  return large;
 }
 // reader:// links reach one window. The renderer claims queued links once its
 // listener exists; later links are sent directly.
@@ -296,18 +311,26 @@ app
       };
       ipcMain.on("reader:flushed", handler);
     });
-    // Let the renderer handle document zoom before Electron's View menu does.
+    // Let the renderer handle reading shortcuts; editable fields keep native undo.
     window.webContents.on("before-input-event", (_event, input) => {
       window?.webContents.setIgnoreMenuShortcuts(
         input.type === "keyDown" &&
-          zoomCommand({
+          (annotationUndoShortcut({
             key: input.key,
-            code: input.code,
             metaKey: input.meta,
             ctrlKey: input.control,
+            shiftKey: input.shift,
             altKey: input.alt,
             isComposing: input.isComposing,
-          }) !== null,
+          }) ||
+            zoomCommand({
+              key: input.key,
+              code: input.code,
+              metaKey: input.meta,
+              ctrlKey: input.control,
+              altKey: input.alt,
+              isComposing: input.isComposing,
+            }) !== null),
       );
     });
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -400,8 +423,29 @@ app
             ? [{ name: "PDF", extensions: ["pdf"] }]
             : [{ name: "EPUB / PDF", extensions: ["epub", "pdf"] }],
       });
-      if (!selected.canceled) await importPaths(selected.filePaths, library);
+      return selected.canceled ? [] : importPaths(selected.filePaths, library);
     });
+    ipcMain.handle(
+      "reader:import-large",
+      async (event, ids: unknown, library: unknown) => {
+        if (
+          event.sender !== window?.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          throw new Error("Invalid sender");
+        if (
+          !Array.isArray(ids) ||
+          (library !== "books" && library !== "papers")
+        )
+          throw new Error("Invalid import");
+        const paths = ids.flatMap((id) => {
+          const path = typeof id === "string" ? largePapers.get(id) : undefined;
+          if (path) largePapers.delete(id);
+          return path ? [path] : [];
+        });
+        await importPaths(paths, library, true);
+      },
+    );
     await window.loadURL(`${url}/#token=${serverToken}`);
     if (pendingFiles.length) await importPaths(pendingFiles.splice(0));
     updateService = await startUpdateService(window);

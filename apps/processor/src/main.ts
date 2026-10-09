@@ -24,13 +24,24 @@ const { values } = parseArgs({
     output: { type: "string" },
     "model-cache": { type: "string" },
     model: { type: "string" },
+    // Books parse one chapter at a time; omitted bounds cover the document.
+    "from-page": { type: "string" },
+    "to-page": { type: "string" },
     debug: { type: "boolean", default: false },
   },
 });
 if (!values.input || !values.output)
   throw new Error(
-    "Usage: --input PDF --output DIRECTORY [--model FILE] [--model-cache DIRECTORY] [--debug]",
+    "Usage: --input PDF --output DIRECTORY [--from-page N] [--to-page N] [--model FILE] [--model-cache DIRECTORY] [--debug]",
   );
+const pageBound = (value: string | undefined) => {
+  if (value === undefined) return undefined;
+  const page = Number(value);
+  if (!Number.isInteger(page) || page < 1) throw new Error("页码无效");
+  return page;
+};
+const fromPage = pageBound(values["from-page"]),
+  toPage = pageBound(values["to-page"]);
 const input = resolve(values.input),
   output = resolve(values.output);
 await mkdir(output, { recursive: true, mode: 0o700 });
@@ -77,8 +88,11 @@ const start = performance.now();
 try {
   const pdf = await loading.promise;
   if (pdf.numPages > 1000) throw new Error("PDF 超过本轮处理上限（1000 页）");
+  const first = fromPage ?? 1,
+    last = Math.min(toPage ?? pdf.numPages, pdf.numPages);
+  if (first > last) throw new Error("页码范围无效");
   const metadata = await pdf.getMetadata();
-  for (let number = 1; number <= pdf.numPages; number++) {
+  for (let number = first; number <= last; number++) {
     const pageStart = performance.now();
     const page = await pdf.getPage(number);
     const original = page.getViewport({ scale: 1 });
@@ -202,6 +216,15 @@ try {
     inputSHA256: await digest(input),
     model,
     pages: pdf.numPages,
+    // Present only for a page range; a full parse covers every page.
+    ...(fromPage || toPage
+      ? {
+          parsedPages: Array.from(
+            { length: last - first + 1 },
+            (_, i) => first + i,
+          ),
+        }
+      : {}),
     metadata: metadata.info,
     blocks,
     warnings,

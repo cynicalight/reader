@@ -170,7 +170,7 @@ export interface TagBoard {
 export interface Document {
   category: DocumentCategory;
   categorySource: "default" | "ai" | "manual";
-  classificationStatus: "pending" | "running" | "failed" | "done";
+  classificationStatus: "idle" | "pending" | "running" | "failed" | "done";
   classificationError: string;
   tags: string[];
   /** Paper-library categories; "a/b" is nested in "a". */
@@ -243,6 +243,7 @@ export interface ReaderAnnotationTarget {
 }
 export type Appearance = "light" | "sepia" | "dark" | "system";
 export interface ReaderTheme {
+  autoTranslatePDF?: boolean;
   appearance?: Appearance;
   mode: "light" | "sepia" | "dark";
   fontSize: number;
@@ -268,6 +269,7 @@ export interface HighlightColor {
   label: string;
 }
 export const defaultTheme: ReaderTheme = {
+  autoTranslatePDF: true,
   appearance: "system",
   mode: "light",
   fontSize: 1.15,
@@ -325,6 +327,7 @@ export interface ReaderEvents {
 export interface ReaderAdapter {
   open(document: Document): Promise<void>;
   getTOC(): Promise<TOCItem[]>;
+  getPageCount?(): number;
   getLocation(): DocumentLocation;
   goTo(location: DocumentLocation): Promise<void>;
   next(): Promise<void>;
@@ -412,6 +415,7 @@ export interface ProcessingStage {
   warning?: string;
 }
 export interface Processing {
+  enabled?: boolean;
   translating?: ProcessingStage;
   usageTracked?: boolean;
   startedAt?: string;
@@ -419,7 +423,7 @@ export interface Processing {
   incomplete?: boolean;
   documentId: string;
   phase: "learning" | "translating" | "ready";
-  status: "queued" | "running" | "waiting" | "failed" | "complete";
+  status: "queued" | "running" | "waiting" | "failed" | "complete" | "paused";
   pagesDone: number;
   pagesTotal: number;
   translationsDone: number;
@@ -445,13 +449,21 @@ export interface EPUBReadingBlock {
   location: EPUBLocation;
 }
 export interface TranslationSentence {
+  /** The model's sentence; it may repair PDF extraction errors. */
   source: string;
   target: string;
+  /** Extracted text the sentence covers, when it differs from `source`. */
+  anchor?: string;
+}
+/** Text used to find a sentence in the PDF text layer. */
+export function sentenceAnchor(sentence: TranslationSentence): string {
+  return sentence.anchor || sentence.source;
 }
 export interface TranslationBlock {
   blockId: string;
   sourceHash: string;
-  status: "pending" | "running" | "complete" | "failed";
+  /** idle: a book paragraph nobody has requested yet. */
+  status: "idle" | "pending" | "running" | "complete" | "failed";
   sentences: TranslationSentence[];
   formulaMarkdown?: string;
   error?: string;

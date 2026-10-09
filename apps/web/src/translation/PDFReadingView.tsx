@@ -22,7 +22,11 @@ import type {
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
-import { defaultTheme, isPDFPageDecoration } from "@reader/core";
+import {
+  defaultTheme,
+  isPDFPageDecoration,
+  sentenceAnchor,
+} from "@reader/core";
 import { api } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
@@ -43,6 +47,9 @@ import { selectSentence } from "../readers/sentence-selection";
 import { installCitationHover } from "../readers/citation-hover";
 import { numberedReference } from "../readers/pdf-citations";
 import "./translation.css";
+
+import { AssistanceControls } from "./AssistanceControls";
+import { chapterRange } from "./chapters";
 
 type Mode = "source" | "parallel" | "translation";
 export function PDFReadingView({
@@ -265,7 +272,8 @@ export function PDFReadingView({
       });
     events.location(
       { type: "pdf", page: block.page, x: block.bounds.x, y: block.bounds.y },
-      block.page / Math.max(1, ...blocks.map((b) => b.page)),
+      block.page /
+        (engine?.getPageCount?.() || Math.max(1, ...blocks.map((b) => b.page))),
     );
   };
   const focusTranslation = (block: PDFBlock) =>
@@ -343,6 +351,7 @@ export function PDFReadingView({
   };
   // Keep the public adapter usable by TOC, notes and page navigation in all modes.
   const facade = useRef<ReaderAdapter | undefined>(undefined);
+  const outline = useRef<TOCItem[]>([]);
   const actions = useRef({ go, focus });
   actions.current = { go, focus };
   useEffect(() => {
@@ -371,6 +380,7 @@ export function PDFReadingView({
     }
   };
   const ready = (adapter: ReaderAdapter, toc: TOCItem[]) => {
+    outline.current = toc;
     setEngine(adapter);
     facade.current = new Proxy(adapter, {
       get(target, key) {
@@ -578,7 +588,9 @@ export function PDFReadingView({
         if (!t) return [];
         const needle = value.text.replace(/\s/g, "").toLowerCase();
         const matches = t.sentences.flatMap((s, i) =>
-          s.source.replace(/\s/g, "").toLowerCase().includes(needle) ? [i] : [],
+          sentenceAnchor(s).replace(/\s/g, "").toLowerCase().includes(needle)
+            ? [i]
+            : [],
         );
         return [
           {
@@ -679,7 +691,9 @@ export function PDFReadingView({
             x: block.bounds.x,
             y: block.bounds.y + anchor.fraction * block.bounds.height,
           },
-          block.page / Math.max(1, ...blocks.map((b) => b.page)),
+          block.page /
+            (engine?.getPageCount?.() ||
+              Math.max(1, ...blocks.map((b) => b.page))),
         );
       if (mode === "parallel") {
         control.current.following("source");
@@ -752,6 +766,21 @@ export function PDFReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
+      <AssistanceControls
+        documentId={doc.id}
+        processing={processing}
+        library={doc.library}
+        chapter={() => {
+          const location = facade.current?.getLocation();
+          if (location?.type !== "pdf") return undefined;
+          return chapterRange(
+            outline.current,
+            location.page,
+            engine?.getPageCount?.() ||
+              Math.max(1, ...blocks.map((b) => b.page)),
+          );
+        }}
+      />
     </div>
   );
   return (
@@ -897,7 +926,11 @@ export function PDFReadingView({
             >
               {error && <p role="alert">{error}</p>}
               {!visibleBlocks.length && (
-                <p role="status">正文仍在解析中，完成的段落会在这里显示。</p>
+                <p role="status">
+                  {doc.library === "books"
+                    ? "尚未翻译任何章节，可在工具栏翻译本章。"
+                    : "正文仍在解析中，完成的段落会在这里显示。"}
+                </p>
               )}
               {processing?.incomplete && (
                 <p className="translation-warning">
@@ -994,6 +1027,7 @@ export function PDFReadingView({
                       translation={translated}
                       documentId={doc.id}
                       retry={() => void translate(block.id)}
+                      paused={processing?.enabled === false}
                       linked={linked?.[block.id] ?? []}
                     />
                     {noteIndexes.length > 0 && (
@@ -1035,6 +1069,7 @@ export function PDFReadingView({
                 translation={activePopup}
                 documentId={doc.id}
                 retry={() => void translate(popup.block.id)}
+                paused={processing?.enabled === false}
               />
               <Button
                 variant="ghost"

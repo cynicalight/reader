@@ -26,6 +26,9 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@reader/api", () => ({
   api: {
     epubBlocks: vi.fn(async () => blocks),
+    assistance: vi.fn(async () => undefined),
+    setAssistance: vi.fn(),
+    translateEPUBChapter: vi.fn(),
     translationStream: vi.fn(
       async (
         _id: string,
@@ -401,4 +404,13 @@ it("follows source block anchors and scrolls the source to the translated block 
       quote: undefined,
     }),
   );
+});
+
+it("initializes chapter context in memory without saving progress on open", async () => {
+  expect(fixture.ready!.getLocation()).toMatchObject({
+    type: "epub",
+    href: "a.xhtml",
+  });
+  expect(await fixture.ready!.getContext()).toBe(blocks[0].text);
+  expect(events.location).not.toHaveBeenCalled();
 });

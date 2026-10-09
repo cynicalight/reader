@@ -674,3 +674,24 @@ it("reports completion at the end of the document", async () => {
     progression: 1,
   });
 });
+
+it("retains the exact block of a TOC fragment for chapter translation", async () => {
+  await open();
+  await reader.goTo({ type: "epub", href: "a.xhtml#note-b" });
+  expect(reader.getLocation()).toMatchObject({
+    type: "epub",
+    href: "a.xhtml",
+    blockId: "b",
+  });
+});
+
+it("keeps nested TOC anchors in their containing block", async () => {
+  vi.mocked(api.epubChapter).mockImplementation(async (_id, href) => ({
+    html: html(chapters.find((c) => c.href === href)!.blocks)
+      .replace('id="note-a"', "")
+      .replace("Same words", '<span id="nested-anchor">Same words</span>'),
+  }));
+  await open();
+  await reader.goTo({ type: "epub", href: "a.xhtml#nested-anchor" });
+  expect(reader.getLocation()).toMatchObject({ href: "a.xhtml", blockId: "a" });
+});

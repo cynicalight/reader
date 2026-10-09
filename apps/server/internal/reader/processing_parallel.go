@@ -9,6 +9,9 @@ import (
 // The translation lane owns its counters and state. Serialize read/merge/write in
 // Store so lane progress and queue requests never overwrite each other.
 func mergeProcessing(current, update Processing) Processing {
+	if update.enable {
+		current.Enabled = true
+	}
 	if update.lane != "" {
 		current.Translating = &ProcessingStage{Status: update.Status, Detail: update.Detail, Warning: update.Warning}
 		current.TranslationsDone, current.TranslationsTotal = update.TranslationsDone, update.TranslationsTotal
@@ -32,6 +35,10 @@ func mergeProcessing(current, update Processing) Processing {
 	return current
 }
 func aggregateProcessing(p *Processing) {
+	if !p.Enabled {
+		p.Status, p.Detail = "paused", "翻译已暂停"
+		return
+	}
 	if stage := p.Translating; stage != nil && stage.Status != "complete" {
 		p.Phase, p.Status, p.Detail = "translating", stage.Status, stage.Detail
 		p.CompletedAt = ""

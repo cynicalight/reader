@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { Button } from "@reader/ui/components/button";
 import { toast } from "sonner";
 import { ReaderView } from "../ReaderView";
+import { AssistanceControls } from "./AssistanceControls";
 import { TranslationPanes } from "./TranslationPanes";
 import { TranslationText } from "./TranslationText";
 import { translatedSelection } from "./selection";
@@ -118,8 +119,16 @@ export function EPUBReadingView({
     clear();
     side.current =
       live.current.mode === "translation" ? "translation" : "source";
-    if (live.current.mode !== "translation")
-      await engine.current?.goTo(location);
+    const navigateSource =
+      live.current.mode !== "translation" || location.href.includes("#");
+    if (navigateSource) await engine.current?.goTo(location);
+    const resolved = navigateSource ? engine.current?.getLocation() : undefined;
+    if (
+      resolved?.type === "epub" &&
+      resolved.href === location.href.split("#")[0] &&
+      resolved.blockId
+    )
+      location = resolved;
     updateLocation(location);
     setChapter(location.href.split("#")[0]);
     const block = epubBlocksAt(location, live.current.blocks)[0];
@@ -337,6 +346,12 @@ export function EPUBReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
+      <AssistanceControls
+        documentId={doc.id}
+        processing={processing}
+        library="books"
+        epubChapter={() => position.current}
+      />
     </div>
   );
   return (
@@ -354,6 +369,11 @@ export function EPUBReadingView({
               annotations={annotations}
               onReady={(adapter, toc) => {
                 engine.current = adapter;
+                const initial = adapter.getLocation();
+                if (initial?.type === "epub") {
+                  position.current = initial;
+                  setChapter(initial.href.split("#")[0]);
+                }
                 adapter.setEPUBBlocks?.(live.current.blocks);
                 const overrides: Partial<ReaderAdapter> = {
                   goTo: go,
@@ -525,7 +545,15 @@ export function EPUBReadingView({
               <div className="translation-warning">
                 {error || streamError || processing?.detail}
                 {processing?.status === "failed" && (
-                  <Button size="sm" variant="ghost" onClick={() => retry()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void api
+                        .setAssistance(doc.id, "resume")
+                        .catch((e) => toast.error(e.message))
+                    }
+                  >
                     重试翻译
                   </Button>
                 )}
@@ -555,6 +583,7 @@ export function EPUBReadingView({
                   }
                   documentId={doc.id}
                   translation={translations.find((t) => t.blockId === block.id)}
+                  paused={processing?.enabled === false}
                   retry={() => retry(block.id)}
                   linked={linked[block.id]}
                 />

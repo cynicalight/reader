@@ -5,6 +5,7 @@ import type {
   ReaderSelection,
   TranslationBlock,
 } from "@reader/core";
+import { sentenceAnchor } from "@reader/core";
 
 export function sentenceLink(
   links: PDFSentenceLink[],
@@ -56,10 +57,10 @@ export function sourcePassage(
 ): PDFPassage {
   return {
     blockId: block.blockId,
-    sources: [block.sentences[index].source],
+    sources: [sentenceAnchor(block.sentences[index])],
     sourceOffset: block.sentences
       .slice(0, index)
-      .map((s) => s.source)
+      .map(sentenceAnchor)
       .join("")
       .toLowerCase()
       .replace(/[\s\u00ad]/g, "").length,

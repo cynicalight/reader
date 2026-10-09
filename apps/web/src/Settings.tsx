@@ -304,6 +304,21 @@ export function Settings({
                   </span>
                 </span>
               </label>
+              <label className="mt-4 flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={theme.autoTranslatePDF ?? true}
+                  onCheckedChange={(checked) =>
+                    setTheme({ autoTranslatePDF: !!checked })
+                  }
+                />
+                <span>
+                  导入后自动翻译
+                  <span className="block text-xs text-muted-foreground">
+                    开启后，新导入的文献会自动翻译全文。
+                  </span>
+                </span>
+              </label>
             </section>
           </TabsContent>
           <TabsContent value="agent" className="settings-panel" keepMounted>
@@ -370,8 +385,8 @@ export function Settings({
                   </Select>
                   <TaskModels disabled={saving || testing.size > 0} />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    问答与翻译分别使用上方模型；未指定时，问答使用主力模型，翻译使用快速模型。图片理解检测通过后，导入的
-                    PDF 将自动生成图表解析稿；图片会发送给此 Agent。
+                    问答与翻译分别使用上方模型；未指定时，问答使用主力模型，翻译使用快速模型。
+                    公式转换与主动图片提问会向此 Agent 发送图片。
                   </p>
                 </div>
               )}
