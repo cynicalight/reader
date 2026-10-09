@@ -163,6 +163,30 @@ it("leaves batch mode after selected papers move to the trash", async () => {
   expect(button("批量")).toBeDefined();
 });
 
+it("leaves batch mode after trashing selected papers from their context menu", async () => {
+  vi.mocked(api.trashDocument).mockResolvedValue(docs[0]);
+  await act(async () => button("批量").click());
+  await act(async () => row("Attention Is All You Need").click());
+  await act(async () =>
+    row("Attention Is All You Need").dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    ),
+  );
+  const trash = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent?.includes("移到回收站"))!;
+
+  await act(async () => trash.click());
+
+  expect(usePaperUI.getState().picking).toBe(false);
+  expect(usePaperUI.getState().picked.size).toBe(0);
+});
+
 it("keeps failed papers selected in batch mode for retry", async () => {
   await act(async () =>
     row("Attention Is All You Need").dispatchEvent(

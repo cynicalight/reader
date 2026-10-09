@@ -369,18 +369,28 @@ export function PaperLibrary({
       e.currentTarget.nextElementSibling?.getBoundingClientRect().width ?? 0;
     saveDetailWidth(clampDetailWidth(current + dx));
   };
-  const trashPapers = async (docs: Document[]) => {
+  const trashPapers = async (docs: Document[], exitPicking: boolean) => {
     const result = await trashWithUndo(docs.map((d) => d.id));
     const state = usePaperUI.getState();
-    state.setPicked(
-      [...state.picked].filter((id) => !result.deleted.includes(id)),
-    );
+    if (exitPicking && !result.failed.length) state.stopPicking();
+    else
+      state.setPicked(
+        [...state.picked].filter((id) => !result.deleted.includes(id)),
+      );
     return result;
   };
   const actions: PaperMenuActions = {
     open: openDocument,
     move: moveToBooks,
-    trash: (docs) => void trashPapers(docs),
+    trash: (docs) => {
+      const state = usePaperUI.getState();
+      const selectedBatch =
+        state.picking &&
+        docs.length > 0 &&
+        docs.length === state.picked.size &&
+        docs.every((doc) => state.picked.has(doc.id));
+      void trashPapers(docs, selectedBatch);
+    },
     newCategory: (docs) => ui.setNaming(docs.map((d) => d.id)),
     newTag: (docs) => setTagging(docs.map((d) => d.id)),
   };
@@ -779,12 +789,7 @@ export function PaperLibrary({
                     variant="ghost"
                     className="text-destructive"
                     disabled={!pickedDocs.length}
-                    onClick={() =>
-                      void trashPapers(pickedDocs).then((result) => {
-                        if (!result.failed.length)
-                          usePaperUI.getState().stopPicking();
-                      })
-                    }
+                    onClick={() => void trashPapers(pickedDocs, true)}
                   >
                     <Trash2 />
                     移到回收站
