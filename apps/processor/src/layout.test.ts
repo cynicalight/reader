@@ -154,3 +154,33 @@ it("expands a grouped crop to include full subfigure captions", () => {
   expect(blocks[0].bounds.x).toBe(0.1);
   expect(blocks[0].bounds.width).toBeCloseTo(0.31);
 });
+
+it("keeps the lines and indentation of algorithm blocks", () => {
+  const region = (label: string, y: number) => ({
+    label,
+    confidence: 1,
+    order: 0,
+    bounds: { x: 0.05, y, width: 0.6, height: 0.2 },
+  });
+  // Every glyph is 0.005 wide, so a 0.025 gap is five spaces.
+  const span = (text: string, x: number, y: number) => ({
+    text,
+    bounds: { x, y, width: text.length * 0.005, height: 0.01 },
+  });
+  const { texts } = assignText(
+    [region("algorithm", 0.05), region("text", 0.5)],
+    [
+      span("2", 0.1, 0.14),
+      span("latch(record)", 0.15, 0.14),
+      span("Algorithm 1: Read phase", 0.1, 0.1),
+      span("1", 0.1, 0.12),
+      span("Function read(txn, record)", 0.13, 0.12),
+      span("Prose wraps", 0.1, 0.55),
+      span("onto one line.", 0.1, 0.57),
+    ],
+  );
+  expect(texts[0]).toBe(
+    "Algorithm 1: Read phase\n1     Function read(txn, record)\n2         latch(record)",
+  );
+  expect(texts[1]).toBe("Prose wraps onto one line.");
+});

@@ -118,21 +118,62 @@ export function assignText(regions: Region[], spans: TextSpan[]) {
     if (best < 0) unmatched.push(span);
     else texts[best].push(span);
   }
-  return { texts: texts.map(joinSpans), unmatched: joinSpans(unmatched) };
+  return {
+    texts: texts.map((t, i) =>
+      preformatted.has(regions[i].label) ? joinLines(t) : joinSpans(t),
+    ),
+    unmatched: joinSpans(unmatched),
+  };
 }
+// Algorithms keep their lines and indentation; everything else reads as prose.
+const preformatted = new Set(["algorithm"]);
+const sameLine = (a: TextSpan, b: TextSpan) =>
+  Math.abs(a.bounds.y - b.bounds.y) <
+  Math.min(a.bounds.height, b.bounds.height) * 0.45;
+// PDF content streams can list columns out of order. Sort only inside one detected region.
+const readingSort = (spans: TextSpan[]) =>
+  [...spans].sort((a, b) =>
+    sameLine(a, b) ? a.bounds.x - b.bounds.x : a.bounds.y - b.bounds.y,
+  );
 function joinSpans(spans: TextSpan[]) {
-  // PDF content streams can list columns out of order. Sort only inside one detected region.
-  return [...spans]
-    .sort((a, b) =>
-      Math.abs(a.bounds.y - b.bounds.y) <
-      Math.min(a.bounds.height, b.bounds.height) * 0.45
-        ? a.bounds.x - b.bounds.x
-        : a.bounds.y - b.bounds.y,
-    )
+  return readingSort(spans)
     .map((s) => s.text)
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+}
+function joinLines(spans: TextSpan[]) {
+  if (!spans.length) return "";
+  const lines: TextSpan[][] = [];
+  for (const span of readingSort(spans)) {
+    const line = lines.at(-1);
+    if (line && sameLine(line[0], span)) line.push(span);
+    else lines.push([span]);
+  }
+  // Horizontal gaps become spaces at the region's median character width.
+  const widths = spans
+    .map((s) => s.bounds.width / Math.max(1, s.text.trim().length))
+    .sort((a, b) => a - b);
+  const char = widths[Math.floor(widths.length / 2)] || 1;
+  const spaces = (gap: number, least: number) =>
+    " ".repeat(
+      gap <= char * 0.15
+        ? 0
+        : Math.min(40, Math.max(least, Math.round(gap / char))),
+    );
+  const left = Math.min(...spans.map((s) => s.bounds.x));
+  return lines
+    .map((line) => {
+      let text = spaces(line[0].bounds.x - left, 0),
+        end = line[0].bounds.x;
+      line.forEach((span, i) => {
+        if (i) text += spaces(span.bounds.x - end, 1);
+        text += span.text.replace(/\s+/g, " ").trim();
+        end = Math.max(end, span.bounds.x + span.bounds.width);
+      });
+      return text.trimEnd();
+    })
+    .join("\n");
 }
 
 export interface ReadingRegion extends Region {
