@@ -54,7 +54,7 @@ export class EPUBReaderAdapter implements ReaderAdapter {
   private frame = 0;
   private navigation = 0;
   private restoring = false;
-  private anchor?: { node: HTMLElement; top: number };
+  private anchor?: { node: HTMLElement; top: number; range?: Range };
   private unresolved = "";
   private disposed = false;
   private opening = true;
@@ -315,9 +315,24 @@ export class EPUBReaderAdapter implements ReaderAdapter {
       }) ??
       this.chapters.find((c) => c.node.getBoundingClientRect().bottom > top)
         ?.node;
-    this.anchor = node
-      ? { node, top: node.getBoundingClientRect().top }
-      : undefined;
+    if (!node) {
+      this.anchor = undefined;
+      return;
+    }
+    const block = this.blocks.find((b) => b.id === node.dataset.epubBlock);
+    // Keep the actual visible character stable when a long paragraph reflows.
+    // Its element top alone does not describe the reader's place inside it.
+    const offset = block && this.visibleOffset(block, top);
+    const range =
+      block && offset !== undefined && offset < block.text.length
+        ? blockRange(this.container, { block, start: offset, end: offset + 1 })
+        : undefined;
+    const textRect = range?.getClientRects()[0];
+    this.anchor = {
+      node,
+      top: textRect?.top ?? node.getBoundingClientRect().top,
+      ...(textRect ? { range } : {}),
+    };
   }
   private preserveAnchor() {
     if (
@@ -327,7 +342,8 @@ export class EPUBReaderAdapter implements ReaderAdapter {
     )
       return;
     const delta =
-      this.anchor.node.getBoundingClientRect().top - this.anchor.top;
+      (this.anchor.range?.getClientRects()[0]?.top ??
+        this.anchor.node.getBoundingClientRect().top) - this.anchor.top;
     if (Math.abs(delta) > 0.5) this.container.scrollTop += delta;
   }
   private onScroll = () => {

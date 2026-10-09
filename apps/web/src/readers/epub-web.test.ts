@@ -429,6 +429,82 @@ it("applies reader theme and ignores stale paginated preferences", async () => {
   expect(host.classList.contains("epub-web-reader")).toBe(true);
 });
 
+it.each(["font", "width"])(
+  "preserves the visible character inside a long paragraph after %s reflow",
+  async (change) => {
+    const long = block("long", "x".repeat(1000));
+    vi.mocked(api.epubChapters).mockResolvedValue({
+      chapters: [{ ...chapters[0], blocks: [long], characters: 1000 }],
+      toc: [],
+    });
+    vi.mocked(api.epubChapter).mockResolvedValue({ html: html([long]) });
+    let resize: ResizeObserverCallback | undefined;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    let columns = 20;
+    const lineHeight = () =>
+      (20 * (Number.parseFloat(host.style.fontSize) || defaultTheme.fontSize)) /
+      defaultTheme.fontSize;
+    vi.mocked(Element.prototype.getBoundingClientRect).mockImplementation(
+      function (this: Element) {
+        if (this.hasAttribute("data-epub-block"))
+          return rect(
+            100 - host.scrollTop,
+            Math.ceil(1000 / columns) * lineHeight(),
+          );
+        if (this.hasAttribute("data-chapter"))
+          return rect(
+            -host.scrollTop,
+            200 + Math.ceil(1000 / columns) * lineHeight(),
+          );
+        return geometry(this);
+      },
+    );
+    Range.prototype.getBoundingClientRect = function () {
+      return rect(
+        100 -
+          host.scrollTop +
+          Math.floor(this.startOffset / columns) * lineHeight(),
+        lineHeight(),
+      );
+    };
+    await open();
+    await reader.setTheme(defaultTheme);
+    host.scrollTop = 505;
+    host.dispatchEvent(new Event("wheel"));
+    host.dispatchEvent(new Event("scroll"));
+    await vi.waitFor(() => expect(events.location).toHaveBeenCalled());
+    const visible = document.createRange();
+    visible.setStart(
+      host.querySelector('[data-epub-run="long"]')!.firstChild!,
+      400,
+    );
+    visible.setEnd(visible.startContainer, 401);
+    const before = visible.getBoundingClientRect().top;
+    expect(before).toBe(-5);
+
+    if (change === "font") {
+      await reader.setTheme({
+        ...defaultTheme,
+        fontSize: defaultTheme.fontSize * 2,
+      });
+    } else {
+      columns = 10;
+      resize!([], {} as ResizeObserver);
+    }
+    expect(visible.getBoundingClientRect().top).toBeCloseTo(before);
+    expect(host.scrollTop).toBe(905);
+  },
+);
+
 it("supports a selection spanning adjacent chapters and restores its exact range", async () => {
   await open();
   await reader.goTo({ type: "epub", href: "b.xhtml" });
