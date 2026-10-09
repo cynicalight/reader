@@ -14,7 +14,15 @@ await mkdir(new URL("../apps/desktop/bin/", import.meta.url), {
 });
 const result = spawnSync(
   "go",
-  ["build", "-trimpath", "-o", fileURLToPath(output), "./cmd/reader-server"],
+  [
+    "build",
+    "-trimpath",
+    // Omit the symbol table and DWARF; panics keep function names and lines.
+    "-ldflags=-s -w",
+    "-o",
+    fileURLToPath(output),
+    "./cmd/reader-server",
+  ],
   {
     cwd: new URL("../apps/server/", import.meta.url),
     stdio: "inherit",
