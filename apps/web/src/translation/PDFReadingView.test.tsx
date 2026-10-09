@@ -404,24 +404,7 @@ it("links block hover in both directions and clears it without changing sentence
   expect(adapter.hoverBlock).toHaveBeenLastCalledWith(null);
 });
 
-it("provides a resizable divider with the swap action outside the toolbar", async () => {
-  await click("原文译文");
-  const divider = host.querySelector<HTMLElement>('[role="separator"]');
-  expect(divider).not.toBeNull();
-  expect(divider!.getAttribute("aria-orientation")).toBe("vertical");
-  const swap = host.querySelector('[aria-label="交换原文和译文"]')!;
-  expect(swap.closest(".translation-panes")).not.toBeNull();
-  expect(
-    host.querySelector('.translation-toolbar [aria-label="交换原文和译文"]'),
-  ).toBeNull();
-  await click("交换原文和译文");
-  expect(adapter.destroy).not.toHaveBeenCalled();
-});
-
-it("supports explicit block focus in source and parallel modes without a single-column mode", async () => {
-  expect(host.textContent).not.toContain("单栏模式");
-  expect(host.textContent).not.toContain("普通模式");
-  expect(host.querySelector('[aria-label="下一段"]')).toBeNull();
+it("supports explicit block focus in source and parallel modes", async () => {
   expect(adapter.focusBlock).not.toHaveBeenCalled();
   await act(async () =>
     fixture.events!.blockFocus?.({

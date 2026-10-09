@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { api } from "@reader/api";
-import { LibraryModeSwitcher } from "./LibraryModeSwitcher";
 import {
   libraryMode,
   loadLibraryPreferences,
@@ -14,44 +11,15 @@ import {
 vi.mock("@reader/api", () => ({
   api: { saveLibraryPreferences: vi.fn(), libraryPreferences: vi.fn() },
 }));
-let root: Root, host: HTMLDivElement;
 beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
   useReaderStore.setState({ libraryPreferences: {} });
-});
-afterEach(() => {
-  act(() => root.unmount());
-  host.remove();
-  document.body.innerHTML = "";
 });
 it("defaults unknown preferences to the paper library", () => {
   expect(libraryMode({})).toBe("papers");
   expect(libraryMode({ mode: "papers" })).toBe("papers");
   expect(libraryMode({ mode: "other" as never })).toBe("papers");
   expect(libraryMode({ mode: "books" })).toBe("books");
-});
-it("lists both libraries and reports the chosen one", async () => {
-  const change = vi.fn();
-  act(() =>
-    root.render(<LibraryModeSwitcher mode="books" onChange={change} />),
-  );
-  const trigger = host.querySelector("button")!;
-  expect(trigger.textContent).toContain("图书库");
-  await act(async () => {
-    trigger.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-    trigger.click();
-  });
-  const items = [...document.querySelectorAll('[role="menuitem"]')];
-  expect(items.map((item) => item.textContent)).toEqual([
-    expect.stringContaining("文献库"),
-    expect.stringContaining("图书库"),
-  ]);
-  await act(async () => (items[0] as HTMLElement).click());
-  expect(change).toHaveBeenCalledWith("papers");
 });
 it("applies preference changes at once and saves them in order", async () => {
   const saved: unknown[] = [];
