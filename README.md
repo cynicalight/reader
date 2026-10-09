@@ -5,10 +5,7 @@
 一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
 <p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
-  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader 的 PDF 阅读界面：左侧目录，右侧 AI 助读" />
-</picture>
+  <img src="website/assets/screenshots/pdf-bilingual-ai.webp" alt="Reader 的 PDF 双语阅读界面：左侧目录，中间原文与译文，右侧 AI 助读" />
 </p>
 
 Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与文献库分开管理，并通过 Readium 和 PDF.js 提供目录、搜索、批注与阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code、Codex CLI 或 Kimi Code CLI 调用，无需在 Reader 中另填 API Key。
