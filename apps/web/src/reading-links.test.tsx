@@ -91,3 +91,23 @@ it("preserves current PDF.js internal links", async () => {
     await act(async () => cleanup?.());
   }
 });
+it("renders citation-linked text containing inline math", async () => {
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <MessageMarkdown
+          content="延迟为 $O(n)$，见 [3]。"
+          citationBlockId="p1-b1"
+        />,
+      ),
+    );
+    // The lazy formula renders its source as a fallback first.
+    expect(host.textContent).toContain("O(n)");
+    expect(host.querySelectorAll('a[href^="#reader-citation?"]')).toHaveLength(
+      1,
+    );
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

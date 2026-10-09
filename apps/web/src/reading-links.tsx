@@ -23,7 +23,10 @@ export function remarkReadingCitations({ blockId }: { blockId?: string }) {
   return (tree: { children?: MarkdownNode[] }) => {
     if (!blockId) return;
     const visit = (parent: { children?: MarkdownNode[] }) => {
-      parent.children = parent.children?.flatMap((node) => {
+      // Leaves (math, code, breaks) must not gain a `children: undefined` key;
+      // mdast-util-to-hast reads its length and throws.
+      if (!parent.children) return;
+      parent.children = parent.children.flatMap((node) => {
         if (node.type !== "text" || !node.value) {
           if (node.type !== "link" && node.type !== "linkReference")
             visit(node);
