@@ -11,6 +11,8 @@ type modelTask string
 const (
 	taskChat        modelTask = "chat"
 	taskTranslation modelTask = "translation"
+	// Only the API agent picks a separate model for image input.
+	taskVision modelTask = "vision"
 )
 
 // Families are ordered by preference for each task. Chat prefers the most
@@ -32,6 +34,9 @@ var taskFamilies = map[modelTask]map[string][]string{
 		"kimi":   {"flash", "turbo", "lite", "mini"},
 		"api":    {"flash", "turbo", "lite", "mini"},
 		"":       {"luna", "sonnet", "flash", "mini", "lite", "haiku"},
+	},
+	taskVision: {
+		"api": {"vl", "vision", "flash", "omni"},
 	},
 }
 

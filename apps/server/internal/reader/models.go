@@ -16,14 +16,17 @@ import (
 )
 
 type AgentModel struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Default          bool     `json:"isDefault"`
-	Aliases          []string `json:"aliases,omitempty"`
-	RecommendedFor   []string `json:"recommendedFor,omitempty"`
-	SupportedEfforts []string `json:"-"`
-	DefaultEffort    string   `json:"-"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Default        bool     `json:"isDefault"`
+	Aliases        []string `json:"aliases,omitempty"`
+	RecommendedFor []string `json:"recommendedFor,omitempty"`
+	// API agent only: an ID the user added, and the model's own check result.
+	Custom           bool        `json:"custom,omitempty"`
+	Capability       *Capability `json:"capability,omitempty"`
+	SupportedEfforts []string    `json:"-"`
+	DefaultEffort    string      `json:"-"`
 }
 
 func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
@@ -34,11 +37,16 @@ func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	models, err := s.modelCatalog(ctx, provider)
-	if err != nil && provider == "api" {
-		fail(w, 502, "无法获取 API 模型列表："+err.Error())
+	if provider == "api" {
+		models, err := s.apiAgentModels(ctx, s.aiConfig())
+		if err != nil {
+			fail(w, 502, "无法获取 API 模型列表："+err.Error())
+			return
+		}
+		respond(w, 200, models)
 		return
 	}
+	models, err := s.modelCatalog(ctx, provider)
 	if err != nil {
 		fail(w, 502, "无法获取模型列表，请确认 Agent 已登录后重试")
 		return

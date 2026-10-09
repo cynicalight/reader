@@ -1537,6 +1537,12 @@
                     "schema": { "type": "string", "enum": ["text", "vision"] },
                   },
                   {
+                    "name": "model",
+                    "in": "query",
+                    "description": 'Required for the api provider, which is checked one model at a time; the result is stored under capabilities["api:<model>"].',
+                    "schema": { "type": "string" },
+                  },
+                  {
                     "name": "provider",
                     "in": "path",
                     "required": true,
@@ -3482,9 +3488,22 @@
                   "recommendedFor":
                     {
                       "type": "array",
-                      "description": "Tasks that use this model when no model is chosen.",
+                      "description": "Tasks that use this model when no model is chosen. For the api provider, only models that passed the task's check are recommended.",
                       "items":
-                        { "type": "string", "enum": ["chat", "translation"] },
+                        {
+                          "type": "string",
+                          "enum": ["chat", "translation", "vision"],
+                        },
+                    },
+                  "custom":
+                    {
+                      "type": "boolean",
+                      "description": "api provider: a model ID the user added.",
+                    },
+                  "capability":
+                    {
+                      "$ref": "#/components/schemas/AICapability",
+                      "description": "api provider: this model's current check result.",
                     },
                 },
             },
@@ -3528,6 +3547,28 @@
                           "additionalProperties":
                             { "$ref": "#/components/schemas/ReasoningEffort" },
                         },
+                    },
+                  "visionModels":
+                    {
+                      "type": "object",
+                      "description": "Image-input model by provider; used by the api agent only. Empty uses the recommended model that passed the vision check.",
+                      "additionalProperties": { "type": "string" },
+                    },
+                  "visionEfforts":
+                    {
+                      "type": "object",
+                      "additionalProperties":
+                        {
+                          "type": "object",
+                          "additionalProperties":
+                            { "$ref": "#/components/schemas/ReasoningEffort" },
+                        },
+                    },
+                  "apiModels":
+                    {
+                      "type": "array",
+                      "description": "Model IDs the user added beside the api endpoint's /models list.",
+                      "items": { "type": "string" },
                     },
                   "api":
                     {

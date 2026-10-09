@@ -59,38 +59,124 @@ func fakeAPI(t *testing.T, reply func(int, apiCall) string) (*httptest.Server, f
 	}
 }
 
-func TestAPIAgentChoosesTaskModelsAndEffort(t *testing.T) {
+// passModels records check results the way Settings would after testing.
+func passModels(c *AIConfig, results map[string]bool) {
+	if c.Capabilities == nil {
+		c.Capabilities = map[string]Capability{}
+	}
+	for id, vision := range results {
+		key := apiCapabilityKey(id)
+		c.Capabilities[key] = Capability{Text: true, Vision: vision, CheckedAt: "checked", Fingerprint: configPrint(*c, key)}
+	}
+}
+
+func TestAPIAgentUsesOnlyCheckedModels(t *testing.T) {
 	s := testServer(t)
 	upstream, calls := fakeAPI(t, func(int, apiCall) string { return "ok" })
-	conn := APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}
+	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}, APIModels: []string{"added-model"}}
+	// Before any check, nothing is usable and nothing is guessed.
+	if apiCapable(config, taskChat, false) || s.generationService(config).ValidateInput(AIInput{Prompt: "hi"}, true) == nil {
+		t.Fatal("an unchecked API agent was accepted")
+	}
+	passModels(&config, map[string]bool{"deepseek-flash": true, "deepseek-v4-pro": false})
+	image := [][]byte{{1}}
 	cases := []struct {
-		task         modelTask
-		model, level string
-		want, effort string
+		task   modelTask
+		images [][]byte
+		want   string
+		effort string
 	}{
-		{taskChat, "", "medium", "deepseek-v4-pro", "high"},
-		{taskTranslation, "", "low", "deepseek-flash", "low"},
-		{taskChat, "plain", "max", "plain", ""},                // No advertised effort.
-		{taskChat, "custom-model", "max", "custom-model", ""},  // Not in the catalog.
-		{taskChat, "deepseek-flash", "", "deepseek-flash", ""}, // Probes omit effort.
+		{taskChat, nil, "deepseek-v4-pro", "high"},
+		{taskTranslation, nil, "deepseek-flash", "high"},
+		// Image input goes to the vision model, never the text-only Pro.
+		{taskChat, image, "deepseek-flash", "high"},
 	}
 	for _, c := range cases {
-		adapter := apiAgentAdapter{conn, c.model, c.level, c.task, s.apiCatalog(conn)}
-		if _, err := adapter.Stream(t.Context(), GenerateRequest{AIInput{Prompt: "hi"}}, nil); err != nil {
+		if _, err := s.apiAgentAdapter(config, c.task).Stream(t.Context(), GenerateRequest{AIInput{Prompt: "hi", Images: c.images}}, nil); err != nil {
 			t.Fatal(err)
 		}
 		got := calls()[len(calls())-1]
 		if got.Model != c.want || got.Effort != c.effort {
-			t.Fatalf("%+v: sent model %q effort %q", c, got.Model, got.Effort)
+			t.Fatalf("%v images=%d: sent model %q effort %q", c.task, len(c.images), got.Model, got.Effort)
 		}
 	}
-	models, err := s.apiCatalog(conn)(t.Context(), "api")
-	if err != nil || len(models) != 3 || models[1].Name != "DeepSeek-V4-Pro" || models[2].Name != "plain" {
-		t.Fatalf("catalog: %+v %v", models, err)
+	// A text-only vision choice is refused; an unchecked chat choice too.
+	config.VisionModels = map[string]string{"api": "deepseek-v4-pro"}
+	config.Models["api"] = "plain"
+	if apiCapable(config, taskChat, true) || apiCapable(config, taskChat, false) || !apiCapable(config, taskTranslation, false) {
+		t.Fatal("choices bypassed their model checks")
+	}
+	// Chosen models and efforts are sent as chosen; plain advertises no effort.
+	passModels(&config, map[string]bool{"plain": false})
+	config.Efforts = map[string]map[string]string{"api": {"plain": "max"}}
+	if _, err := s.apiAgentAdapter(config, taskChat).Stream(t.Context(), GenerateRequest{AIInput{Prompt: "hi"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls()[len(calls())-1]; got.Model != "plain" || got.Effort != "" {
+		t.Fatalf("chosen model: %+v", got)
+	}
+	models, err := s.apiAgentModels(t.Context(), config)
+	if err != nil || len(models) != 4 || !models[3].Custom || models[3].Capability != nil || models[0].Capability == nil || !models[0].Capability.Vision {
+		t.Fatalf("models: %+v %v", models, err)
+	}
+	recommended := map[string]string{}
+	for _, m := range models {
+		for _, task := range m.RecommendedFor {
+			recommended[task] = m.ID
+		}
+	}
+	if recommended["chat"] != "deepseek-v4-pro" || recommended["translation"] != "deepseek-flash" || recommended["vision"] != "deepseek-flash" {
+		t.Fatalf("recommendations: %v", recommended)
 	}
 	other := APIConnection{URL: upstream.URL + "/v1", Key: "sk-wrong"}
-	if _, err = s.apiCatalog(other)(t.Context(), "api"); errorKind(err) != ErrorAuthentication {
+	if _, err = s.apiCatalog(other)(t.Context()); errorKind(err) != ErrorAuthentication {
 		t.Fatalf("a different key reused the cached catalog: %v", err)
+	}
+}
+
+func TestAPIAgentWithoutVisionModel(t *testing.T) {
+	s := testServer(t)
+	upstream, _ := fakeAPI(t, func(int, apiCall) string { return "ok" })
+	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}}
+	passModels(&config, map[string]bool{"deepseek-v4-pro": false})
+	service := s.generationService(config)
+	if service.ValidateInput(AIInput{Prompt: "hi"}, true) != nil {
+		t.Fatal("text chat refused")
+	}
+	if err := service.ValidateInput(AIInput{Images: [][]byte{{1}}}, true); errorKind(err) != ErrorCapability {
+		t.Fatalf("image input accepted without a vision model: %v", err)
+	}
+	if _, err := s.apiAgentAdapter(config, taskChat).Stream(t.Context(), GenerateRequest{AIInput{Prompt: "hi", Images: [][]byte{{1}}}}, nil); errorKind(err) != ErrorCapability {
+		t.Fatalf("adapter picked a model without vision: %v", err)
+	}
+}
+
+func TestAPIModelCheckIsPerModel(t *testing.T) {
+	s := testServer(t)
+	upstream, calls := fakeAPI(t, func(_ int, call apiCall) string {
+		if call.Model == "broken" {
+			return ""
+		}
+		return "READER_OK"
+	})
+	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}}
+	if err := s.writeAIConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	if w := request(t, s, "POST", "/api/ai/test/api?capability=text", nil); w.Code != 400 {
+		t.Fatal("a check without a model was accepted")
+	}
+	for _, model := range []string{"deepseek-flash", "broken"} {
+		if w := request(t, s, "POST", "/api/ai/test/api?capability=text&model="+model, nil); w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+	}
+	saved := s.aiConfig()
+	if !capable(saved, "api:deepseek-flash", false) || capable(saved, "api:broken", false) || saved.Capabilities["api:broken"].Error == "" {
+		t.Fatalf("per-model results: %+v", saved.Capabilities)
+	}
+	if got := calls(); got[0].Model != "deepseek-flash" || got[0].Effort != "" || got[1].Model != "broken" {
+		t.Fatalf("probes: %+v", got)
 	}
 }
 
@@ -102,7 +188,8 @@ func TestAPITranslationSessionSpansBatches(t *testing.T) {
 		}
 		return "answer-" + string(rune('0'+n))
 	})
-	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}, Capabilities: map[string]Capability{}}
+	config := AIConfig{Primary: "api", API: APIConnection{URL: upstream.URL + "/v1", Key: "sk-test"}, Models: map[string]string{}}
+	passModels(&config, map[string]bool{"deepseek-flash": true})
 	service, sessions := s.translationService(config)
 	defer sessions.close()
 	session := service.connections["api"].Adapter
@@ -170,7 +257,7 @@ func TestAPIAgentConfigKeepsKeyPrivate(t *testing.T) {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
 	c := s.aiConfig()
-	c.Capabilities["api"] = Capability{Text: true, Fingerprint: configPrint(c, "api")}
+	passModels(&c, map[string]bool{"deepseek-flash": false})
 	if err := s.writeAIConfig(c); err != nil {
 		t.Fatal(err)
 	}
@@ -179,12 +266,12 @@ func TestAPIAgentConfigKeepsKeyPrivate(t *testing.T) {
 	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(resend)); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
-	if c = s.aiConfig(); c.API.Key != "sk-private" || !capable(c, "api", false) {
+	if c = s.aiConfig(); c.API.Key != "sk-private" || !capable(c, "api:deepseek-flash", false) {
 		t.Fatalf("key or capability lost: %+v", c.API)
 	}
 	// A new key is a new connection and must be tested again.
 	changed := strings.Replace(body, "sk-private", "sk-other", 1)
-	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(changed)); w.Code != 200 || capable(s.aiConfig(), "api", false) {
+	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(changed)); w.Code != 200 || capable(s.aiConfig(), "api:deepseek-flash", false) {
 		t.Fatal("capability survived a key change")
 	}
 	insecure := strings.Replace(body, "https://api.deepseek.com", "http://api.deepseek.com", 1)
@@ -206,12 +293,13 @@ func TestLiveDeepSeekTranslationSession(t *testing.T) {
 	}
 	s := testServer(t)
 	conn := APIConnection{URL: "https://api.deepseek.com", Key: key}
-	models, err := s.apiCatalog(conn)(t.Context(), "api")
+	models, err := s.apiCatalog(conn)(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("models: %+v", models)
-	config := AIConfig{Primary: "api", API: conn, Models: map[string]string{}, Capabilities: map[string]Capability{}}
+	config := AIConfig{Primary: "api", API: conn, Models: map[string]string{}, TranslationModels: map[string]string{"api": "deepseek-flash"}}
+	passModels(&config, map[string]bool{"deepseek-flash": true})
 	service, sessions := s.translationService(config)
 	defer sessions.close()
 	session := service.connections["api"].Adapter
@@ -245,15 +333,18 @@ func TestLiveDeepSeekCapabilityCheck(t *testing.T) {
 		t.Skip("set READER_TEST_DEEPSEEK=1 and DEEPSEEK_API_KEY")
 	}
 	s := testServer(t)
-	config, _ := json.Marshal(AIConfig{Primary: "api", API: APIConnection{URL: "https://api.deepseek.com", Key: key}, Models: map[string]string{"api": "deepseek-flash"}})
+	config, _ := json.Marshal(AIConfig{Primary: "api", API: APIConnection{URL: "https://api.deepseek.com", Key: key}, Models: map[string]string{}})
 	if w := request(t, s, "PUT", "/api/ai/config", strings.NewReader(string(config))); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+	for _, model := range []string{"deepseek-flash", "deepseek-v4-pro"} {
+		w := request(t, s, "POST", "/api/ai/test/api?model="+model, nil)
+		t.Logf("%s: %d %s", model, w.Code, w.Body.String())
+	}
 	w := request(t, s, "GET", "/api/ai/models?provider=api", nil)
 	t.Logf("models: %d %s", w.Code, w.Body.String())
-	w = request(t, s, "POST", "/api/ai/test/api", nil)
-	t.Logf("capability: %d %s", w.Code, w.Body.String())
-	if !capable(s.aiConfig(), "api", false) {
-		t.Fatal("text check failed")
+	saved := s.aiConfig()
+	if !apiCapable(saved, taskChat, false) || !apiCapable(saved, taskChat, true) {
+		t.Fatal("no model passed text and vision")
 	}
 }

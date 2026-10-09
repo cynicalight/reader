@@ -91,6 +91,11 @@ func (s *Server) taskGenerationService(config AIConfig, task modelTask) *Generat
 		if task == taskTranslation && validAgent(provider) {
 			return
 		}
+		// API checks are per model; a runtime failure does not say which
+		// model's check is stale.
+		if provider == "api" {
+			return
+		}
 		if saveErr := s.recordCapabilityFailure(config, provider, vision, err); saveErr != nil {
 			log.Printf("cannot persist %s capability failure: %v", provider, saveErr)
 		}
@@ -106,14 +111,15 @@ func (s *Server) taskGenerationService(config AIConfig, task modelTask) *Generat
 		if p == "codex" {
 			adapter = codexChatAdapter{cli, &s.codexChat}
 		}
-		if p == "api" {
-			adapter = apiAgentAdapter{config.API, model, level, task, s.apiCatalog(config.API)}
-		}
 		if p == "text-api" {
 			adapter = apiAdapter{config.TextAPI}
 		}
 		if p == "image-api" {
 			adapter = apiAdapter{config.ImageAPI}
+		}
+		if p == "api" {
+			g.connections[p] = generationConnection{s.apiAgentAdapter(config, task), apiCapable(config, task, false), apiCapable(config, task, true), true}
+			continue
 		}
 		g.connections[p] = generationConnection{adapter, capable(config, p, false), capable(config, p, true), true}
 	}
@@ -349,7 +355,7 @@ func (g *GenerationService) generate(ctx context.Context, in AIInput, interactiv
 	var result GenerateResult
 	err := generationError(ErrorCapability, "主 Agent 尚未通过所需能力测试")
 	// Existing Codex/Claude text chat works with CLI login without a saved probe.
-	if primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" {
+	if primary.VerifiedText && (!vision || primary.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
 		result, err = g.attempt(ctx, g.primary, in, send)
 	}
 	if err == nil {
@@ -385,7 +391,7 @@ func (g *GenerationService) ValidateInput(in AIInput, interactive bool) error {
 	}
 	vision := len(in.images()) > 0
 	p := g.connections[g.primary]
-	if p.VerifiedText && (!vision || p.VerifiedVision) || interactive && !vision && g.primary != "kimi" {
+	if p.VerifiedText && (!vision || p.VerifiedVision) || interactive && !vision && g.primary != "kimi" && g.primary != "api" {
 		return nil
 	}
 	target := "text-api"

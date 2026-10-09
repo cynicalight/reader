@@ -2,8 +2,9 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { AIConfig } from "@reader/core";
+import type { AIConfig, AgentModel } from "@reader/core";
 import { api } from "@reader/api";
+import { toast } from "sonner";
 import { Settings } from "./Settings";
 import { useReaderStore } from "./store";
 
@@ -17,6 +18,7 @@ vi.mock("@reader/api", () => ({
     saveLibraryPreferences: vi.fn(async (value) => value),
   },
 }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 vi.mock("@reader/ui/components/dialog", () => {
   const Content = ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
@@ -33,6 +35,8 @@ vi.mock("@reader/ui/components/dialog", () => {
 let root: Root;
 let host: HTMLDivElement;
 let config: AIConfig;
+// Listed by the endpoint; the value says whether the model passes vision.
+let listed: Record<string, boolean>;
 const input = (label: string) =>
   host.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
 const type = async (label: string, value: string) => {
@@ -72,19 +76,41 @@ beforeEach(() => {
     },
   ]);
   vi.mocked(api.aiConfig).mockImplementation(async () => config);
+  listed = { "deepseek-flash": true, "deepseek-v4-pro": false };
   vi.mocked(api.saveAIConfig).mockImplementation(async (next) => {
     const { key, ...rest } = next.api;
+    const changed = next.api.url !== config.api.url || !!key;
     config = {
       ...next,
       api: { ...rest, hasKey: !!key || next.api.hasKey },
-      capabilities: {},
+      capabilities: changed ? {} : next.capabilities,
     };
     return config;
   });
-  vi.mocked(api.testAI).mockResolvedValue({
-    text: true,
-    vision: false,
-    checkedAt: "2026-10-09",
+  vi.mocked(api.agentModels).mockImplementation(async () =>
+    [...Object.keys(listed), ...(config.apiModels ?? [])].map(
+      (id): AgentModel => ({
+        id,
+        name: id,
+        description: "",
+        isDefault: false,
+        custom: !(id in listed),
+        capability: config.capabilities[`api:${id}`],
+      }),
+    ),
+  );
+  vi.mocked(api.testAI).mockImplementation(async (_provider, stage, model) => {
+    const capability = {
+      text: true,
+      vision: stage === "vision" && !!listed[model!],
+      checkedAt: "2026-10-09",
+      pendingVision: stage === "text",
+    };
+    config = {
+      ...config,
+      capabilities: { ...config.capabilities, [`api:${model}`]: capability },
+    };
+    return capability;
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -112,7 +138,14 @@ it("saves the API endpoint and key, then tests the new connection", async () => 
       },
     }),
   );
-  expect(api.testAI).toHaveBeenCalledWith("api", "text");
+  // Each listed model is checked on its own, text first, then vision.
+  for (const model of ["deepseek-flash", "deepseek-v4-pro"])
+    for (const stage of ["text", "vision"])
+      expect(api.testAI).toHaveBeenCalledWith("api", stage, model);
+  expect(host.querySelectorAll('[aria-label="图片理解：已通过"]')).toHaveLength(
+    1,
+  );
+  expect(toast.warning).not.toHaveBeenCalled();
   expect(input("API Key").value).toBe("");
   expect(input("API Key").placeholder).toBe("已保存，留空保持不变");
   // Editing only the address keeps the saved key without resending it.
@@ -128,5 +161,37 @@ it("saves the API endpoint and key, then tests the new connection", async () => 
       },
     }),
   );
-  expect(api.testAI).toHaveBeenCalledTimes(4);
+  expect(api.testAI).toHaveBeenCalledTimes(8);
+});
+it("warns when no listed model passes the vision check", async () => {
+  config.api = { url: "https://api.example.com", model: "", hasKey: true };
+  listed = { "text-only": false };
+  await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
+  expect(api.testAI).toHaveBeenCalledWith("api", "vision", "text-only");
+  expect(toast.warning).toHaveBeenCalledOnce();
+});
+it("adds and removes a model ID by hand and checks it", async () => {
+  config.api = { url: "https://api.example.com", model: "", hasKey: true };
+  config.capabilities = {
+    "api:deepseek-flash": { text: true, vision: true, checkedAt: "saved" },
+    "api:deepseek-v4-pro": { text: true, vision: false, checkedAt: "saved" },
+  };
+  await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
+  expect(api.testAI).not.toHaveBeenCalled();
+  await type("添加模型 ID", "my-model");
+  await act(async () =>
+    input("添加模型 ID").form!.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(config.apiModels).toEqual(["my-model"]);
+  expect(api.testAI).toHaveBeenCalledWith("api", "text", "my-model");
+  expect(api.testAI).toHaveBeenCalledTimes(2);
+  await act(async () =>
+    (
+      host.querySelector('[aria-label="移除 my-model"]') as HTMLButtonElement
+    ).click(),
+  );
+  expect(config.apiModels).toEqual([]);
+  expect(host.textContent).not.toContain("my-model");
 });

@@ -1667,6 +1667,13 @@ kbd {
   display: inline-flex;
   flex-shrink: 0;
 }
+.api-model-list {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+.api-model-list > li + li {
+  border-top: 1px solid var(--border);
+}
 
 /* Native macOS controls occupy this sidebar space; web/other platforms keep
    their normal chrome. Interactive header controls must stay outside drag areas. */

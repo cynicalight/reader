@@ -10,12 +10,20 @@ import {
   Monitor,
   RefreshCw,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { ProviderIdentity } from "./ProviderIdentity";
 import { TaskModels } from "./TaskModels";
-import { APIAgentForm } from "./APIAgentForm";
+import { APIAgentForm, APIModelForm } from "./APIAgentForm";
 import { api } from "@reader/api";
-import type { APIConnection, LibraryMode, Provider } from "@reader/core";
+import type {
+  AICapability,
+  AIConfig,
+  AgentModel,
+  APIConnection,
+  LibraryMode,
+  Provider,
+} from "@reader/core";
 import { Button } from "@reader/ui/components/button";
 import {
   Dialog,
@@ -52,6 +60,8 @@ import {
 import { libraryModes } from "./LibraryModeSwitcher";
 import { Checkbox } from "@reader/ui/components/checkbox";
 import { toast } from "sonner";
+// Checks run automatically for this many API models; the rest on demand.
+const autoAPIChecks = 12;
 export function Settings({
   open,
   onOpenChange,
@@ -68,6 +78,8 @@ export function Settings({
   const refreshing = useRef(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [apiModels, setAPIModels] = useState<AgentModel[]>([]);
+  const [apiModelsError, setAPIModelsError] = useState("");
   const {
     theme,
     setTheme,
@@ -78,6 +90,84 @@ export function Settings({
   } = useReaderStore();
   const paperPreferences =
     useReaderStore((s) => s.libraryPreferences.papers) || {};
+  // Run the text check, then the vision check, for an agent or an API model
+  // ("api:<model>"). A result is dropped if its configuration changed meanwhile.
+  const check = async (
+    id: string,
+    first: "text" | "vision",
+    snapshot: AIConfig,
+  ) => {
+    const model = id.startsWith("api:") ? id.slice(4) : undefined;
+    const run = (stage: "text" | "vision") =>
+      model ? api.testAI("api", stage, model) : api.testAI(id, stage);
+    let stage = first;
+    const update = (capability: AICapability) => {
+      const current = useReaderStore.getState().aiConfig;
+      if (
+        !current ||
+        (model
+          ? current.api.url !== snapshot.api.url
+          : current.models[id] !== snapshot.models[id])
+      )
+        return false;
+      setAIConfig({
+        ...current,
+        capabilities: { ...current.capabilities, [id]: capability },
+      });
+      return true;
+    };
+    try {
+      if (stage === "text") {
+        const capability = await run("text");
+        if (!update(capability) || !capability.text) return;
+        stage = "vision";
+        setTesting((current) => new Map(current).set(id, "vision"));
+      }
+      update(await run("vision"));
+    } catch (error) {
+      setErrors((current) => ({
+        ...current,
+        [`${id}:${stage}`]: (error as Error).message,
+      }));
+    } finally {
+      setTesting((current) => {
+        const next = new Map(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+  const checkAll = async (
+    ids: string[],
+    firstStage: (id: string) => "text" | "vision",
+    snapshot: AIConfig,
+  ) => {
+    setTesting((current) => {
+      const next = new Map(current);
+      for (const id of ids) next.set(id, firstStage(id));
+      return next;
+    });
+    setErrors((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([key]) => !ids.some((id) => key.startsWith(`${id}:`)),
+        ),
+      ),
+    );
+    await Promise.all(ids.map((id) => check(id, firstStage(id), snapshot)));
+  };
+  const warnWithoutVision = (models: AgentModel[]) => {
+    const capabilities = useReaderStore.getState().aiConfig?.capabilities;
+    const results = models.map(({ id }) => capabilities?.[`api:${id}`]);
+    if (
+      results.length &&
+      results.every(Boolean) &&
+      !results.some((r) => r?.vision)
+    )
+      toast.warning(
+        "此 API Key 不符合图片理解要求：拉取到的模型都没有通过图片理解检测。",
+      );
+  };
   const refresh = async (force = false) => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -89,71 +179,55 @@ export function Settings({
       ]);
       setProviders(providers);
       setAIConfig(config);
-      const pending = providers.filter((provider) => {
-        if (!provider.installed) return false;
-        // Saved results survive dialog remounts and application restarts.
-        // Only an explicit retry replaces an existing result, including failures.
-        if (
-          !force &&
-          config.capabilities[provider.id] &&
-          !config.capabilities[provider.id].pendingVision
-        )
-          return false;
-        const key = JSON.stringify([provider.id, config.models[provider.id]]);
-        if (!force && checked.current.has(key)) return false;
-        checked.current.add(key);
-        return true;
-      });
+      // CLI agents are checked as a whole, the API agent one model at a time.
+      const pending = providers
+        .filter((provider) => {
+          if (provider.id === "api" || !provider.installed) return false;
+          // Saved results survive dialog remounts and application restarts.
+          // Only an explicit retry replaces an existing result, including failures.
+          if (
+            !force &&
+            config.capabilities[provider.id] &&
+            !config.capabilities[provider.id].pendingVision
+          )
+            return false;
+          const key = JSON.stringify([provider.id, config.models[provider.id]]);
+          if (!force && checked.current.has(key)) return false;
+          checked.current.add(key);
+          return true;
+        })
+        .map(({ id }) => id);
+      let models: AgentModel[] = [];
+      if (providers.some(({ id, installed }) => id === "api" && installed)) {
+        try {
+          models = await api.agentModels("api");
+          setAPIModelsError("");
+        } catch (error) {
+          setAPIModelsError((error as Error).message);
+        }
+      }
+      setAPIModels(models);
+      // Large catalogs are checked on demand, row by row.
+      const modelChecks = models
+        .filter((model) => {
+          const saved = config.capabilities[`api:${model.id}`];
+          if (!force && saved && !saved.pendingVision) return false;
+          return (
+            force || !checked.current.has(JSON.stringify(["api", model.id]))
+          );
+        })
+        .slice(0, autoAPIChecks);
+      for (const model of modelChecks)
+        checked.current.add(JSON.stringify(["api", model.id]));
       const firstStage = (id: string): "text" | "vision" =>
         !force && config.capabilities[id]?.pendingVision ? "vision" : "text";
-      setTesting(new Map(pending.map(({ id }) => [id, firstStage(id)])));
-      setErrors((current) =>
-        Object.fromEntries(
-          Object.entries(current).filter(
-            ([key]) =>
-              !pending.some((provider) => key.startsWith(`${provider.id}:`)),
-          ),
-        ),
-      );
       setLoading(false);
-      await Promise.all(
-        pending.map(async ({ id }) => {
-          let stage = firstStage(id);
-          const update = (
-            capability: NonNullable<typeof config>["capabilities"][string],
-          ) => {
-            const current = useReaderStore.getState().aiConfig;
-            if (!current || current.models[id] !== config.models[id])
-              return false;
-            setAIConfig({
-              ...current,
-              capabilities: { ...current.capabilities, [id]: capability },
-            });
-            return true;
-          };
-          try {
-            if (stage === "text") {
-              const capability = await api.testAI(id, "text");
-              if (!update(capability) || !capability.text) return;
-              stage = "vision";
-              setTesting((current) => new Map(current).set(id, "vision"));
-            }
-            const capability = await api.testAI(id, "vision");
-            update(capability);
-          } catch (error) {
-            setErrors((current) => ({
-              ...current,
-              [`${id}:${stage}`]: (error as Error).message,
-            }));
-          } finally {
-            setTesting((current) => {
-              const next = new Map(current);
-              next.delete(id);
-              return next;
-            });
-          }
-        }),
+      await checkAll(
+        [...pending, ...modelChecks.map(({ id }) => `api:${id}`)],
+        firstStage,
+        config,
       );
+      if (modelChecks.length) warnWithoutVision(models);
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -164,14 +238,17 @@ export function Settings({
   useEffect(() => {
     if (open) void refresh();
   }, [open]);
-  const saveAPI = async (connection: APIConnection) => {
+  const checkModel = async (model: AgentModel) => {
+    const snapshot = useReaderStore.getState().aiConfig;
+    if (!snapshot) return;
+    checked.current.add(JSON.stringify(["api", model.id]));
+    await checkAll([`api:${model.id}`], () => "text", snapshot);
+    warnWithoutVision(apiModels);
+  };
+  const saveConfig = async (change: (latest: AIConfig) => AIConfig) => {
     setSaving(true);
     try {
-      const latest = await api.aiConfig();
-      setAIConfig(await api.saveAIConfig({ ...latest, api: connection }));
-      // A new address or key is a new connection: test it again.
-      for (const key of checked.current)
-        if (key.startsWith('["api"')) checked.current.delete(key);
+      setAIConfig(await api.saveAIConfig(change(await api.aiConfig())));
     } catch (e) {
       toast.error((e as Error).message);
       return;
@@ -180,6 +257,82 @@ export function Settings({
     }
     await refresh();
   };
+  const saveAPI = (connection: APIConnection) => {
+    // A new address or key is a new connection: test its models again.
+    for (const key of checked.current)
+      if (key.startsWith('["api"')) checked.current.delete(key);
+    return saveConfig((latest) => ({ ...latest, api: connection }));
+  };
+  const saveAPIModels = (change: (models: string[]) => string[]) =>
+    saveConfig((latest) => ({
+      ...latest,
+      apiModels: change(latest.apiModels ?? []),
+    }));
+  const checkStatus = (id: string, capability?: AICapability) => (
+    <div className="flex flex-wrap gap-x-5">
+      {(
+        [
+          ["text", "文本推理"],
+          ["vision", "图片理解"],
+        ] as const
+      ).map(([kind, label]) => {
+        const stage = testing.get(id);
+        const pending =
+          stage === "text" || (stage === "vision" && kind === "vision");
+        const error = errors[`${id}:${kind}`] || capability?.error;
+        const ready =
+          !errors[`${id}:text`] &&
+          !errors[`${id}:${kind}`] &&
+          !!capability?.[kind];
+        const state = pending ? "pending" : ready ? "passed" : "failed";
+        const apiModel = id.startsWith("api:");
+        return (
+          <div
+            key={kind}
+            className="agent-check-status"
+            role="status"
+            aria-live="polite"
+            aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
+          >
+            <span className="agent-check-icon" key={state} data-state={state}>
+              {pending ? (
+                <LoaderCircle className="animate-spin" />
+              ) : ready ? (
+                <CircleCheck />
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={<Button variant="ghost" size="icon" />}
+                    className="size-4 p-0 text-inherit hover:bg-transparent hover:text-inherit"
+                    aria-label={`${label}未通过：查看详情`}
+                  >
+                    <TriangleAlert />
+                  </TooltipTrigger>
+                  <TooltipContent className="block max-w-xs space-y-2 leading-5 break-words">
+                    <p>
+                      {error ||
+                        (capability?.text
+                          ? "文本推理可用，图片理解未通过检测。"
+                          : apiModel
+                            ? "检测未通过，请检查 API 地址、Key、模型名称、网络或额度。"
+                            : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
+                    </p>
+                    {!capability?.text && !apiModel && (
+                      <p>
+                        支持 CLI 当前使用的订阅登录或 API Key
+                        配置；以实际调用结果为准。
+                      </p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </span>
+            <span>{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog sm:max-w-3xl">
@@ -405,8 +558,9 @@ export function Settings({
                   </Select>
                   <TaskModels disabled={saving || testing.size > 0} />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    问答与翻译分别使用上方模型；未指定时，问答使用主力模型，翻译使用快速模型。
-                    公式转换与主动图片提问会向此 Agent 发送图片。
+                    {config.primary === "api"
+                      ? "只列出通过检测的模型：问答与翻译需通过文本推理，图片需通过图片理解。公式转换与主动图片提问使用图片模型。"
+                      : "问答与翻译分别使用上方模型；未指定时，问答使用主力模型，翻译使用快速模型。公式转换与主动图片提问会向此 Agent 发送图片。"}
                   </p>
                 </div>
               )}
@@ -417,7 +571,10 @@ export function Settings({
                   const pending = testing.has(name);
 
                   return (
-                    <div key={name} className="min-w-0 rounded-xl border p-4">
+                    <div
+                      key={name}
+                      className={`min-w-0 rounded-xl border p-4 ${name === "api" ? "sm:col-span-2" : ""}`}
+                    >
                       <div className="flex items-center gap-3">
                         <span className="flex-1 text-base font-medium">
                           <ProviderIdentity provider={name} size={36} />
@@ -428,89 +585,89 @@ export function Settings({
                           </Badge>
                         )}
                       </div>
+                      {name !== "api" &&
+                        (pending || p?.installed || capability) &&
+                        checkStatus(name, capability)}
                       {name === "api" && config && (
-                        <APIAgentForm
-                          connection={config.api}
-                          disabled={saving || testing.size > 0}
-                          onSave={saveAPI}
-                        />
-                      )}
-                      {(pending || p?.installed || capability) && (
-                        <div className="flex flex-wrap gap-x-5">
-                          {(
-                            [
-                              ["text", "文本推理"],
-                              ["vision", "图片理解"],
-                            ] as const
-                          ).map(([kind, label]) => {
-                            const stage = testing.get(name);
-                            const pending =
-                              stage === "text" ||
-                              (stage === "vision" && kind === "vision");
-                            const error =
-                              errors[`${name}:${kind}`] || capability?.error;
-                            const ready =
-                              !errors[`${name}:text`] &&
-                              !errors[`${name}:${kind}`] &&
-                              !!capability?.[kind];
-                            const state = pending
-                              ? "pending"
-                              : ready
-                                ? "passed"
-                                : "failed";
-                            return (
-                              <div
-                                key={kind}
-                                className="agent-check-status"
-                                role="status"
-                                aria-live="polite"
-                                aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
-                              >
-                                <span
-                                  className="agent-check-icon"
-                                  key={state}
-                                  data-state={state}
-                                >
-                                  {pending ? (
-                                    <LoaderCircle className="animate-spin" />
-                                  ) : ready ? (
-                                    <CircleCheck />
-                                  ) : (
-                                    <Tooltip>
-                                      <TooltipTrigger
-                                        render={
-                                          <Button variant="ghost" size="icon" />
-                                        }
-                                        className="size-4 p-0 text-inherit hover:bg-transparent hover:text-inherit"
-                                        aria-label={`${label}未通过：查看详情`}
+                        <>
+                          <APIAgentForm
+                            connection={config.api}
+                            disabled={saving || testing.size > 0}
+                            onSave={saveAPI}
+                          />
+                          {p?.installed && (
+                            <div className="mt-4">
+                              <h4 className="mb-1 text-xs font-medium text-muted-foreground">
+                                模型
+                              </h4>
+                              <ul className="api-model-list">
+                                {apiModels.map((model) => {
+                                  const id = `api:${model.id}`;
+                                  const result = config.capabilities[id];
+                                  return (
+                                    <li
+                                      key={model.id}
+                                      className="flex min-h-9 items-center gap-3"
+                                    >
+                                      <span
+                                        className="min-w-0 flex-1 truncate text-sm"
+                                        title={model.id}
                                       >
-                                        <TriangleAlert />
-                                      </TooltipTrigger>
-                                      <TooltipContent className="block max-w-xs space-y-2 leading-5 break-words">
-                                        <p>
-                                          {error ||
-                                            (capability?.text
-                                              ? "文本推理可用，图片理解未通过检测。"
-                                              : name === "api"
-                                                ? "检测未通过，请检查 API 地址、Key、网络或额度。"
-                                                : "检测未通过，请检查终端中的 Agent、API 配置、网络或额度。")}
-                                        </p>
-                                        {!capability?.text &&
-                                          name !== "api" && (
-                                            <p>
-                                              支持 CLI 当前使用的订阅登录或 API
-                                              Key 配置；以实际调用结果为准。
-                                            </p>
-                                          )}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                </span>
-                                <span>{label}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                                        {model.name}
+                                      </span>
+                                      {testing.has(id) ||
+                                      result ||
+                                      errors[`${id}:text`] ? (
+                                        checkStatus(id, result)
+                                      ) : (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={saving}
+                                          onClick={() => void checkModel(model)}
+                                        >
+                                          检测
+                                        </Button>
+                                      )}
+                                      {model.custom && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-sm"
+                                          aria-label={`移除 ${model.name}`}
+                                          title="移除"
+                                          disabled={saving || testing.has(id)}
+                                          onClick={() =>
+                                            void saveAPIModels((models) =>
+                                              models.filter(
+                                                (item) => item !== model.id,
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <X />
+                                        </Button>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {apiModelsError && (
+                                <p
+                                  className="mt-1 text-xs text-muted-foreground"
+                                  role="alert"
+                                >
+                                  {apiModelsError}
+                                </p>
+                              )}
+                              <APIModelForm
+                                disabled={saving}
+                                onAdd={(id) =>
+                                  saveAPIModels((models) => [...models, id])
+                                }
+                              />
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   );

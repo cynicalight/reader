@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -43,9 +44,14 @@ type AIConfig struct {
 	// Reader picks the fast tier from the live catalog.
 	TranslationModels  map[string]string            `json:"translationModels,omitempty"`
 	TranslationEfforts map[string]map[string]string `json:"translationEfforts,omitempty"`
-	// API is the endpoint of the "api" agent. Its models live in Models and
-	// TranslationModels like the CLI agents; API.Model is unused.
+	// The API agent also picks a model for image input. Other agents send
+	// images to their chat model.
+	VisionModels  map[string]string            `json:"visionModels,omitempty"`
+	VisionEfforts map[string]map[string]string `json:"visionEfforts,omitempty"`
+	// API is the endpoint of the "api" agent; API.Model is unused. APIModels
+	// are model IDs the user added beside the endpoint's /models list.
 	API          APIConnection         `json:"api"`
+	APIModels    []string              `json:"apiModels"`
 	TextAPI      APIConnection         `json:"textAPI"`
 	ImageAPI     APIConnection         `json:"imageAPI"`
 	Capabilities map[string]Capability `json:"capabilities"`
@@ -101,6 +107,9 @@ func (s *Server) readAIConfig() AIConfig {
 	if c.Capabilities == nil {
 		c.Capabilities = map[string]Capability{}
 	}
+	if c.APIModels == nil {
+		c.APIModels = []string{}
+	}
 	for k, v := range c.Capabilities {
 		v.Fingerprint = stored.Fingerprints[k]
 		c.Capabilities[k] = v
@@ -147,8 +156,11 @@ func configPrint(c AIConfig, p string) string {
 		value = c.TextAPI
 	} else if p == "image-api" {
 		value = c.ImageAPI
+	} else if model, ok := strings.CutPrefix(p, "api:"); ok {
+		value = []string{"api", c.API.URL, c.API.Key, model}
 	} else if p == "api" {
-		value = []string{p, c.API.URL, c.API.Key, c.Models[p]}
+		// Checked per model, never as a whole.
+		return ""
 	} else {
 		path, _ := exec.LookPath(p)
 		value = []string{p, path, c.Models[p]}
@@ -158,6 +170,9 @@ func configPrint(c AIConfig, p string) string {
 	return hex.EncodeToString(h[:])
 }
 func capable(c AIConfig, p string, vision bool) bool {
+	if p == "api" {
+		return apiCapable(c, taskChat, false) && (!vision || apiCapable(c, taskChat, true))
+	}
 	v := c.Capabilities[p]
 	return v.Fingerprint == configPrint(c, p) && v.Text && (!vision || v.Vision)
 }
@@ -234,7 +249,7 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请选择主 Agent")
 		return
 	}
-	for _, efforts := range []map[string]map[string]string{c.Efforts, c.TranslationEfforts} {
+	for _, efforts := range []map[string]map[string]string{c.Efforts, c.TranslationEfforts, c.VisionEfforts} {
 		for provider, models := range efforts {
 			for _, effort := range models {
 				if !validEffort(provider, effort) {
@@ -256,6 +271,27 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 	if c.TranslationEfforts == nil {
 		c.TranslationEfforts = old.TranslationEfforts
 	}
+	if c.VisionModels == nil {
+		c.VisionModels = old.VisionModels
+	}
+	if c.VisionEfforts == nil {
+		c.VisionEfforts = old.VisionEfforts
+	}
+	if c.APIModels == nil {
+		c.APIModels = old.APIModels
+	}
+	added := []string{}
+	for _, id := range c.APIModels {
+		id = strings.TrimSpace(id)
+		if id != "" && !slices.Contains(added, id) {
+			added = append(added, id)
+		}
+	}
+	if len(added) > 50 || slices.ContainsFunc(added, func(id string) bool { return len(id) > 200 }) {
+		fail(w, 400, "手动添加的模型过多或名称过长")
+		return
+	}
+	c.APIModels = added
 	// Omitted keys preserve secrets; hasKey=false plus empty key explicitly clears one.
 	if c.TextAPI.Key == "" && c.TextAPI.HasKey {
 		c.TextAPI.Key = old.TextAPI.Key
@@ -303,6 +339,15 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 	if !validAgent(p) && p != "text-api" && p != "image-api" {
 		fail(w, 400, "未知连接")
 		return
+	}
+	if p == "api" {
+		// The API agent is checked one model at a time.
+		model := strings.TrimSpace(r.URL.Query().Get("model"))
+		if model == "" || len(model) > 200 {
+			fail(w, 400, "请选择要检测的 API 模型")
+			return
+		}
+		p = apiCapabilityKey(model)
 	}
 	mode := r.URL.Query().Get("capability")
 	if mode != "" && mode != "text" && mode != "vision" || mode == "vision" && p == "text-api" {
@@ -381,8 +426,10 @@ func (s *Server) probeConnection(parent context.Context, c AIConfig, p string, i
 		}
 	}
 	var adapter Adapter = cliAdapter{s.Store.Root, p, model}
-	if p == "api" {
-		adapter = apiAgentAdapter{c.API, model, "", taskChat, s.apiCatalog(c.API)}
+	if model, ok := strings.CutPrefix(p, "api:"); ok {
+		// Probe exactly this model, without effort, for text and images alike.
+		choice := apiModelChoice{model, ""}
+		adapter = apiAgentAdapter{c.API, choice, choice, taskChat, func(context.Context) ([]AgentModel, error) { return nil, errors.New("not listed") }}
 	}
 	if p == "text-api" {
 		adapter = apiAdapter{c.TextAPI}

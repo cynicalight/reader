@@ -116,17 +116,23 @@ export function ModelSelector({
   }, [provider, revision, retry]);
   const models = catalog.provider === provider ? catalog.models : [];
   const configuredModel = config?.models[provider] ?? "";
-  const current = selectedAgentModel(models, configuredModel);
+  const usable = usableModels(provider, models, "chat");
+  const current = configuredModel
+    ? selectedAgentModel(models, configuredModel)
+    : selectedAgentModel(usable, "");
   const currentEffort =
     config?.efforts?.[provider]?.[configuredModel] ?? "medium";
   const effort = draftEffort ?? currentEffort;
   useEffect(() => {
     setDraftEffort(null);
   }, [provider, configuredModel]);
+  // An API model that failed its check is never offered again.
   const options =
-    current && !models.some((model) => model.id === current.id)
-      ? [current, ...models]
-      : models;
+    current &&
+    provider !== "api" &&
+    !models.some((model) => model.id === current.id)
+      ? [current, ...usable]
+      : usable;
 
   const choose = async (value: string | null) => {
     if (
@@ -345,9 +351,26 @@ export function ModelSelector({
   );
 }
 
-/** The API agent's catalog depends on its endpoint; reload it after the
- * address changes or a new connection test finishes. */
+/** The API agent's catalog carries per-model check results; reload it after
+ * the address, the added models or any model check changes. */
 export function catalogRevision(config: AIConfig | null | undefined) {
   if (config?.primary !== "api") return "";
-  return `${config.api.url}\n${config.capabilities.api?.checkedAt ?? ""}`;
+  const checks = Object.entries(config.capabilities)
+    .filter(([key]) => key.startsWith("api:"))
+    .map(([key, value]) => `${key}@${value.checkedAt}`)
+    .sort();
+  return [config.api.url, ...(config.apiModels ?? []), ...checks].join("\n");
+}
+
+/** API models are offered only for tasks whose checks they passed. */
+export function usableModels(
+  provider: string,
+  models: AgentModel[],
+  task: ModelTask,
+) {
+  if (provider !== "api") return models;
+  return models.filter(
+    (model) =>
+      model.capability?.text && (task !== "vision" || model.capability.vision),
+  );
 }

@@ -493,6 +493,11 @@ export interface AIConfig {
   efforts?: Record<string, Record<string, ReasoningEffort>>;
   translationModels?: Record<string, string>;
   translationEfforts?: Record<string, Record<string, ReasoningEffort>>;
+  /** Image-input model of the "api" agent; other agents use their chat model. */
+  visionModels?: Record<string, string>;
+  visionEfforts?: Record<string, Record<string, ReasoningEffort>>;
+  /** Model IDs the user added beside the API endpoint's /models list. */
+  apiModels?: string[];
   /** Endpoint of the "api" agent; its models are chosen per task above. */
   api: APIConnection;
   textAPI: APIConnection;
@@ -506,8 +511,13 @@ export interface AgentModel {
   isDefault: boolean;
   aliases?: string[];
   recommendedFor?: ModelTask[];
+  /** API agent: a model ID the user added. */
+  custom?: boolean;
+  /** API agent: this model's own check result. */
+  capability?: AICapability;
 }
-export type ModelTask = "chat" | "translation";
+/** "vision" is the API agent's image-input model. */
+export type ModelTask = "chat" | "translation" | "vision";
 
 export { isPDFPageDecoration } from "./pdf-content";
 

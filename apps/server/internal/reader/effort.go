@@ -14,7 +14,7 @@ type modelCatalogEntry struct {
 // starts; canceled callers should not block another conversation.
 func (s *Server) modelCatalog(ctx context.Context, provider string) ([]AgentModel, error) {
 	if provider == "api" {
-		return s.apiCatalog(s.aiConfig().API)(ctx, provider)
+		return s.apiAgentModels(ctx, s.aiConfig())
 	}
 	return s.cachedCatalog(ctx, provider, func(ctx context.Context) ([]AgentModel, error) {
 		return discoverModels(ctx, s.Store.Root, provider)

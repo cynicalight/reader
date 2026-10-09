@@ -77,3 +77,46 @@ export function APIAgentForm({
     </form>
   );
 }
+
+/** Adds a model ID that the endpoint's /models list does not include. */
+export function APIModelForm({
+  disabled,
+  onAdd,
+}: {
+  disabled: boolean;
+  onAdd: (id: string) => Promise<void>;
+}) {
+  const [id, setID] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <form
+      className="mt-2 flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const model = id.trim();
+        if (!model) return;
+        setSaving(true);
+        void onAdd(model)
+          .then(() => setID(""))
+          .finally(() => setSaving(false));
+      }}
+    >
+      <Input
+        aria-label="添加模型 ID"
+        placeholder="手动添加模型 ID"
+        autoComplete="off"
+        spellCheck={false}
+        value={id}
+        disabled={disabled || saving}
+        onChange={(event) => setID(event.target.value)}
+      />
+      <Button
+        type="submit"
+        variant="outline"
+        disabled={disabled || saving || !id.trim()}
+      >
+        添加
+      </Button>
+    </form>
+  );
+}

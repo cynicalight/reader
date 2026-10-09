@@ -1297,6 +1297,8 @@ export interface paths {
                 query?: {
                     /** @description Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration. */
                     capability?: "text" | "vision";
+                    /** @description Required for the api provider, which is checked one model at a time; the result is stored under capabilities["api:<model>"]. */
+                    model?: string;
                 };
                 header?: never;
                 path: {
@@ -2761,8 +2763,12 @@ export interface components {
             description: string;
             isDefault: boolean;
             aliases?: string[];
-            /** @description Tasks that use this model when no model is chosen. */
-            recommendedFor?: ("chat" | "translation")[];
+            /** @description Tasks that use this model when no model is chosen. For the api provider, only models that passed the task's check are recommended. */
+            recommendedFor?: ("chat" | "translation" | "vision")[];
+            /** @description api provider: a model ID the user added. */
+            custom?: boolean;
+            /** @description api provider: this model's current check result. */
+            capability?: components["schemas"]["AICapability"];
         };
         /** @enum {string} */
         ReasoningEffort: "low" | "medium" | "high" | "max";
@@ -2787,6 +2793,17 @@ export interface components {
                     [key: string]: components["schemas"]["ReasoningEffort"];
                 };
             };
+            /** @description Image-input model by provider; used by the api agent only. Empty uses the recommended model that passed the vision check. */
+            visionModels?: {
+                [key: string]: string;
+            };
+            visionEfforts?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ReasoningEffort"];
+                };
+            };
+            /** @description Model IDs the user added beside the api endpoint's /models list. */
+            apiModels?: string[];
             /** @description OpenAI-compatible endpoint of the api agent. Its models are chosen in models and translationModels; model here is unused. */
             api: components["schemas"]["APIConnection"];
             textAPI: components["schemas"]["APIConnection"];
