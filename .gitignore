@@ -10,3 +10,5 @@ apps/web/public/pdf-assets/
 
 apps/desktop/staging/
 release/
+.claude/
+docs/MAKE.epub
