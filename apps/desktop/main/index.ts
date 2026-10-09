@@ -13,6 +13,7 @@ import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
+import { annotationUndoShortcut } from "../../../packages/reader-core/src/undo-shortcut";
 import { zoomCommand } from "../../../packages/reader-core/src/zoom-shortcut";
 import {
   READER_SCHEME,
@@ -310,18 +311,26 @@ app
       };
       ipcMain.on("reader:flushed", handler);
     });
-    // Let the renderer handle document zoom before Electron's View menu does.
+    // Let the renderer handle reading shortcuts; editable fields keep native undo.
     window.webContents.on("before-input-event", (_event, input) => {
       window?.webContents.setIgnoreMenuShortcuts(
         input.type === "keyDown" &&
-          zoomCommand({
+          (annotationUndoShortcut({
             key: input.key,
-            code: input.code,
             metaKey: input.meta,
             ctrlKey: input.control,
+            shiftKey: input.shift,
             altKey: input.alt,
             isComposing: input.isComposing,
-          }) !== null,
+          }) ||
+            zoomCommand({
+              key: input.key,
+              code: input.code,
+              metaKey: input.meta,
+              ctrlKey: input.control,
+              altKey: input.alt,
+              isComposing: input.isComposing,
+            }) !== null),
       );
     });
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));

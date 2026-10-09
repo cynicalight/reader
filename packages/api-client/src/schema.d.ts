@@ -264,6 +264,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/annotations/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Undo the latest annotation mutation from this window and document. Restores merged/deleted marks and original IDs atomically; rejects changes superseded by another client. History is in-memory, bounded to the latest 100 operations and 16 MiB across the server. */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Reader-Undo-Session": string;
+                };
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Undo result; use the returned annotations only when undone is true */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            undone: boolean;
+                            annotations: components["schemas"]["Annotation"][];
+                        };
+                    };
+                };
+                /** @description An affected annotation changed outside this history; no data was overwritten and this document's window history was cleared */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Error */
+                default: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/annotations": {
         parameters: {
             query?: never;
@@ -306,7 +367,10 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                 };
@@ -367,7 +431,10 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                     annotation: string;
@@ -401,7 +468,10 @@ export interface paths {
         patch: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /** @description Opt into per-window annotation undo history. */
+                    "X-Reader-Undo-Session"?: string;
+                };
                 path: {
                     id: string;
                     annotation: string;

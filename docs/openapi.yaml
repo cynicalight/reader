@@ -347,6 +347,83 @@
                 },
             },
         },
+      "/api/documents/{id}/annotations/undo":
+        {
+          "post":
+            {
+              "description": "Undo the latest annotation mutation from this window and document. Restores merged/deleted marks and original IDs atomically; rejects changes superseded by another client. History is in-memory, bounded to the latest 100 operations and 16 MiB across the server.",
+              "parameters":
+                [
+                  {
+                    "name": "id",
+                    "in": "path",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "required": true,
+                    "schema":
+                      { "type": "string", "minLength": 1, "maxLength": 128 },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Undo result; use the returned annotations only when undone is true",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["undone", "annotations"],
+                                  "properties":
+                                    {
+                                      "undone": { "type": "boolean" },
+                                      "annotations":
+                                        {
+                                          "type": "array",
+                                          "items":
+                                            {
+                                              "$ref": "#/components/schemas/Annotation",
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "An affected annotation changed outside this history; no data was overwritten and this document's window history was cleared",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents/{id}/annotations":
         {
           "get":
@@ -428,6 +505,12 @@
               "parameters":
                 [
                   {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
+                  {
                     "in": "path",
                     "name": "id",
                     "required": true,
@@ -481,6 +564,12 @@
             {
               "parameters":
                 [
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
                   {
                     "in": "path",
                     "name": "id",
@@ -584,6 +673,12 @@
                 },
               "parameters":
                 [
+                  {
+                    "name": "X-Reader-Undo-Session",
+                    "in": "header",
+                    "description": "Opt into per-window annotation undo history.",
+                    "schema": { "type": "string", "maxLength": 128 },
+                  },
                   {
                     "in": "path",
                     "name": "id",

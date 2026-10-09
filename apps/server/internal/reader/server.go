@@ -23,6 +23,8 @@ import (
 )
 
 type Server struct {
+	annotationMu           sync.Mutex
+	annotationHistory      []annotationChange
 	codexChat              codexChatCache
 	Store                  *Store
 	Token                  string
@@ -108,17 +110,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/trash", s.trashList)
 	mux.HandleFunc("DELETE /api/trash", s.emptyTrash)
 	mux.HandleFunc("POST /api/documents/{id}/classification", s.retryClassification)
+	mux.HandleFunc("POST /api/documents/{id}/annotations/undo", s.undoAnnotation)
 	mux.HandleFunc("GET /api/documents/{id}/annotations", s.annotations)
-	mux.HandleFunc("POST /api/documents/{id}/annotations", s.saveAnnotation)
-	mux.HandleFunc("PATCH /api/documents/{id}/annotations/{annotation}", s.updateAnnotationNote)
-	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/documents/{id}/annotations", s.recordAnnotation(s.saveAnnotation))
+	mux.HandleFunc("PATCH /api/documents/{id}/annotations/{annotation}", s.recordAnnotation(s.updateAnnotationNote))
+	mux.HandleFunc("DELETE /api/documents/{id}/annotations/{annotation}", s.recordAnnotation(func(w http.ResponseWriter, r *http.Request) {
 		_, err := s.Store.DB.Exec("DELETE FROM annotations WHERE id=? AND document_id=?", r.PathValue("annotation"), r.PathValue("id"))
 		if err != nil {
 			fail(w, 500, "删除失败")
 			return
 		}
 		w.WriteHeader(204)
-	})
+	}))
 	mux.HandleFunc("GET /api/documents/{id}/search", s.search)
 	mux.HandleFunc("GET /api/documents/{id}/messages", s.messages)
 	mux.HandleFunc("POST /api/documents/{id}/chat", s.chat)

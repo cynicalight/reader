@@ -79,6 +79,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
+// Keep annotation writes and undo in the same client order, including failures.
+let annotationQueue = Promise.resolve();
+let annotationSession = "";
+function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
+  annotationSession ||= crypto.randomUUID();
+  const operation = annotationQueue.then(() =>
+    request<T>(path, {
+      ...init,
+      headers: { ...init.headers, "X-Reader-Undo-Session": annotationSession },
+    }),
+  );
+  annotationQueue = operation.then(
+    () => {},
+    () => {},
+  );
+  return operation;
+}
 export const api = {
   chatUsage: (id: string) =>
     request<ProcessingUsage>(
@@ -299,7 +316,7 @@ export const api = {
       "kind" | "location" | "quote" | "note" | "color"
     >,
   ) =>
-    request<components["schemas"]["SavedAnnotation"]>(
+    annotationRequest<components["schemas"]["SavedAnnotation"]>(
       `/api/documents/${id}/annotations`,
       {
         method: "POST",
@@ -307,10 +324,13 @@ export const api = {
       },
     ),
   updateAnnotationNote: (id: string, annotation: string, note: string) =>
-    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
-      method: "PATCH",
-      body: JSON.stringify({ note }),
-    }),
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ note }),
+      },
+    ),
   updateAnnotation: (
     id: string,
     annotation: string,
@@ -322,10 +342,13 @@ export const api = {
       tags?: string[];
     },
   ) =>
-    request<Annotation>(`/api/documents/${id}/annotations/${annotation}`, {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    }),
+    annotationRequest<Annotation>(
+      `/api/documents/${id}/annotations/${annotation}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    ),
   documentNote: (id: string) =>
     request<{ body: string; updatedAt?: string }>(
       `/api/documents/${encodeURIComponent(id)}/note`,
@@ -335,8 +358,13 @@ export const api = {
       `/api/documents/${encodeURIComponent(id)}/note`,
       { method: "PUT", body: JSON.stringify({ body }) },
     ),
+  undoAnnotation: (id: string) =>
+    annotationRequest<{ undone: boolean; annotations: Annotation[] }>(
+      `/api/documents/${encodeURIComponent(id)}/annotations/undo`,
+      { method: "POST" },
+    ),
   removeAnnotation: (id: string, annotation: string) =>
-    request<void>(`/api/documents/${id}/annotations/${annotation}`, {
+    annotationRequest<void>(`/api/documents/${id}/annotations/${annotation}`, {
       method: "DELETE",
     }),
   search: (id: string, query: string) =>

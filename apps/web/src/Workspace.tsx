@@ -99,6 +99,7 @@ import { contextReferences } from "./references";
 import { ReferenceNavigation } from "./reference-navigation";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { AnnotationToolbar, annotationLabels } from "./AnnotationToolbar";
+import { useAnnotationUndo } from "./useAnnotationUndo";
 import { useAnnotationDeletion } from "./useAnnotationDeletion";
 import {
   activeAnnotation,
@@ -490,6 +491,17 @@ export function Workspace({
       setNoteSaving(false);
     }
   };
+  useAnnotationUndo(
+    doc.id,
+    (items) => {
+      setAnnotations(items);
+      setAnnotationTarget(null);
+      adapter?.clearSelection();
+      setSelection(null);
+    },
+    () => !annotationsLoaded || annotationSaving.current || noteOpen,
+  );
+
   const selectedAnnotation = annotationTarget
     ? activeAnnotation(annotations, annotationTarget.ids)
     : undefined;
