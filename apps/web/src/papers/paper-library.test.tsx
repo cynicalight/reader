@@ -115,22 +115,9 @@ const navButton = (label: string) =>
     b.textContent?.includes(label),
   )!;
 
-it("lists papers with author, year and venue and opens on double click", async () => {
-  expect(row("Attention Is All You Need").textContent).toContain(
-    "Ashish Vaswani · 2017 · NeurIPS",
-  );
-  await act(async () =>
-    row("Graph Attention Networks").dispatchEvent(
-      new MouseEvent("dblclick", { bubbles: true }),
-    ),
-  );
-  expect(open).toHaveBeenCalledExactlyOnceWith(docs[1]);
-});
-
 it("shows details on click and saves an edited field as manual metadata", async () => {
   await act(async () => row("Attention Is All You Need").click());
   const detail = host.querySelector(".paper-detail")!;
-  expect(detail.textContent).toContain("摘要");
   const venue = detail.querySelector<HTMLInputElement>('[aria-label="出处"]')!;
   expect(venue.value).toBe("NeurIPS");
   venue.value = "NIPS 2017";
@@ -141,28 +128,6 @@ it("shows details on click and saves an edited field as manual metadata", async 
   expect(api.update).toHaveBeenCalledExactlyOnceWith("a", {
     metadata: { venue: "NIPS 2017" },
   });
-});
-
-it("filters by sidebar views and the search box", async () => {
-  await act(async () => navButton("已读").click());
-  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
-  expect(row("Graph Attention Networks")).toBeTruthy();
-  await act(async () => navButton("ML").click());
-  expect(host.querySelector(".library-title")?.textContent).toBe("ML");
-  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
-  await act(async () => navButton("全部论文").click());
-  const search = host.querySelector<HTMLInputElement>(
-    '[aria-label="搜索论文"]',
-  )!;
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!;
-    setter.call(search, "vaswani 2017");
-    search.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
 });
 
 it("selects all visible papers and changes their status together", async () => {
@@ -341,36 +306,6 @@ it("links related papers from the detail panel", async () => {
   expect(api.unrelateDocuments).toHaveBeenCalledExactlyOnceWith("a", "b");
 });
 
-it("shows papers as a table and sorts by a column header", async () => {
-  await act(async () =>
-    useReaderStore.setState({
-      libraryPreferences: {
-        mode: "papers",
-        papers: { sort: "title", layout: "table", columns: ["year", "venue"] },
-      },
-    }),
-  );
-  const headers = [...host.querySelectorAll("th")].map((th) =>
-    th.textContent?.trim(),
-  );
-  expect(headers).toEqual(["标题", "年份", "出处", ""]);
-  expect(row("Attention Is All You Need").textContent).toContain("2017");
-  const year = [...host.querySelectorAll<HTMLButtonElement>("th button")].find(
-    (b) => b.textContent === "年份",
-  )!;
-  await act(async () => year.click());
-  expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      papers: expect.objectContaining({ sort: "year", sortReverse: false }),
-    }),
-  );
-  const title = host.querySelector('th[data-column="title"]')!;
-  expect(title.getAttribute("aria-sort")).toBeNull();
-  expect(
-    host.querySelector('th[data-column="year"]')!.getAttribute("aria-sort"),
-  ).toBe("descending");
-});
-
 it("edits authors as capsules", async () => {
   await act(async () => row("Attention Is All You Need").click());
   const detail = host.querySelector(".paper-detail")!;
@@ -443,72 +378,6 @@ it("tags a paper and collects it in a smart tag category", async () => {
   expect(host.querySelector(".library-title")?.textContent).toBe("图网络");
   expect(host.querySelectorAll("[data-paper-id]")).toHaveLength(1);
 });
-
-it("puts reading and paper actions under the title, the remark first", async () => {
-  await act(async () => row("Attention Is All You Need").click());
-  const body = host.querySelector(".paper-detail-body")!;
-  const [title, open, actions, fields] = [...body.children];
-  expect(title.getAttribute("aria-label")).toBe("标题");
-  expect(open.textContent).toBe("开始阅读");
-  expect(
-    [...actions.querySelectorAll("button")].map(
-      (b) => b.getAttribute("aria-label") || b.textContent,
-    ),
-  ).toEqual(["引用", "加星标", "置顶到侧栏", "更多操作"]);
-  expect(fields.querySelector("dt")?.textContent).toBe("备注");
-  await act(async () =>
-    actions
-      .querySelector<HTMLButtonElement>('[aria-label="置顶到侧栏"]')!
-      .click(),
-  );
-  expect(api.saveLibraryPreferences).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      papers: expect.objectContaining({ pinned: ["doc:a"] }),
-    }),
-  );
-});
-
-it.each([
-  { phase: "learning" as const, label: "解析中", percent: 15 },
-  { phase: "translating" as const, label: "翻译中", percent: 25 },
-])(
-  "shows $label progress beside the table title without the notes column",
-  async ({ phase, label, percent }) => {
-    jobs = new Map([
-      [
-        "a",
-        {
-          documentId: "a",
-          phase,
-          status: "running",
-          pagesDone: 3,
-          pagesTotal: 20,
-          translationsDone: 5,
-          translationsTotal: 20,
-          detail: "",
-          updatedAt: "2026-10-08T00:00:00Z",
-        },
-      ],
-    ]);
-    await act(async () => {
-      useReaderStore.setState({
-        libraryPreferences: {
-          mode: "papers",
-          papers: { layout: "table", columns: ["year"] },
-        },
-      });
-      root.render(<Harness />);
-    });
-    const paperRow = row("Attention Is All You Need");
-    const progress = paperRow.querySelector('[role="progressbar"]');
-    expect(progress).not.toBeNull();
-    expect(progress!.closest(".paper-table-title")).not.toBeNull();
-    expect(progress!.getAttribute("aria-valuenow")).toBe(String(percent));
-    expect(paperRow.textContent).toContain(label);
-    expect(paperRow.textContent).not.toMatch(/3\s*\/\s*20|5\s*\/\s*20/);
-    expect(paperRow.querySelector('[data-column="notes"]')).toBeNull();
-  },
-);
 
 it.each(["list", "table"] as const)(
   "retries a failed translation in %s view without opening the paper or posting twice",

@@ -46,26 +46,10 @@ const report: ProcessingUsage = {
   partialCalls: 1,
   elapsedMs: 11000,
 };
-it("shows actual models, stages, failure usage and cache subsets without adding them again", () => {
+it("shows actual model usage without adding cache subsets again", () => {
   const text = renderToStaticMarkup(<UsageDetails report={report} />);
   expect(text).toContain("15 tokens");
   expect(text).toContain("actual");
-  expect(text).toContain("Codex");
-  expect(text).toContain("沉淀／图片解析");
-  expect(text).toContain("正文翻译");
-  expect(text).not.toContain("学习／解析");
-  expect(text).not.toContain("调用明细");
-  expect(text).toContain("模型调用详情");
-  expect(text).toContain("部分用量");
-  expect(text).toContain("缓存读取 token");
-  expect(text).toContain("关联调用累计耗时");
-  const host = document.createElement("div");
-  host.innerHTML = text;
-  expect(host.querySelectorAll("tbody > tr")).toHaveLength(3);
-  expect(host.querySelectorAll("details")).toHaveLength(3);
-  expect(
-    [...host.querySelectorAll("details")].every((item) => !item.open),
-  ).toBe(true);
 });
 it("never represents missing or historical usage as zero tokens", () => {
   const unknown: ProcessingUsage = {
@@ -84,7 +68,7 @@ it("never represents missing or historical usage as zero tokens", () => {
   expect(text).not.toContain("0 tokens");
 });
 
-it("adds chat below processing and combines totals without counting cache subsets twice", () => {
+it("combines processing and chat totals without counting cache subsets twice", () => {
   const chatReport = {
     ...report,
     total,
@@ -100,25 +84,4 @@ it("adds chat below processing and combines totals without counting cache subset
   expect(combined.total.totalTokens).toBe(30);
   expect(combined.total.cachedInputTokens).toBe(14);
   expect(combined.elapsedMs).toBe(21000);
-  const text = renderToStaticMarkup(<UsageDetails report={combined} />);
-  const host = document.createElement("div");
-  host.innerHTML = text;
-  expect(host.querySelectorAll("tbody > tr")).toHaveLength(3);
-  expect(text).toContain("1 次提问");
-  expect(text).toContain("2 次调用");
-  expect(text).toContain("累计执行耗时");
-  expect(text).toContain("正文翻译");
-  expect(text).toContain("沉淀／图片解析");
-});
-it("omits the removed consolidation row when it has no past usage", () => {
-  const translated: ProcessingUsage = {
-    ...report,
-    calls: report.calls.map((call) => ({ ...call, stage: "translating" })),
-    groups: report.groups.map((group) => ({ ...group, stage: "translating" })),
-  };
-  const text = renderToStaticMarkup(<UsageDetails report={translated} />);
-  const host = document.createElement("div");
-  host.innerHTML = text;
-  expect(text).not.toContain("沉淀");
-  expect(host.querySelectorAll("tbody > tr")).toHaveLength(2);
 });

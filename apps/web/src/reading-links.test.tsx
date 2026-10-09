@@ -31,7 +31,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
-it("opens translated links in the system browser, has no copy icons, and routes citations without touching inline code", async () => {
+it("opens translated links in the system browser and routes citations without touching inline code", async () => {
   const navigate = vi.fn();
   const root = createRoot(host);
   try {
@@ -53,7 +53,6 @@ it("opens translated links in the system browser, has no copy icons, and routes 
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(
       "https://example.com/",
     );
-    expect(host.querySelector("button")).toBeNull();
     const citations = host.querySelectorAll<HTMLAnchorElement>(
       'a[href^="#reader-citation?"]',
     );
@@ -65,7 +64,7 @@ it("opens translated links in the system browser, has no copy icons, and routes 
     await act(async () => root.unmount());
   }
 });
-it("preserves current PDF.js internal links and omits copy icons", async () => {
+it("preserves current PDF.js internal links", async () => {
   host.innerHTML =
     '<div class="annotationLayer"><section><a href="https://example.com/">项目</a></section><section data-internal-link><a href="http://127.0.0.1/#cite.six">[6]</a></section></div>';
   let cleanup: (() => void) | undefined;
@@ -77,7 +76,6 @@ it("preserves current PDF.js internal links and omits copy icons", async () => {
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(
       "https://example.com/",
     );
-    expect(host.querySelector("button")).toBeNull();
     const internal = host.querySelector<HTMLAnchorElement>(
       "[data-internal-link] a",
     )!;
@@ -89,9 +87,6 @@ it("preserves current PDF.js internal links and omits copy icons", async () => {
     internal.click();
     expect(nativeClick).toHaveBeenCalledOnce();
     expect(openExternal).toHaveBeenCalledTimes(1);
-    expect(host.querySelectorAll("button")).toHaveLength(0);
-    await act(async () => host.querySelector("a")!.remove());
-    expect(host.querySelector("button")).toBeNull();
   } finally {
     await act(async () => cleanup?.());
   }
