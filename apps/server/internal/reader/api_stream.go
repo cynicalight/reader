@@ -23,37 +23,55 @@ func invokeAPI(ctx context.Context, c APIConnection, in AIInput, delta func(stri
 	return r.Text, e
 }
 func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {
-	// Respect the request-specific generation deadline (longer for batches).
-	if _, bounded := ctx.Deadline(); !bounded {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
-		defer cancel()
-	}
-	c, in := a.config, req.Input
-	if e := validateAPI(c); e != nil {
+	if e := validateAPI(a.config); e != nil {
 		return GenerateResult{}, generationError(ErrorConfiguration, e.Error())
 	}
+	return streamCompletion(ctx, a.config, completionRequest{Model: a.config.Model}, req.Input, emit)
+}
+
+type completionMessage struct {
+	Role    string `json:"role"`
+	Content any    `json:"content"`
+}
+
+// History holds earlier completed turns of the same conversation; the new user
+// turn is appended after it. Effort is omitted unless the model advertises it.
+type completionRequest struct {
+	Model, Effort string
+	History       []completionMessage
+}
+
+func completionContent(in AIInput) any {
+	if len(in.images()) == 0 {
+		return in.Prompt
+	}
+	parts := []any{map[string]any{"type": "text", "text": in.Prompt}}
+	for _, im := range in.images() {
+		parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageData(im)}})
+	}
+	return parts
+}
+
+// apiRequest sends one authenticated request to the configured endpoint.
+// Redirects are refused so the key never reaches another origin.
+func apiRequest(ctx context.Context, c APIConnection, method, path string, body []byte) (*http.Response, error) {
 	if c.URL == "" {
-		return GenerateResult{}, generationError(ErrorConfiguration, "未配置 API")
+		return nil, generationError(ErrorConfiguration, "未配置 API")
 	}
-	var content any = in.Prompt
-	if len(in.images()) > 0 {
-		parts := []any{map[string]any{"type": "text", "text": in.Prompt}}
-		for _, im := range in.images() {
-			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": imageData(im)}})
-		}
-		content = parts
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
 	}
-	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": []any{
-		map[string]any{"role": "system", "content": readerSystemPrompt},
-		map[string]any{"role": "user", "content": content},
-	}, "stream": true, "n": 1, "stream_options": map[string]bool{"include_usage": true}})
-	request, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.URL, "/")+"/chat/completions", bytes.NewReader(body))
+	request, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.URL, "/")+path, reader)
 	if e != nil {
-		return GenerateResult{}, generationError(ErrorConfiguration, "API 地址无效")
+		return nil, generationError(ErrorConfiguration, "API 地址无效")
 	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		// Every request with a body is a streamed generation.
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "text/event-stream")
+	}
 	if c.Key != "" {
 		request.Header.Set("Authorization", "Bearer "+c.Key)
 	}
@@ -63,12 +81,12 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 	response, e := client.Do(request)
 	if e != nil {
 		if ctx.Err() != nil {
-			return GenerateResult{}, ctx.Err()
+			return nil, ctx.Err()
 		}
-		return GenerateResult{}, generationError(ErrorNetwork, "API 网络请求失败或超时")
+		return nil, generationError(ErrorNetwork, "API 网络请求失败或超时")
 	}
-	defer response.Body.Close()
 	if response.StatusCode != 200 {
+		response.Body.Close()
 		kind := ErrorUpstream
 		if response.StatusCode == 401 || response.StatusCode == 403 {
 			kind = ErrorAuthentication
@@ -76,8 +94,30 @@ func (a apiAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(P
 		if response.StatusCode == 429 {
 			kind = ErrorLimit
 		}
-		return GenerateResult{}, generationError(kind, fmt.Sprintf("API 返回 HTTP %d", response.StatusCode))
+		return nil, generationError(kind, fmt.Sprintf("API 返回 HTTP %d", response.StatusCode))
 	}
+	return response, nil
+}
+
+func streamCompletion(ctx context.Context, c APIConnection, req completionRequest, in AIInput, emit func(ProviderEvent) error) (GenerateResult, error) {
+	// Respect the request-specific generation deadline (longer for batches).
+	if _, bounded := ctx.Deadline(); !bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
+	}
+	messages := append([]completionMessage{{"system", readerSystemPrompt}}, req.History...)
+	messages = append(messages, completionMessage{"user", completionContent(in)})
+	payload := map[string]any{"model": req.Model, "messages": messages, "stream": true, "n": 1, "stream_options": map[string]bool{"include_usage": true}}
+	if req.Effort != "" {
+		payload["reasoning_effort"] = req.Effort
+	}
+	body, _ := json.Marshal(payload)
+	response, e := apiRequest(ctx, c, "POST", "/chat/completions", body)
+	if e != nil {
+		return GenerateResult{}, e
+	}
+	defer response.Body.Close()
 	media, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if media != "text/event-stream" {
 		return GenerateResult{}, generationError(ErrorProtocol, "API 未返回 SSE 流；此连接只支持 Chat Completions 流式协议")

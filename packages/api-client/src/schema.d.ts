@@ -630,7 +630,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {unknown} */
-                        provider: "codex" | "claude" | "kimi";
+                        provider: "codex" | "claude" | "kimi" | "api";
                         attachments?: string[];
                         prompt: string;
                         context: string;
@@ -1166,7 +1166,7 @@ export interface paths {
         get: {
             parameters: {
                 query: {
-                    provider: "codex" | "claude" | "kimi";
+                    provider: "codex" | "claude" | "kimi" | "api";
                 };
                 header?: never;
                 path?: never;
@@ -2652,7 +2652,7 @@ export interface components {
         };
         Provider: {
             /** @enum {string} */
-            id: "codex" | "claude" | "kimi";
+            id: "codex" | "claude" | "kimi" | "api";
             installed: boolean;
             authenticated: boolean;
             status: string;
@@ -2787,6 +2787,8 @@ export interface components {
                     [key: string]: components["schemas"]["ReasoningEffort"];
                 };
             };
+            /** @description OpenAI-compatible endpoint of the api agent. Its models are chosen in models and translationModels; model here is unused. */
+            api: components["schemas"]["APIConnection"];
             textAPI: components["schemas"]["APIConnection"];
             imageAPI: components["schemas"]["APIConnection"];
             capabilities: {

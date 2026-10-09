@@ -25,17 +25,33 @@ func (a *translationCodexAdapter) close() {
 	}
 }
 
-func (s *Server) translationService(config AIConfig) (*GenerationService, *translationCodexAdapter) {
+// translationSessions are the per-worker conversations that persist across
+// batches. Close discards them when the worker ends.
+type translationSessions struct {
+	codex *translationCodexAdapter
+	api   *apiTranslationSession
+}
+
+func (t translationSessions) close() {
+	t.codex.close()
+	t.api.close()
+}
+
+func (s *Server) translationService(config AIConfig) (*GenerationService, translationSessions) {
 	service := s.taskGenerationService(config, taskTranslation)
 	connection := service.connections["codex"]
-	adapter := &translationCodexAdapter{
+	codex := &translationCodexAdapter{
 		configuredCLIAdapter: connection.Adapter.(codexChatAdapter).configuredCLIAdapter,
 		root:                 s.Store.Root,
 	}
-	connection.Adapter = adapter
+	connection.Adapter = codex
 	service.connections["codex"] = connection
+	connection = service.connections["api"]
+	api := &apiTranslationSession{apiAgentAdapter: connection.Adapter.(apiAgentAdapter)}
+	connection.Adapter = api
+	service.connections["api"] = connection
 	service.timeout = translationBatchTimeout
-	return service, adapter
+	return service, translationSessions{codex, api}
 }
 
 func (a *translationCodexAdapter) Stream(ctx context.Context, req GenerateRequest, emit func(ProviderEvent) error) (GenerateResult, error) {

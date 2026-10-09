@@ -35,6 +35,10 @@ func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	models, err := s.modelCatalog(ctx, provider)
+	if err != nil && provider == "api" {
+		fail(w, 502, "无法获取 API 模型列表："+err.Error())
+		return
+	}
 	if err != nil {
 		fail(w, 502, "无法获取模型列表，请确认 Agent 已登录后重试")
 		return
@@ -45,7 +49,7 @@ func (s *Server) agentModels(w http.ResponseWriter, r *http.Request) {
 // Model discovery only initializes the installed CLI's protocol. It never sends
 // a user prompt, starts a model turn, or reads the CLI's credential files.
 func discoverModels(ctx context.Context, root, provider string) ([]AgentModel, error) {
-	if !validAgent(provider) {
+	if !validAgent(provider) || provider == "api" {
 		return nil, errors.New("unknown agent")
 	}
 	work, err := os.MkdirTemp(filepath.Join(root, "ai-work"), "models-")

@@ -46,6 +46,7 @@ beforeEach(() => {
     primary: "codex",
     models: {},
     capabilities: {},
+    api: { url: "", model: "", hasKey: false },
     textAPI: { url: "", model: "", hasKey: false },
     imageAPI: { url: "", model: "", hasKey: false },
   };

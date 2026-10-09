@@ -7,7 +7,7 @@
 | 项目 | 本轮固定约定 |
 | --- | --- |
 | 接口与认证 | `POST /api/documents/{documentId}/chat`；Reader 会话 Bearer token；JSON 请求。不是 Agent API Key。 |
-| 必填请求字段 | `provider: "codex" \| "claude" \| "kimi"`、`prompt: string`、`context: string`；context 可为空。 |
+| 必填请求字段 | `provider: "codex" \| "claude" \| "kimi" \| "api"`、`prompt: string`、`context: string`；context 可为空。 |
 | 可选请求字段 | `references: SourceReference[]`、`attachments: string[]`，省略等价于空数组；附件是当前文档块 ID。不新增 connectionId 或客户端模型/认证字段。 |
 | 事件与 JSON data | `status {status:"reading"\|"reading-image"}`、`delta {text:string}`、`fallback {message:string}`、`error {error:string}`、`done {ok:true}`。仍使用独立 SSE event 行，不另包 type/payload 外壳。 |
 | 正文 | delta 仅为新增原始文本，保留空格/换行；按到达顺序追加。不是累计全文、HTML 或 AST，不携带推理/工具/日志。 |
@@ -40,7 +40,7 @@ Content-Type: application/json
 import type { SourceReference } from "@reader/core";
 
 type ChatRequest = {
-  provider: "codex" | "claude" | "kimi";
+  provider: "codex" | "claude" | "kimi" | "api";
   prompt: string;
   context: string;
   references?: SourceReference[];
@@ -48,7 +48,7 @@ type ChatRequest = {
 };
 ```
 
-`claude` 对应 Claude Code，`kimi` 对应 Kimi Code。`references` 用于保存来源引用；EPUB 使用自身的 `href`、`locator` 等位置字段，PDF 使用页码，类型见 [reader-core](../packages/reader-core/src/index.ts)。
+`claude` 对应 Claude Code，`kimi` 对应 Kimi Code，`api` 对应设置中填写的 OpenAI 兼容 API（地址与 Key）。`references` 用于保存来源引用；EPUB 使用自身的 `href`、`locator` 等位置字段，PDF 使用页码，类型见 [reader-core](../packages/reader-core/src/index.ts)。
 
 `attachments` 是当前文档已有图片块的 ID，例如 `p1-b1`，最多 4 项。后端读取并发送图片；前端无需在此请求中上传 base64。`prompt` 必须非空，最多 16,000 UTF-8 字节；`context` 最多 64,000 UTF-8 字节。没有摘录时传空字符串。
 
@@ -140,6 +140,7 @@ data: {"ok":true}
 | `codex`  | `codex app-server` 的 `item/agentMessage/delta`                                                    | `delta {text}`   |
 | `claude` | Claude Code `stream-json` 的 `content_block_delta / text_delta`，启用 `--include-partial-messages` | `delta {text}`   |
 | `kimi`   | Kimi Code ACP 的 `session/update / agent_message_chunk`                                            | `delta {text}`   |
+| `api`    | OpenAI Chat Completions SSE 中 choice 0 的 `delta.content`；`reasoning_content` 不输出                | `delta {text}`   |
 
 前端无需解析上述 CLI 协议，也无需为不同 Agent 编写 SSE 分支。纯文字及带图片请求都使用相同事件结构。Codex 的完整消息事件仅用于补齐未发送后缀与一致性校验，不会重复发送已有内容。
 

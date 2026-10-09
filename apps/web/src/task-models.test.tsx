@@ -48,6 +48,7 @@ beforeEach(() => {
     models: { claude: "opus" },
     efforts: { claude: { opus: "high" } },
     capabilities: {},
+    api: { url: "", model: "", hasKey: false },
     textAPI: { url: "", model: "", hasKey: false },
     imageAPI: { url: "", model: "", hasKey: false },
   };

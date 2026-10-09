@@ -43,9 +43,12 @@ type AIConfig struct {
 	// Reader picks the fast tier from the live catalog.
 	TranslationModels  map[string]string            `json:"translationModels,omitempty"`
 	TranslationEfforts map[string]map[string]string `json:"translationEfforts,omitempty"`
-	TextAPI            APIConnection                `json:"textAPI"`
-	ImageAPI           APIConnection                `json:"imageAPI"`
-	Capabilities       map[string]Capability        `json:"capabilities"`
+	// API is the endpoint of the "api" agent. Its models live in Models and
+	// TranslationModels like the CLI agents; API.Model is unused.
+	API          APIConnection         `json:"api"`
+	TextAPI      APIConnection         `json:"textAPI"`
+	ImageAPI     APIConnection         `json:"imageAPI"`
+	Capabilities map[string]Capability `json:"capabilities"`
 }
 type savedConfig struct {
 	Config       AIConfig          `json:"config"`
@@ -75,7 +78,7 @@ type AIResult struct {
 	Fallback bool
 }
 
-func validAgent(p string) bool { return p == "codex" || p == "claude" || p == "kimi" }
+func validAgent(p string) bool { return p == "codex" || p == "claude" || p == "kimi" || p == "api" }
 func (s *Server) aiConfig() AIConfig {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
@@ -144,6 +147,8 @@ func configPrint(c AIConfig, p string) string {
 		value = c.TextAPI
 	} else if p == "image-api" {
 		value = c.ImageAPI
+	} else if p == "api" {
+		value = []string{p, c.API.URL, c.API.Key, c.Models[p]}
 	} else {
 		path, _ := exec.LookPath(p)
 		value = []string{p, path, c.Models[p]}
@@ -157,6 +162,8 @@ func capable(c AIConfig, p string, vision bool) bool {
 	return v.Fingerprint == configPrint(c, p) && v.Text && (!vision || v.Vision)
 }
 func publicConfig(c AIConfig) AIConfig {
+	c.API.HasKey = c.API.Key != ""
+	c.API.Key = ""
 	c.TextAPI.HasKey = c.TextAPI.Key != ""
 	c.TextAPI.Key = ""
 	c.ImageAPI.HasKey = c.ImageAPI.Key != ""
@@ -167,15 +174,29 @@ func validateAPI(c APIConnection) error {
 	if c.URL == "" && c.Model == "" && c.Key == "" {
 		return nil
 	}
-	u, e := url.Parse(c.URL)
+	if e := validateAPIURL(c.URL); e != nil {
+		return e
+	}
+	if strings.TrimSpace(c.Model) == "" {
+		return errors.New("请填写 API 模型")
+	}
+	return nil
+}
+
+// The API agent chooses models per task, so only the endpoint is required.
+func validateAgentAPI(c APIConnection) error {
+	if c.URL == "" && c.Key == "" {
+		return nil
+	}
+	return validateAPIURL(c.URL)
+}
+func validateAPIURL(raw string) error {
+	u, e := url.Parse(raw)
 	if e != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("API 地址无效")
 	}
 	if u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")) {
 		return errors.New("API 需要 HTTPS，本机服务可使用 HTTP")
-	}
-	if strings.TrimSpace(c.Model) == "" {
-		return errors.New("请填写 API 模型")
 	}
 	return nil
 }
@@ -242,8 +263,19 @@ func (s *Server) putAIConfig(w http.ResponseWriter, r *http.Request) {
 	if c.ImageAPI.Key == "" && c.ImageAPI.HasKey {
 		c.ImageAPI.Key = old.ImageAPI.Key
 	}
+	if c.API.Key == "" && c.API.HasKey {
+		c.API.Key = old.API.Key
+	}
+	c.API.URL = strings.TrimSpace(c.API.URL)
+	c.API.Key = strings.TrimSpace(c.API.Key)
+	c.API.Model = ""
+	c.API.HasKey = false
 	c.TextAPI.HasKey = false
 	c.ImageAPI.HasKey = false
+	if e := validateAgentAPI(c.API); e != nil {
+		fail(w, 400, e.Error())
+		return
+	}
 	for _, a := range []APIConnection{c.TextAPI, c.ImageAPI} {
 		if e := validateAPI(a); e != nil {
 			fail(w, 400, e.Error())
@@ -349,6 +381,9 @@ func (s *Server) probeConnection(parent context.Context, c AIConfig, p string, i
 		}
 	}
 	var adapter Adapter = cliAdapter{s.Store.Root, p, model}
+	if p == "api" {
+		adapter = apiAgentAdapter{c.API, model, "", taskChat, s.apiCatalog(c.API)}
+	}
 	if p == "text-api" {
 		adapter = apiAdapter{c.TextAPI}
 	}

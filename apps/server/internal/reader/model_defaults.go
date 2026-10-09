@@ -23,11 +23,14 @@ var taskFamilies = map[modelTask]map[string][]string{
 		// is a default; users can still pick them.
 		"codex":  {"sol", "terra"},
 		"claude": {"opus", "sonnet"},
+		// API endpoints without a matching tier fall back to their first model.
+		"api": {"pro", "max", "plus"},
 	},
 	taskTranslation: {
 		"codex":  {"luna", "mini", "terra"},
 		"claude": {"sonnet", "haiku"},
 		"kimi":   {"flash", "turbo", "lite", "mini"},
+		"api":    {"flash", "turbo", "lite", "mini"},
 		"":       {"luna", "sonnet", "flash", "mini", "lite", "haiku"},
 	},
 }

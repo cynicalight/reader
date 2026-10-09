@@ -861,7 +861,10 @@
                               "properties":
                                 {
                                   "provider":
-                                    { "enum": ["codex", "claude", "kimi"] },
+                                    {
+                                      "enum":
+                                        ["codex", "claude", "kimi", "api"],
+                                    },
                                   "attachments":
                                     {
                                       "type": "array",
@@ -1416,7 +1419,10 @@
                     "name": "provider",
                     "required": true,
                     "schema":
-                      { "type": "string", "enum": ["codex", "claude", "kimi"] },
+                      {
+                        "type": "string",
+                        "enum": ["codex", "claude", "kimi", "api"],
+                      },
                   },
                 ],
               "responses":
@@ -3221,7 +3227,10 @@
               "properties":
                 {
                   "id":
-                    { "type": "string", "enum": ["codex", "claude", "kimi"] },
+                    {
+                      "type": "string",
+                      "enum": ["codex", "claude", "kimi", "api"],
+                    },
                   "installed": { "type": "boolean" },
                   "authenticated": { "type": "boolean" },
                   "status": { "type": "string" },
@@ -3520,6 +3529,11 @@
                             { "$ref": "#/components/schemas/ReasoningEffort" },
                         },
                     },
+                  "api":
+                    {
+                      "$ref": "#/components/schemas/APIConnection",
+                      "description": "OpenAI-compatible endpoint of the api agent. Its models are chosen in models and translationModels; model here is unused.",
+                    },
                   "textAPI": { "$ref": "#/components/schemas/APIConnection" },
                   "imageAPI": { "$ref": "#/components/schemas/APIConnection" },
                   "capabilities":
@@ -3530,7 +3544,14 @@
                     },
                 },
               "required":
-                ["primary", "models", "textAPI", "imageAPI", "capabilities"],
+                [
+                  "primary",
+                  "models",
+                  "api",
+                  "textAPI",
+                  "imageAPI",
+                  "capabilities",
+                ],
             },
           "TranslationSentence":
             {

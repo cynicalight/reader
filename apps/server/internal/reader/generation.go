@@ -95,7 +95,7 @@ func (s *Server) taskGenerationService(config AIConfig, task modelTask) *Generat
 			log.Printf("cannot persist %s capability failure: %v", provider, saveErr)
 		}
 	}
-	for _, p := range []string{"codex", "claude", "kimi", "text-api", "image-api"} {
+	for _, p := range []string{"codex", "claude", "kimi", "api", "text-api", "image-api"} {
 		model := models[p]
 		level := efforts[p][model]
 		if level == "" {
@@ -105,6 +105,9 @@ func (s *Server) taskGenerationService(config AIConfig, task modelTask) *Generat
 		var adapter Adapter = cli
 		if p == "codex" {
 			adapter = codexChatAdapter{cli, &s.codexChat}
+		}
+		if p == "api" {
+			adapter = apiAgentAdapter{config.API, model, level, task, s.apiCatalog(config.API)}
 		}
 		if p == "text-api" {
 			adapter = apiAdapter{config.TextAPI}

@@ -386,7 +386,7 @@ export function locationLabel(location?: DocumentLocation): string {
     : `章节进度 ${Math.round((location.progression ?? 0) * 100)}%`;
 }
 export interface Provider {
-  id: "codex" | "claude" | "kimi";
+  id: "codex" | "claude" | "kimi" | "api";
   installed: boolean;
   authenticated: boolean;
   status: string;
@@ -493,6 +493,8 @@ export interface AIConfig {
   efforts?: Record<string, Record<string, ReasoningEffort>>;
   translationModels?: Record<string, string>;
   translationEfforts?: Record<string, Record<string, ReasoningEffort>>;
+  /** Endpoint of the "api" agent; its models are chosen per task above. */
+  api: APIConnection;
   textAPI: APIConnection;
   imageAPI: APIConnection;
   capabilities: Record<string, AICapability>;

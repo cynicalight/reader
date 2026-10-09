@@ -13,15 +13,24 @@ type modelCatalogEntry struct {
 // Reuse metadata already loaded by the picker. Never hold a lock while a CLI
 // starts; canceled callers should not block another conversation.
 func (s *Server) modelCatalog(ctx context.Context, provider string) ([]AgentModel, error) {
+	if provider == "api" {
+		return s.apiCatalog(s.aiConfig().API)(ctx, provider)
+	}
+	return s.cachedCatalog(ctx, provider, func(ctx context.Context) ([]AgentModel, error) {
+		return discoverModels(ctx, s.Store.Root, provider)
+	})
+}
+
+func (s *Server) cachedCatalog(ctx context.Context, key string, discover func(context.Context) ([]AgentModel, error)) ([]AgentModel, error) {
 	s.modelMu.Lock()
-	entry, ok := s.modelCache[provider]
+	entry, ok := s.modelCache[key]
 	s.modelMu.Unlock()
 	if ok && time.Now().Before(entry.expires) {
 		return entry.models, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	models, err := discoverModels(ctx, s.Store.Root, provider)
+	models, err := discover(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +38,7 @@ func (s *Server) modelCatalog(ctx context.Context, provider string) ([]AgentMode
 	if s.modelCache == nil {
 		s.modelCache = map[string]modelCatalogEntry{}
 	}
-	s.modelCache[provider] = modelCatalogEntry{models: models, expires: time.Now().Add(5 * time.Minute)}
+	s.modelCache[key] = modelCatalogEntry{models: models, expires: time.Now().Add(5 * time.Minute)}
 	s.modelMu.Unlock()
 	return models, nil
 }
