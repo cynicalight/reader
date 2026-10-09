@@ -335,6 +335,21 @@ it("follows the latest translated position after an earlier chapter navigation f
   );
 });
 
+it("uses independent translation typography even when old preferences request pagination", async () => {
+  await renderView({
+    ...defaultTheme,
+    epubFlow: "paginated",
+    fontSize: 1.5,
+    translationFontSize: 1.1,
+    translationFontFamily: "sans-serif",
+    translationFontWeight: "bold",
+  });
+  const pane = host.querySelector<HTMLElement>(".translation-document")!;
+  expect(pane.style.fontSize).toBe("1.1rem");
+  expect(pane.style.fontFamily).toBe("inherit");
+  expect(pane.style.fontWeight).toBe("600");
+  expect(host.querySelector(".pdf-page-navigation")).toBeNull();
+});
 it("focuses the matching block slice when a translated sentence is selected", async () => {
   await click("原文译文");
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
