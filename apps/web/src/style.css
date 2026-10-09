@@ -895,6 +895,8 @@ kbd {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .paper-column-resizer::after,
+  .paper-detail-resizer::after,
   .chat-message-actions,
   .chat-copy-button {
     transition: none;
@@ -2383,6 +2385,7 @@ kbd {
   table-layout: fixed;
 }
 .paper-table th {
+  position: relative;
   height: 32px;
   padding: 0 4px;
   font-size: 12px;
@@ -2407,6 +2410,53 @@ kbd {
 }
 .paper-table th[data-column="status"] {
   width: 72px;
+}
+/* Straddles the right edge of a header cell; the line shows on hover and focus. */
+.paper-column-resizer {
+  position: absolute;
+  top: 6px;
+  right: -4px;
+  bottom: 6px;
+  z-index: 1;
+  width: 7px;
+  outline: none;
+  cursor: col-resize;
+}
+.paper-column-resizer::after,
+.paper-detail-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+.paper-column-resizer:hover::after,
+.paper-detail-resizer:hover::after {
+  background: var(--border);
+}
+.paper-column-resizer:focus-visible::after,
+.paper-detail-resizer:focus-visible::after,
+body[data-resizing]
+  :is(.paper-column-resizer, .paper-detail-resizer):active::after {
+  background: var(--ring);
+}
+.paper-detail-resizer {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 7px;
+  /* Zero net width: the handle overlays the panel border. */
+  margin: 0 -4px 0 -3px;
+  outline: none;
+  cursor: col-resize;
+}
+body[data-resizing],
+body[data-resizing] * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 .paper-table-sort.paper-table-sort {
   gap: 2px;
@@ -2518,7 +2568,9 @@ kbd {
 .paper-detail {
   display: flex;
   flex-direction: column;
-  width: 360px;
+  width: var(--paper-detail-width, 360px);
+  /* Keep room for the paper list however wide the saved panel is. */
+  max-width: calc(100% - 320px);
   flex-shrink: 0;
   min-height: 0;
   overflow-y: auto;
@@ -2680,7 +2732,7 @@ textarea.paper-title-input {
 }
 @media (max-width: 1100px) {
   .paper-detail {
-    width: 300px;
+    width: var(--paper-detail-width, 300px);
   }
   .paper-row .paper-row-meta > span:not(.paper-row-status) {
     display: none;

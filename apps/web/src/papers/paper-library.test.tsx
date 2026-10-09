@@ -421,3 +421,86 @@ it.each(["list", "table"] as const)(
     expect(open).not.toHaveBeenCalled();
   },
 );
+
+const prefs = () => useReaderStore.getState().libraryPreferences.papers ?? {};
+const press = (target: Element, type: string, clientX = 0) =>
+  act(async () => {
+    target.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, button: 0, clientX }),
+    );
+  });
+const fakeWidths = (widths: Record<string, number>) =>
+  vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const key =
+        (this as HTMLElement).dataset?.column ??
+        (this.classList.contains("paper-detail") ? "detail" : "");
+      return { width: widths[key] ?? 0 } as DOMRect;
+    });
+
+it("closes the detail panel when pressing empty library space", async () => {
+  await act(async () => usePaperUI.setState({ selectedId: "a" }));
+  await press(host.querySelector(".paper-detail")!, "pointerdown");
+  expect(usePaperUI.getState().selectedId).toBe("a");
+  await press(host.querySelector(".paper-list-pane")!, "pointerdown");
+  expect(usePaperUI.getState().selectedId).toBeNull();
+  expect(host.querySelector(".paper-detail")).toBeNull();
+});
+
+it("drags the detail panel edge and saves the width once released", async () => {
+  const rects = fakeWidths({ detail: 360 });
+  await act(async () => usePaperUI.setState({ selectedId: "a" }));
+  const edge = host.querySelector<HTMLElement>(
+    '[aria-label="调整论文详情宽度"]',
+  )!;
+  await press(edge, "pointerdown", 600);
+  await press(edge, "pointermove", 500);
+  const body = host.querySelector<HTMLElement>(".paper-library-body")!;
+  expect(body.style.getPropertyValue("--paper-detail-width")).toBe("460px");
+  expect(prefs().detailWidth).toBeUndefined();
+  await press(edge, "pointerup", 500);
+  expect(prefs().detailWidth).toBe(460);
+  expect(api.saveLibraryPreferences).toHaveBeenCalled();
+  await act(async () =>
+    edge.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  expect(prefs().detailWidth).toBe(344);
+  rects.mockRestore();
+});
+
+it("resizes table columns at their shared boundary", async () => {
+  await act(async () =>
+    useReaderStore.setState({
+      libraryPreferences: {
+        mode: "papers",
+        papers: { sort: "title", layout: "table" },
+      },
+    }),
+  );
+  const rects = fakeWidths({ title: 400, authors: 160, year: 64 });
+  const titleEdge = host.querySelector<HTMLElement>(
+    '[aria-label="调整标题列宽度"]',
+  )!;
+  // Widening the title takes the space from the authors column.
+  await press(titleEdge, "pointerdown", 400);
+  await press(titleEdge, "pointermove", 440);
+  expect(
+    host.querySelector<HTMLElement>('th[data-column="authors"]')!.style.width,
+  ).toBe("120px");
+  await press(titleEdge, "pointerup", 440);
+  expect(prefs().columnWidths).toEqual({ authors: 120 });
+  // The last column has no handle: the menu column cannot give up space.
+  expect(host.querySelector('[aria-label="调整状态列宽度"]')).toBeNull();
+  await act(async () =>
+    host
+      .querySelector('[aria-label="调整作者列宽度"]')!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+      ),
+  );
+  expect(prefs().columnWidths).toEqual({ authors: 176, year: 48 });
+  rects.mockRestore();
+});

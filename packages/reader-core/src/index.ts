@@ -144,6 +144,10 @@ export interface PaperLibraryPreferences {
   layout?: "list" | "table";
   /** Visible table columns in order. */
   columns?: PaperColumn[];
+  /** Widths of resized table columns in CSS pixels; the title fills the rest. */
+  columnWidths?: Partial<Record<PaperColumn, number>>;
+  /** Width of the paper detail panel in CSS pixels. */
+  detailWidth?: number;
   /** Look up metadata from the DOI or arXiv ID printed in imported PDFs. */
   autoLookup?: boolean;
   citationStyle?: "gb7714" | "apa" | "bibtex" | "ris" | "csl-json";
