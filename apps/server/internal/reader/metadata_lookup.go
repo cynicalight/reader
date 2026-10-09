@@ -68,7 +68,7 @@ func (s *Server) applyFound(id string, found PaperMetadata, title, source, looku
 			return s.Store.Document(id)
 		}
 	}
-	return Document{}, errors.New("文献信息正在被修改，请重试")
+	return Document{}, errors.New("论文信息正在被修改，请重试")
 }
 
 // firstPagesText returns text from the first two parsed pages, where papers
@@ -145,7 +145,7 @@ func lookupMessage(err error) string {
 	if errors.Is(err, errNoIdentifier) {
 		return err.Error()
 	}
-	return "查找文献信息失败，请检查网络后重试"
+	return "查找论文信息失败，请检查网络后重试"
 }
 
 func (s *Server) lookupMetadata(w http.ResponseWriter, r *http.Request) {

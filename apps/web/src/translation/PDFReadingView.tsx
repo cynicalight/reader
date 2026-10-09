@@ -384,7 +384,7 @@ export function PDFReadingView({
       const target =
         (await engine?.resolveCitation?.(blockId, label)) ??
         numberedReference(blocks, label);
-      if (!target) throw new Error(`未找到参考文献 [${label}] 的跳转位置`);
+      if (!target) throw new Error(`未找到参考论文 [${label}] 的跳转位置`);
       if (facade.current) events.internalLink?.(facade.current.getLocation());
       await go(target);
     } catch (e) {

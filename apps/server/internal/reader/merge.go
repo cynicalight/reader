@@ -190,7 +190,7 @@ func (s *Server) mergeDocuments(w http.ResponseWriter, r *http.Request) {
 	trashed := []string{}
 	for _, d := range others {
 		if _, status, message := s.moveToTrash(r.Context(), d.ID); status != 0 {
-			fail(w, status, "已合并文献信息，但未能把重复的文档移到回收站："+message)
+			fail(w, status, "已合并论文信息，但未能把重复的文档移到回收站："+message)
 			return
 		}
 		trashed = append(trashed, d.ID)

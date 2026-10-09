@@ -12,7 +12,7 @@ export const libraryModes: Record<
   LibraryMode,
   { label: string; description: string }
 > = {
-  papers: { label: "文献库", description: "论文、文献信息与引用" },
+  papers: { label: "论文库", description: "论文、论文信息与引用" },
   books: { label: "图书库", description: "EPUB 与 PDF 书籍、文章" },
 };
 

@@ -673,7 +673,7 @@ export function PaperSidebar({
   const hiddenItems = hidden.filter((key) => hiddenLabel(key));
   return (
     <div className="paper-sidebar">
-      <nav className="space-y-1" aria-label="文献库">
+      <nav className="space-y-1" aria-label="论文库">
         {viewRow("all")}
       </nav>
       {pinnedRows.length > 0 && (

@@ -16,7 +16,7 @@ export type ExportPart =
   | "bookmarks"
   | "chat";
 export const exportParts: Record<ExportPart, string> = {
-  info: "文献信息",
+  info: "论文信息",
   paperNote: "论文笔记",
   notes: "批注",
   highlights: "划线",

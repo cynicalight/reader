@@ -105,7 +105,7 @@ func cleanText(value string, limit int, multiline bool) (string, error) {
 }
 
 var metadataLabels = map[string]string{
-	"itemType": "文献类型", "translatedTitle": "译名", "shortTitle": "短标题", "creators": "作者", "affiliation": "单位",
+	"itemType": "论文类型", "translatedTitle": "译名", "shortTitle": "短标题", "creators": "作者", "affiliation": "单位",
 	"date": "日期", "venue": "出处", "volume": "卷", "issue": "期", "pages": "页码", "publisher": "出版者",
 	"doi": "DOI", "arxiv": "arXiv 编号", "isbn": "ISBN", "url": "链接", "abstract": "摘要", "language": "语言",
 	"remark": "备注",
@@ -115,7 +115,7 @@ var metadataLabels = map[string]string{
 func normalizeMetadataField(key string, raw json.RawMessage) (any, error) {
 	label := metadataLabels[key]
 	if label == "" {
-		return nil, fmt.Errorf("未知文献字段：%s", key)
+		return nil, fmt.Errorf("未知论文字段：%s", key)
 	}
 	if key == "creators" {
 		var creators []Creator
@@ -157,7 +157,7 @@ func normalizeMetadataField(key string, raw json.RawMessage) (any, error) {
 	switch key {
 	case "itemType":
 		if !itemTypes[value] {
-			return nil, errors.New("未知文献类型")
+			return nil, errors.New("未知论文类型")
 		}
 	case "doi":
 		if value = NormalizeDOI(value); !doiPattern.MatchString(value) {

@@ -341,7 +341,7 @@ export function LibraryDocuments({
                   }
                 >
                   <ArrowRightLeft />
-                  {doc.library === "papers" ? "移到图书库" : "移到文献库"}
+                  {doc.library === "papers" ? "移到图书库" : "移到论文库"}
                 </ContextMenuItem>
               )}
               <ContextMenuSeparator />
