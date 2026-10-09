@@ -318,25 +318,38 @@ export function PDFReadingView({
     const readable = state.current.blocks.filter(
       (b) => !isPDFPageDecoration(b),
     );
+    const linked =
+      location.translation?.blockId ?? location.sentenceLink?.parts[0]?.blockId;
+    const page = readable.filter((b) => b.page === location.page);
+    // Saved selections carry rects rather than x/y; the first marked line
+    // decides the paragraph, never the page origin.
+    const rect = location.rects?.[0];
+    const covering =
+      rect &&
+      page
+        .map((b) => ({ block: b, area: overlap(rect, b.bounds) }))
+        .filter((c) => c.area > 0)
+        .sort((a, b) => b.area - a.area)[0]?.block;
+    const x = location.x ?? (rect ? rect.x + rect.width / 2 : 0),
+      y = location.y ?? (rect ? rect.y + rect.height / 2 : 0);
     return (
-      readable.find((b) => b.id === location.translation?.blockId) ??
-      readable
-        .filter((b) => b.page === location.page)
-        .sort((a, b) => {
-          const distance = (block: PDFBlock) =>
-            Math.max(
-              block.bounds.y - (location.y ?? 0),
-              (location.y ?? 0) - block.bounds.y - block.bounds.height,
-              0,
-            ) +
-            Math.max(
-              block.bounds.x - (location.x ?? 0),
-              (location.x ?? 0) - block.bounds.x - block.bounds.width,
-              0,
-            ) *
-              2;
-          return distance(a) - distance(b);
-        })[0]
+      readable.find((b) => b.id === linked) ??
+      covering ??
+      page.sort((a, b) => {
+        const distance = (block: PDFBlock) =>
+          Math.max(
+            block.bounds.y - y,
+            y - block.bounds.y - block.bounds.height,
+            0,
+          ) +
+          Math.max(
+            block.bounds.x - x,
+            x - block.bounds.x - block.bounds.width,
+            0,
+          ) *
+            2;
+        return distance(a) - distance(b);
+      })[0]
     );
   };
   const go = async (location: DocumentLocation) => {
@@ -366,11 +379,16 @@ export function PDFReadingView({
       );
     }
   };
+  const focus = async (location: DocumentLocation) => {
+    const block = locationBlock(location);
+    if (!block) return go(location);
+    focusBlock(block, mode === "translation" ? "translation" : "source");
+  };
   // Keep the public adapter usable by TOC, notes and page navigation in all modes.
   const facade = useRef<ReaderAdapter | undefined>(undefined);
   const outline = useRef<TOCItem[]>([]);
-  const actions = useRef({ go });
-  actions.current = { go };
+  const actions = useRef({ go, focus });
+  actions.current = { go, focus };
   useEffect(() => {
     if (!root.current || !engine) return;
     return installCitationHover(
@@ -431,6 +449,8 @@ export function PDFReadingView({
           };
         if (key === "goTo")
           return (l: DocumentLocation) => actions.current.go(l);
+        if (key === "focusLocation")
+          return (l: DocumentLocation) => actions.current.focus(l);
         if (key === "next" || key === "previous")
           return () => {
             if (!state.current.blocks.length) return target[key]();

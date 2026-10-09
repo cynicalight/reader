@@ -442,6 +442,44 @@ it("supports explicit block focus in source and parallel modes without a single-
   expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "parallel");
 });
 
+it("focuses the paragraph containing a saved annotation like clicking it", async () => {
+  await renderView(defaultTheme, [
+    {
+      id: "p1-b2",
+      page: 1,
+      label: "text",
+      text: "Lower paragraph.",
+      bounds: { x: 0.1, y: 0.55, width: 0.3, height: 0.2 },
+    },
+  ]);
+  // Source selections store only rects; the page origin must not win.
+  await act(async () =>
+    fixture.ready!.focusLocation?.({
+      type: "pdf",
+      page: 1,
+      quote: "Lower",
+      rects: [{ x: 0.12, y: 0.6, width: 0.1, height: 0.02 }],
+    }),
+  );
+  expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b2", "source");
+  await click("原文译文");
+  await act(async () =>
+    fixture.ready!.focusLocation?.({
+      type: "pdf",
+      page: 1,
+      translation: {
+        blockId: "p1-b1",
+        sourceHash: "hash",
+        sentenceIndexes: [1],
+        start: 0,
+        end: 3,
+      },
+    }),
+  );
+  expect(adapter.focusBlock).toHaveBeenLastCalledWith("p1-b1", "parallel");
+  expect(adapter.goTo).not.toHaveBeenCalled();
+});
+
 it("always follows scrolling in either pane without an unlink control", async () => {
   await click("原文译文");
   expect(host.querySelector('[aria-label="同步滚动"]')).toBeNull();

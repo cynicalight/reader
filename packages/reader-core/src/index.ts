@@ -351,6 +351,8 @@ export interface ReaderAdapter {
     translations: TranslationBlock[],
   ): Promise<PDFSentenceLink[]>;
   focusBlock?(blockId: string, layout: "source" | "parallel"): Promise<void>;
+  /** Center the paragraph containing a saved location, like clicking it. */
+  focusLocation?(location: DocumentLocation): Promise<void>;
   cancelBlockFocus?(): void;
   destroy(): Promise<void>;
 }
