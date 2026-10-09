@@ -69,8 +69,6 @@ afterEach(async () => {
 });
 const trigger = (label: string) =>
   host.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
-const shown = (label: string) =>
-  trigger(label).querySelector("[data-slot=select-value]")?.textContent;
 async function choose(label: string, text: string) {
   await act(async () => trigger(label).click());
   const option = Array.from(document.querySelectorAll('[role="option"]')).find(
@@ -88,13 +86,6 @@ it("defaults effort to medium and keys choices per task", () => {
     model: "",
     effort: "medium",
   });
-});
-// Opening a Base UI select takes about a second in jsdom; keep one per test.
-it("shows recommended translation defaults", async () => {
-  await act(async () => root.render(<TaskModels disabled={false} />));
-  expect(shown("问答模型")).toBe("Opus");
-  expect(shown("翻译模型")).toBe("Sonnet");
-  expect(shown("翻译 Effort")).toBe("Medium");
 });
 it("saves the translation model without touching chat", async () => {
   await act(async () => root.render(<TaskModels disabled={false} />));

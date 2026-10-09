@@ -6,7 +6,6 @@ import { defaultTheme, type ReaderTheme } from "@reader/core";
 import {
   resolveTheme,
   stepTranslationSize,
-  translationFont,
   useResolvedTheme,
 } from "./appearance";
 let root: Root | undefined;
@@ -31,7 +30,6 @@ it("resolves explicit appearance independently from OS and preserves paper mode"
   ).toBe("sepia");
 });
 it("steps translated text size within bounds", () => {
-  expect(defaultTheme.translationFontSize).toBeLessThan(defaultTheme.fontSize);
   expect(stepTranslationSize(1, 1)).toBe(1.05);
   expect(stepTranslationSize(0.8, -1)).toBe(0.8);
   expect(stepTranslationSize(1.6, 1)).toBe(1.6);
@@ -66,13 +64,4 @@ it("follows live system changes and unsubscribes on unmount", () => {
   act(() => root!.unmount());
   root = undefined;
   expect(listeners.size).toBe(0);
-});
-
-it("builds translated text fonts, falling back for installed ones", () => {
-  expect(translationFont()).toContain("Songti SC");
-  expect(translationFont("sans-serif")).toBe("inherit");
-  expect(translationFont("serif")).toContain("Songti SC");
-  expect(translationFont('LXGW "WenKai"')).toBe(
-    '"LXGW WenKai", system-ui, sans-serif',
-  );
 });

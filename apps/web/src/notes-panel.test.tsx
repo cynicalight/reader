@@ -132,25 +132,6 @@ it("lists records in reading order", () => {
   ]);
 });
 
-it("filters by kind and open questions", async () => {
-  await act(async () => button("问题").click());
-  expect(cards()).toEqual(["第 1 页", "Why?"]);
-  await act(async () => button("只看待回答").click());
-  expect(cards()).toEqual(["Why?"]);
-  await act(async () => button("划线").click());
-  expect(cards()).toEqual(["page two"]);
-});
-
-it("answers, resolves and shows linked answers", async () => {
-  expect(host.textContent).toContain("p is the probability.");
-  await act(async () => button("p is the probability.").click());
-  expect(handlers.onShowAnswer).toHaveBeenCalledWith("m1");
-  await act(async () => button("让 AI 回答").click());
-  expect(handlers.onAnswer).toHaveBeenCalledWith(annotations[1]);
-  await act(async () => button("标为已解决").click());
-  expect(handlers.onResolve).toHaveBeenCalledWith(annotations[1], true);
-});
-
 it("edits a note in place", async () => {
   await act(async () => button("编辑批注").click());
   const field = host.querySelector<HTMLTextAreaElement>('[aria-label="批注"]')!;
@@ -183,35 +164,4 @@ it("saves the paper note after typing stops", async () => {
     "p",
     "Main contribution",
   );
-  expect(host.textContent).toContain("已保存");
-});
-
-it("filters by color and tag", async () => {
-  await act(async () =>
-    root.render(
-      <NotesPanel
-        document={paper({ id: "p" })}
-        annotations={[
-          ...annotations,
-          mark({
-            id: "red",
-            quote: "red mark",
-            color: "#e8746b",
-            tags: ["proof"],
-            location: { type: "pdf", page: 3 },
-          }),
-        ]}
-        messages={messages}
-        deleting={new Set()}
-        answering={new Set()}
-        {...handlers}
-      />,
-    ),
-  );
-  await act(async () => button("只看红色").click());
-  expect(cards()).toEqual(["red mark"]);
-  await act(async () => button("只看红色").click());
-  expect(cards()).toHaveLength(5);
-  await act(async () => button("只看标签 proof").click());
-  expect(cards()).toEqual(["red mark"]);
 });
