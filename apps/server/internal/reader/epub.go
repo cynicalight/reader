@@ -143,7 +143,7 @@ func prepareEPUB(ctx context.Context, filename, cache string) (map[string]any, m
 	if len(positions) == 0 {
 		return nil, nil, errors.New("EPUB contains no reading positions")
 	}
-	encoded, err := json.Marshal(map[string]any{"positions": positions})
+	encoded, err := json.Marshal(map[string]any{"total": len(positions), "positions": positions})
 	if err != nil {
 		return nil, nil, err
 	}

@@ -1051,6 +1051,155 @@
                 },
             },
         },
+      "/api/documents/{id}/epub-chapters":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "EPUB in-document reader",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/EPUBChapters" },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/epub-chapter":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                  {
+                    "in": "query",
+                    "name": "href",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "EPUB in-document reader",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["html"],
+                                  "properties":
+                                    {
+                                      "html":
+                                        {
+                                          "type": "string",
+                                          "description": "Server sanitized reader-mode HTML; no publisher CSS",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/documents/{id}/epub-blocks":
+        {
+          "get":
+            {
+              "parameters":
+                [
+                  {
+                    "in": "path",
+                    "name": "id",
+                    "required": true,
+                    "schema": { "type": "string" },
+                  },
+                ],
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Ordered EPUB paragraphs with exact source locations",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "array",
+                                  "items":
+                                    {
+                                      "$ref": "#/components/schemas/EPUBReadingBlock",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/ai/models":
         {
           "get":
@@ -2451,128 +2600,15 @@
                               },
                           },
                         "sentenceLink":
-                          {
-                            "type": "object",
-                            "required": ["origin", "parts"],
-                            "properties":
-                              {
-                                "origin":
-                                  {
-                                    "type": "string",
-                                    "enum": ["source", "translation"],
-                                  },
-                                "parts":
-                                  {
-                                    "type": "array",
-                                    "items":
-                                      {
-                                        "type": "object",
-                                        "required":
-                                          [
-                                            "blockId",
-                                            "sourceHash",
-                                            "sentenceIndex",
-                                            "source",
-                                            "target",
-                                          ],
-                                        "properties":
-                                          {
-                                            "blockId": { "type": "string" },
-                                            "sourceHash": { "type": "string" },
-                                            "sentenceIndex":
-                                              {
-                                                "type": "integer",
-                                                "minimum": 0,
-                                              },
-                                            "source": { "type": "string" },
-                                            "target": { "type": "string" },
-                                          },
-                                      },
-                                  },
-                              },
-                          },
+                          { "$ref": "#/components/schemas/SentenceLink" },
                         "translation":
                           {
-                            "type": "object",
-                            "required":
-                              [
-                                "blockId",
-                                "sourceHash",
-                                "sentenceIndexes",
-                                "start",
-                                "end",
-                              ],
-                            "properties":
-                              {
-                                "blockId": { "type": "string" },
-                                "sourceHash": { "type": "string" },
-                                "sentenceIndexes":
-                                  {
-                                    "type": "array",
-                                    "items":
-                                      { "type": "integer", "minimum": 0 },
-                                  },
-                                "start": { "type": "integer", "minimum": 0 },
-                                "end": { "type": "integer", "minimum": 0 },
-                                "ranges":
-                                  {
-                                    "type": "array",
-                                    "items":
-                                      {
-                                        "type": "object",
-                                        "required":
-                                          [
-                                            "blockId",
-                                            "sourceHash",
-                                            "sentenceIndexes",
-                                            "start",
-                                            "end",
-                                            "quote",
-                                          ],
-                                        "properties":
-                                          {
-                                            "blockId": { "type": "string" },
-                                            "sourceHash": { "type": "string" },
-                                            "sentenceIndexes":
-                                              {
-                                                "type": "array",
-                                                "items":
-                                                  {
-                                                    "type": "integer",
-                                                    "minimum": 0,
-                                                  },
-                                              },
-                                            "start":
-                                              {
-                                                "type": "integer",
-                                                "minimum": 0,
-                                              },
-                                            "end":
-                                              {
-                                                "type": "integer",
-                                                "minimum": 0,
-                                              },
-                                            "quote": { "type": "string" },
-                                          },
-                                      },
-                                  },
-                              },
+                            "$ref": "#/components/schemas/TranslationLocation",
                           },
                       },
                     "required": ["type", "page"],
                   },
-                  {
-                    "type": "object",
-                    "properties":
-                      {
-                        "type": { "const": "epub" },
-                        "href": { "type": "string" },
-                        "locator": { "type": "string" },
-                        "progression": { "type": "number" },
-                        "quote": { "type": "string" },
-                      },
-                    "required": ["type", "href"],
-                  },
+                  { "$ref": "#/components/schemas/EPUBLocation" },
                 ],
             },
           "Document":
@@ -3381,6 +3417,178 @@
                       "description": "Automatic lookup state for papers imported from files",
                     },
                 },
+            },
+          "SentenceLink":
+            {
+              "type": "object",
+              "required": ["origin", "parts"],
+              "properties":
+                {
+                  "origin":
+                    { "type": "string", "enum": ["source", "translation"] },
+                  "parts":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "object",
+                          "required":
+                            [
+                              "blockId",
+                              "sourceHash",
+                              "sentenceIndex",
+                              "source",
+                              "target",
+                            ],
+                          "properties":
+                            {
+                              "blockId": { "type": "string" },
+                              "sourceHash": { "type": "string" },
+                              "sentenceIndex":
+                                { "type": "integer", "minimum": 0 },
+                              "source": { "type": "string" },
+                              "target": { "type": "string" },
+                            },
+                        },
+                    },
+                },
+            },
+          "TranslationLocation":
+            {
+              "type": "object",
+              "required":
+                ["blockId", "sourceHash", "sentenceIndexes", "start", "end"],
+              "properties":
+                {
+                  "blockId": { "type": "string" },
+                  "sourceHash": { "type": "string" },
+                  "sentenceIndexes":
+                    {
+                      "type": "array",
+                      "items": { "type": "integer", "minimum": 0 },
+                    },
+                  "start": { "type": "integer", "minimum": 0 },
+                  "end": { "type": "integer", "minimum": 0 },
+                  "ranges":
+                    {
+                      "type": "array",
+                      "items":
+                        {
+                          "type": "object",
+                          "required":
+                            [
+                              "blockId",
+                              "sourceHash",
+                              "sentenceIndexes",
+                              "start",
+                              "end",
+                              "quote",
+                            ],
+                          "properties":
+                            {
+                              "blockId": { "type": "string" },
+                              "sourceHash": { "type": "string" },
+                              "sentenceIndexes":
+                                {
+                                  "type": "array",
+                                  "items": { "type": "integer", "minimum": 0 },
+                                },
+                              "start": { "type": "integer", "minimum": 0 },
+                              "end": { "type": "integer", "minimum": 0 },
+                              "quote": { "type": "string" },
+                              "location":
+                                { "$ref": "#/components/schemas/EPUBLocation" },
+                            },
+                        },
+                    },
+                },
+            },
+          "EPUBLocation":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "type": { "const": "epub" },
+                  "href": { "type": "string" },
+                  "blockId": { "type": "string" },
+                  "start": { "type": "integer", "minimum": 0 },
+                  "end": { "type": "integer", "minimum": 0 },
+                  "endBlockId": { "type": "string" },
+                  "locator": { "type": "string" },
+                  "progression": { "type": "number" },
+                  "quote": { "type": "string" },
+                  "sentenceLink":
+                    { "$ref": "#/components/schemas/SentenceLink" },
+                  "translation":
+                    { "$ref": "#/components/schemas/TranslationLocation" },
+                },
+              "required": ["type", "href"],
+            },
+          "EPUBChapters":
+            {
+              "type": "object",
+              "required": ["chapters", "toc"],
+              "properties":
+                {
+                  "chapters":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/EPUBChapter" },
+                    },
+                  "toc":
+                    {
+                      "type": ["array", "null"],
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBChapterLink" },
+                    },
+                },
+            },
+          "EPUBChapter":
+            {
+              "type": "object",
+              "required": ["href", "title", "index", "characters", "blocks"],
+              "properties":
+                {
+                  "href": { "type": "string" },
+                  "title": { "type": "string" },
+                  "index": { "type": "integer" },
+                  "characters": { "type": "integer" },
+                  "blocks":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBReadingBlock" },
+                    },
+                },
+            },
+          "EPUBChapterLink":
+            {
+              "type": "object",
+              "required": ["href", "title"],
+              "properties":
+                {
+                  "href": { "type": "string" },
+                  "title": { "type": "string" },
+                  "children":
+                    {
+                      "type": "array",
+                      "items":
+                        { "$ref": "#/components/schemas/EPUBChapterLink" },
+                    },
+                },
+            },
+          "EPUBReadingBlock":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "label": { "type": "string" },
+                  "text": { "type": "string" },
+                  "location": { "$ref": "#/components/schemas/EPUBLocation" },
+                  "image": { "type": "string" },
+                },
+              "required": ["id", "label", "text", "location"],
             },
         },
     },

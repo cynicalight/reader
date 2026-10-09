@@ -29,13 +29,8 @@ type translationBatch struct {
 
 // Count Unicode characters and include the entire paragraph crossing the target.
 // Batch boundaries are stable across retries; only their pending members change.
-func translationBatches(m layoutManifest, items []TranslationBlock, target int) []translationBatch {
-	paragraphs := []translationParagraph{}
-	for _, b := range m.Blocks {
-		if source := translationSource(b); source != "" {
-			paragraphs = append(paragraphs, translationParagraph{b.ID, translationHash(source), source})
-		}
-	}
+func translationBatches(m translationInput, items []TranslationBlock, target int) []translationBatch {
+	paragraphs := m.translationParagraphs()
 	pending := map[string]bool{}
 	for _, t := range items {
 		pending[t.BlockID] = t.Status == "pending" || t.Status == "running"
@@ -60,21 +55,8 @@ func translationBatches(m layoutManifest, items []TranslationBlock, target int) 
 	}
 	return batches
 }
-func translationPrompt(doc Document, m layoutManifest, batch translationBatch) string {
-	// Keep verbatim title-page evidence when PDF author metadata is missing.
-	frontMatter := []string{}
-	for _, b := range m.Blocks {
-		if b.Page != 1 {
-			break
-		}
-		text := strings.TrimSpace(b.Text)
-		if b.Label == "paragraph_title" || strings.EqualFold(text, "abstract") || text == "摘要" {
-			break
-		}
-		if text != "" && !isImageAsset(b) && !isPDFPageDecoration(b) {
-			frontMatter = append(frontMatter, text)
-		}
-	}
+func translationPrompt(doc Document, m translationInput, batch translationBatch) string {
+	frontMatter := m.translationFrontMatter()
 	data, _ := json.Marshal(struct {
 		Title       string           `json:"title"`
 		Author      string           `json:"author"`
@@ -155,7 +137,7 @@ func (d *translationJSONL) line(line string) error {
 	delete(d.invalid, row.BlockID)
 	return nil
 }
-func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManifest, batch translationBatch, service *GenerationService, progress func()) error {
+func (s *Server) translateBatch(ctx context.Context, doc Document, m translationInput, batch translationBatch, service *GenerationService, progress func()) error {
 	decoder := newTranslationJSONL(batch, func(t TranslationBlock) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -201,7 +183,7 @@ func (s *Server) translateBatch(ctx context.Context, doc Document, m layoutManif
 	}
 	return ctx.Err()
 }
-func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layoutManifest) error {
+func (s *Server) settleTranslations(ctx context.Context, p *Processing, m translationInput) error {
 	doc, err := s.Store.Document(p.DocumentID)
 	if err != nil {
 		return err
@@ -336,13 +318,11 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m layout
 }
 
 // Text batches never reset or count the concurrently converted formula records.
-func (s *Server) textTranslations(documentID string, m layoutManifest) ([]TranslationBlock, error) {
+func (s *Server) textTranslations(documentID string, m translationInput) ([]TranslationBlock, error) {
 	items, err := s.translations(documentID, m)
 	textIDs := map[string]bool{}
-	for _, b := range m.Blocks {
-		if translationSource(b) != "" {
-			textIDs[b.ID] = true
-		}
+	for _, p := range m.translationParagraphs() {
+		textIDs[p.BlockID] = true
 	}
 	out := []TranslationBlock{}
 	for _, t := range items {
@@ -353,7 +333,7 @@ func (s *Server) textTranslations(documentID string, m layoutManifest) ([]Transl
 	return out, err
 }
 
-func (s *Server) refreshTranslationCounts(p *Processing, m layoutManifest) error {
+func (s *Server) refreshTranslationCounts(p *Processing, m translationInput) error {
 	items, err := s.translations(p.DocumentID, m)
 	if err != nil {
 		return err

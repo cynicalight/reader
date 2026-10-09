@@ -100,11 +100,18 @@ func (s *Store) saveProcessing(p Processing) error {
 func initialProcessing(id string) Processing {
 	return Processing{UsageTracked: true, DocumentID: id, Phase: "learning", Status: "queued", Detail: "等待解析文档", UpdatedAt: now()}
 }
-func (s *Store) enqueuePDF(d Document) error {
-	if d.Type != "pdf" {
-		return nil
-	}
+
+// EPUB text needs no layout pass; it enters the translation lane directly.
+func initialDocumentProcessing(d Document) Processing {
 	p := initialProcessing(d.ID)
+	if d.Type == "epub" {
+		p.Translating = &ProcessingStage{Status: "queued", Detail: "等待翻译正文"}
+		aggregateProcessing(&p)
+	}
+	return p
+}
+func (s *Store) enqueueDocument(d Document) error {
+	p := initialDocumentProcessing(d)
 	b, _ := json.Marshal(p)
 	_, e := s.DB.Exec("INSERT OR IGNORE INTO document_processing(document_id,phase,status,body) VALUES(?,?,?,?)", d.ID, p.Phase, p.Status, b)
 	return e
@@ -134,16 +141,14 @@ func (s *Server) retryProcessing(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "文档不存在")
 		return
 	}
-	if d.Type != "pdf" {
-		fail(w, 400, "此解析流程用于 PDF")
-		return
-	}
 	s.processingMu.Lock()
 	defer s.processingMu.Unlock()
 	p, e := s.Store.processing(d.ID)
 	if e != nil {
-		e = s.Store.enqueuePDF(d)
-		p = initialProcessing(d.ID)
+		e = s.Store.enqueueDocument(d)
+		if e == nil {
+			p, e = s.Store.processing(d.ID)
+		}
 	}
 	if e != nil {
 		fail(w, 500, "无法创建解析任务")
@@ -225,7 +230,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 	if err := s.Store.dropSettlingState(); err != nil {
 		log.Printf("cannot migrate processing state: %v", err)
 	}
-	s.queueUntranslatedPDFs()
+	s.queueUntranslatedDocuments()
 	var workers sync.WaitGroup
 	rows, e := s.Store.DB.Query("SELECT body FROM document_processing WHERE status='running' OR json_extract(body,'$.translating.status')='running'")
 	if e == nil {
@@ -292,7 +297,7 @@ func (s *Server) StartProcessing(parent context.Context) func() {
 						}
 					}
 				} else {
-					e = s.processPDF(work, &p)
+					e = s.processTranslation(work, &p)
 				}
 				if e != nil && phase == "learning" {
 					if ctx.Err() != nil {

@@ -4,6 +4,14 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@readium/navigator-html-injectables@2.8.4':
+    hash: 55e79bbe1e906c6abe3e0a35e3acce6fca5c6f9f13df231684da0ba1ae0bfc29
+    path: patches/@readium__navigator-html-injectables@2.8.4.patch
+  '@readium/navigator@2.11.1':
+    hash: 91945f1d2975bffd8f4a122ae1595096c882cef2991a5da8b8e39ed88a87985c
+    path: patches/@readium__navigator@2.11.1.patch
+
 importers:
 
   .:
@@ -92,7 +100,7 @@ importers:
         version: link:../../packages/ui
       '@readium/navigator':
         specifier: 2.11.1
-        version: 2.11.1
+        version: 2.11.1(patch_hash=91945f1d2975bffd8f4a122ae1595096c882cef2991a5da8b8e39ed88a87985c)
       '@readium/shared':
         specifier: 2.6.0
         version: 2.6.0
@@ -6195,23 +6203,23 @@ snapshots:
 
   '@readium/decorator@1.2.4':
     dependencies:
-      '@readium/navigator-html-injectables': 2.8.4
+      '@readium/navigator-html-injectables': 2.8.4(patch_hash=55e79bbe1e906c6abe3e0a35e3acce6fca5c6f9f13df231684da0ba1ae0bfc29)
       '@readium/shared': 2.6.0
 
   '@readium/helpers@1.1.1':
     dependencies:
       user-agent-data-types: 0.4.3
 
-  '@readium/navigator-html-injectables@2.8.4':
+  '@readium/navigator-html-injectables@2.8.4(patch_hash=55e79bbe1e906c6abe3e0a35e3acce6fca5c6f9f13df231684da0ba1ae0bfc29)':
     dependencies:
       '@readium/helpers': 1.1.1
       '@readium/shared': 2.6.0
 
-  '@readium/navigator@2.11.1':
+  '@readium/navigator@2.11.1(patch_hash=91945f1d2975bffd8f4a122ae1595096c882cef2991a5da8b8e39ed88a87985c)':
     dependencies:
       '@readium/decorator': 1.2.4
       '@readium/helpers': 1.1.1
-      '@readium/navigator-html-injectables': 2.8.4
+      '@readium/navigator-html-injectables': 2.8.4(patch_hash=55e79bbe1e906c6abe3e0a35e3acce6fca5c6f9f13df231684da0ba1ae0bfc29)
       '@readium/shared': 2.6.0
 
   '@readium/shared@2.6.0':

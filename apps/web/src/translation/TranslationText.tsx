@@ -39,14 +39,19 @@ export function TranslationText({
   linked = [],
   formulaNumber,
   onCitation,
+  imageURL,
 }: {
-  block: PDFBlock;
+  // PDF blocks and EPUB paragraphs share these fields.
+  block: Pick<PDFBlock, "id" | "label" | "text" | "image" | "caption"> &
+    Partial<PDFBlock>;
   translation?: TranslationBlock;
   documentId: string;
   retry: () => void;
   linked?: number[];
   formulaNumber?: string;
   onCitation?: (blockId: string, label: string) => void;
+  /** EPUB images come from the publication rather than the PDF asset store. */
+  imageURL?: string;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const asset =
@@ -54,8 +59,8 @@ export function TranslationText({
   const image = block.image ? (
     <img
       className="translation-image"
-      src={blockImageURL(documentId, block.id)}
-      alt={block.caption || block.label}
+      src={imageURL ?? blockImageURL(documentId, block.id)}
+      alt={block.caption || block.text || block.label}
       loading="lazy"
     />
   ) : null;

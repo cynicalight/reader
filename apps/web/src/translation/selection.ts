@@ -1,22 +1,21 @@
+import { epubSentenceLocation } from "./epub-links";
 import type {
   PDFBlock,
+  EPUBReadingBlock,
   PDFPassage,
   PDFSentenceLink,
   ReaderSelection,
   TranslationBlock,
+  TranslationLocation,
 } from "@reader/core";
 
 export function translatedSelection(
   host: HTMLElement,
   range: Range,
-  blocks: PDFBlock[],
+  blocks: (PDFBlock | EPUBReadingBlock)[],
   translations: TranslationBlock[],
 ) {
-  const ranges: NonNullable<
-    NonNullable<
-      Extract<ReaderSelection["location"], { type: "pdf" }>["translation"]
-    >["ranges"]
-  > = [];
+  const ranges: NonNullable<TranslationLocation["ranges"]> = [];
   const passages: PDFPassage[] = [],
     links: PDFSentenceLink[] = [];
   for (const node of host.querySelectorAll<HTMLElement>(
@@ -62,6 +61,15 @@ export function translatedSelection(
       start,
       end: start + clipped.toString().length,
       quote,
+      ...("location" in block
+        ? {
+            location: epubSentenceLocation(
+              block,
+              translation.sentences,
+              sentenceIndexes,
+            ),
+          }
+        : {}),
     });
     passages.push({
       blockId: block.id,
@@ -87,10 +95,14 @@ export function translatedSelection(
       bottom: rect.bottom,
     },
     location: {
-      type: "pdf",
-      page: block.page,
-      quote: passages.flatMap((p) => p.sources).join(" "),
-      rects: [block.bounds],
+      ...("location" in block
+        ? first.location!
+        : {
+            type: "pdf" as const,
+            page: block.page,
+            quote: passages.flatMap((p) => p.sources).join(" "),
+            rects: [block.bounds],
+          }),
       translation: {
         blockId: first.blockId,
         sourceHash: first.sourceHash,

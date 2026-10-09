@@ -46,9 +46,10 @@ func aggregateProcessing(p *Processing) {
 	}
 }
 
-// Translation starts after the manifest is published, under one document lifetime.
-func (s *Server) processPDF(ctx context.Context, p *Processing) error {
-	m, err := s.readLayout(p.DocumentID)
+// Translation starts after the PDF manifest is published, or directly for EPUB,
+// under one document lifetime.
+func (s *Server) processTranslation(ctx context.Context, p *Processing) error {
+	m, err := s.readTranslationSource(p.DocumentID)
 	if err != nil {
 		p.Translating = &ProcessingStage{Status: "failed", Detail: err.Error()}
 		aggregateProcessing(p)
@@ -65,7 +66,7 @@ func (s *Server) processPDF(ctx context.Context, p *Processing) error {
 	work.Warning = ""
 	runErr := s.Store.saveProcessing(work)
 	if runErr == nil {
-		runErr = s.translatePDFContent(ctx, &work, m)
+		runErr = s.translateContent(ctx, &work, m)
 	}
 	if ctx.Err() != nil {
 		work.Status, work.Detail = "queued", "已暂停，将在下次启动时继续"
