@@ -7,6 +7,10 @@
 .message-markdown p {
   margin: 0.65em 0;
 }
+.message-markdown > :last-child,
+.message-markdown > .streamdown-animated > :last-child {
+  margin-bottom: 0;
+}
 .message-markdown h1,
 .message-markdown h2,
 .message-markdown h3 {

@@ -141,7 +141,7 @@ export function AssistantPanel({
                 {assistant && !!content && (
                   <div className="chat-message-actions">
                     <Button
-                      size="icon-sm"
+                      size="icon-xs"
                       variant="ghost"
                       aria-label="复制回答"
                       title="复制回答"
