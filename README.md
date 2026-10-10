@@ -48,9 +48,9 @@ Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与论文�
 
 以下截图来自应用本身，使用项目自带的示例文档；图片会跟随 GitHub 的浅色 / 深色外观。
 
-| 书库 | Agent 设置 |
-| --- | --- |
-| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="书库，PDF 封面上显示后台处理进度" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent 设置：Codex、Claude Code 与 Kimi Code" /> |
+| 书库                                                                                                                                                                                                                         | Agent 设置                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| <picture> <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" /> <img src="website/assets/screenshots/library-light.webp" alt="书库，PDF 封面上显示后台处理进度" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent 设置：Codex、Claude Code 与 Kimi Code" /> |
 
 ## 快速开始
 
@@ -63,7 +63,7 @@ pnpm install
 pnpm desktop
 ```
 
-`pnpm desktop` 会构建 Go 服务、Web 界面和 Electron，然后打开桌面窗口。Go 服务只监听本机的随机端口，并随应用关闭。
+`pnpm desktop` 会构建 Go 服务、Web 界面和 Electron，然后打开桌面窗口。主 API 监听本机随机端口，并随应用关闭。
 
 若安装时 Electron 二进制未成功下载，可运行以下命令后重试：
 
@@ -97,10 +97,13 @@ CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex �
 
 原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Reader 没有内置云同步。论文元数据查找和在线导入会访问公开的论文服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。
 
-| 运行方式 | 数据目录                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------- |
-| 桌面模式 | Electron `userData` 下的 `library/`；macOS 开发版通常为 `~/Library/Application Support/Reader/library/` |
-| 开发模式 | 项目根目录的 `.reader/`                                                                                 |
+| 运行方式                       | 数据目录                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| 已安装桌面版                   | Electron `userData/library/`；macOS 通常为 `~/Library/Application Support/Reader/library/` |
+| 未打包桌面版（`pnpm desktop`） | macOS 为 `~/Library/Application Support/Reader Dev/library/`                               |
+| 浏览器开发模式（`pnpm dev`）   | 项目根目录的 `.reader/`                                                                    |
+
+此前用 `pnpm desktop` 作为日常应用的人，旧书库仍在 `~/Library/Application Support/Reader/library/`；关闭 Reader 后可将其复制到新目录。
 
 ```text
 library/
@@ -123,6 +126,8 @@ pnpm dev
 ```
 
 终端会输出 `http://127.0.0.1:5173/#token=…`，请用完整地址打开。Vite 将请求代理到 `127.0.0.1:17840` 的 Go 服务。该 token 用于本地服务鉴权，不是 AI 账户凭据，请勿分享带 token 的地址。
+
+开发运行默认不监听插件端口；设置 `READER_DEV_CONNECTOR=1` 可启用。未打包桌面版默认不注册 `reader://`；设置 `READER_DEV_PROTOCOL=1` 可启用。
 
 ```sh
 pnpm typecheck     # TypeScript 类型检查

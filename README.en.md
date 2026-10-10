@@ -55,9 +55,9 @@ Appearance supports light, dark, and system modes, including the desktop window.
 
 Captured from the app with the bundled sample documents. Images follow GitHub's light / dark appearance.
 
-| Library | Agent settings |
-| --- | --- |
-| <picture>  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" />  <img src="website/assets/screenshots/library-light.webp" alt="Library with a PDF processing overlay on its cover" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent settings with Codex, Claude Code and Kimi Code" /> |
+| Library                                                                                                                                                                                                                                        | Agent settings                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| <picture> <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/library-dark.webp" /> <img src="website/assets/screenshots/library-light.webp" alt="Library with a PDF processing overlay on its cover" /></picture> | <img src="website/assets/screenshots/settings-light.webp" alt="Agent settings with Codex, Claude Code and Kimi Code" /> |
 
 ## Quick start
 
@@ -70,7 +70,7 @@ pnpm install
 pnpm desktop
 ```
 
-`pnpm desktop` builds the Go service, web interface, and Electron app, then opens the desktop window. The Go service listens only on a random loopback port and stops when the application closes.
+`pnpm desktop` builds the Go service, web interface, and Electron app, then opens the desktop window. The main API listens on a random loopback port and stops when the application closes.
 
 If the Electron binary was not downloaded successfully during installation, run the following command and try again:
 
@@ -106,10 +106,13 @@ CLIs run in temporary empty directories. Claude is configured with tools and MCP
 
 Original files are stored on the filesystem. Document metadata, progress, annotations, conversations, and settings are stored in SQLite. Reader has no built-in cloud sync.
 
-| Mode        | Data directory                                                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Desktop     | `library/` under Electron's `userData`; typically `~/Library/Application Support/Reader/library/` for macOS development builds |
-| Development | `.reader/` in the project root                                                                                                 |
+| Mode                                | Data directory                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Installed desktop app               | Electron `userData/library/`; typically `~/Library/Application Support/Reader/library/` on macOS |
+| Unpackaged desktop (`pnpm desktop`) | `~/Library/Application Support/Reader Dev/library/` on macOS                                     |
+| Browser development (`pnpm dev`)    | `.reader/` in the project root                                                                   |
+
+If you previously used `pnpm desktop` as your daily app, your old library is at `~/Library/Application Support/Reader/library/`. You can copy it to the new directory while Reader is closed.
 
 ```text
 library/
@@ -131,6 +134,8 @@ pnpm dev
 ```
 
 The terminal prints a URL in the form `http://127.0.0.1:5173/#token=…`. Open the complete URL. Vite proxies requests to the Go service at `127.0.0.1:17840`. This token authenticates access to the local service; it is not an AI account credential. Do not share URLs containing the token.
+
+Development runs leave the connector port disabled unless `READER_DEV_CONNECTOR=1` is set. Unpackaged desktop runs register `reader://` only with `READER_DEV_PROTOCOL=1`.
 
 ```sh
 pnpm typecheck     # TypeScript type checking
