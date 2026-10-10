@@ -64,6 +64,7 @@ export function PDFReadingView({
   toolbarHost,
   pageNavigation,
   searchResults = [],
+  searchQuery = "",
   onReady,
   events,
 }: {
@@ -75,6 +76,7 @@ export function PDFReadingView({
   toolbarHost?: HTMLElement | null;
   pageNavigation?: ReactNode;
   searchResults?: SearchResult[];
+  searchQuery?: string;
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
@@ -161,6 +163,8 @@ export function PDFReadingView({
     theme.linkTranslationAnnotations !== false,
     mode,
     events,
+    searchQuery,
+    searchResults,
   );
   const byId = useMemo(
     () => new Map(translations.map((t) => [t.blockId, t])),
@@ -184,19 +188,6 @@ export function PDFReadingView({
   const visibleBlocks = blocks.filter(
     (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
   );
-  const searchBlockIds = useMemo(
-    () => [
-      ...new Set(
-        searchResults
-          .map((result) => result.blockId)
-          .filter((id): id is string => !!id),
-      ),
-    ],
-    [searchResults],
-  );
-  useEffect(() => {
-    engine?.setSearchBlocks?.(searchBlockIds);
-  }, [engine, searchBlockIds]);
   useEffect(() => {
     if (pane.current) return installTranslationSelectionHighlight(pane.current);
   }, [mode, doc.id]);
@@ -1027,9 +1018,6 @@ export function PDFReadingView({
                     data-label={block.label}
                     data-hovered={hoveredBlock === block.id || undefined}
                     data-focused={focusedBlock === block.id || undefined}
-                    data-search-hit={
-                      searchBlockIds.includes(block.id) || undefined
-                    }
                     aria-current={focusedBlock === block.id || undefined}
                     tabIndex={0}
                     onClick={(event) => {

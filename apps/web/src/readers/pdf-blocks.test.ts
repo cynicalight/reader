@@ -16,19 +16,6 @@ it("hits normalized regions only on their source page", () => {
   expect(hitBlock([block], 1, 0.2, 0.3)).toBeUndefined();
   expect(hitBlock([block], 2, 0.8, 0.3)).toBeUndefined();
 });
-it("keeps search highlights attached to matching PDF blocks", () => {
-  const host = document.createElement("div");
-  host.innerHTML = '<div class="page" data-page-number="2"></div>';
-  const layer = new PDFBlockOverlay(host);
-  layer.setBlocks([block]);
-  layer.setSearchBlocks([block.id]);
-  const hit = host.querySelector<HTMLElement>(".reader-block-search-hit")!;
-  expect(hit.style.left).toBe("10%");
-  expect(hit.style.height).toBe("40%");
-  layer.setSearchBlocks([]);
-  expect(host.querySelector(".reader-block-search-hit")).toBeNull();
-  layer.destroy();
-});
 it("positions the whole-block overlay and clears during selection, scroll and disposal", async () => {
   const host = document.createElement("div");
   host.innerHTML =

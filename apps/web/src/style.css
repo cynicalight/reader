@@ -669,12 +669,6 @@ kbd {
   font-size: 10px;
   color: var(--muted-foreground);
 }
-.reader-block-search-hit {
-  position: absolute;
-  pointer-events: none;
-  z-index: 1;
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-}
 .reading-pane {
   height: 100%;
   position: relative;

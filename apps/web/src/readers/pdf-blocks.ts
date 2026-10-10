@@ -40,7 +40,6 @@ export class PDFBlockOverlay {
   private focusId: string | null = null;
   private focus = document.createElement("div");
   private linked = document.createElement("div");
-  private searchBlocks = new Map<string, HTMLDivElement>();
   private pressed?: { id: string; x: number; y: number };
   constructor(
     private host: HTMLElement,
@@ -75,24 +74,6 @@ export class PDFBlockOverlay {
       const updated = this.blocks.find((b) => b.id === this.active?.id);
       if (!updated || JSON.stringify(updated) !== JSON.stringify(this.active))
         this.clear();
-    }
-    this.repaint();
-  }
-  setSearchBlocks(blockIds: string[]) {
-    const wanted = new Set(blockIds);
-    for (const [id, element] of this.searchBlocks) {
-      if (!wanted.has(id)) {
-        element.remove();
-        this.searchBlocks.delete(id);
-      }
-    }
-    for (const id of wanted) {
-      if (!this.searchBlocks.has(id)) {
-        const element = document.createElement("div");
-        element.className = "reader-block-search-hit";
-        element.setAttribute("aria-hidden", "true");
-        this.searchBlocks.set(id, element);
-      }
     }
     this.repaint();
   }
@@ -276,26 +257,6 @@ export class PDFBlockOverlay {
     page.append(this.focus);
   }
   repaint() {
-    for (const [id, element] of this.searchBlocks) {
-      const match = this.blocks.find((block) => block.id === id);
-      const page =
-        match &&
-        this.host.querySelector<HTMLElement>(
-          `.page[data-page-number="${match.page}"]`,
-        );
-      if (!match || !page) {
-        element.remove();
-        continue;
-      }
-      const b = match.bounds;
-      Object.assign(element.style, {
-        left: `${b.x * 100}%`,
-        top: `${b.y * 100}%`,
-        width: `${b.width * 100}%`,
-        height: `${b.height * 100}%`,
-      });
-      if (element.parentElement !== page) page.append(element);
-    }
     this.paintReadingFocus();
     const block = this.blocks.find((b) => b.id === this.linkedId);
     if (!block) {
@@ -318,8 +279,6 @@ export class PDFBlockOverlay {
     this.show(this.linked, page);
   }
   destroy() {
-    for (const element of this.searchBlocks.values()) element.remove();
-    this.searchBlocks.clear();
     this.focusId = null;
     this.focus.remove();
     this.clear();

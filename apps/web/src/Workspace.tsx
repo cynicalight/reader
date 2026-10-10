@@ -315,6 +315,7 @@ export function Workspace({
   const [leftTab, setLeftTab] = useState("toc");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [searchedQuery, setSearchedQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
@@ -380,6 +381,7 @@ export function Workspace({
     searchSerial.current++;
     setQuery("");
     setResults([]);
+    setSearchedQuery("");
     setSearching(false);
   }, [doc.id]);
   useEffect(() => {
@@ -643,7 +645,10 @@ export function Workspace({
     setSearching(true);
     try {
       const found = await adapter.search(query.trim());
-      if (serial === searchSerial.current) setResults(found);
+      if (serial === searchSerial.current) {
+        setResults(found);
+        setSearchedQuery(query.trim());
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -1162,6 +1167,7 @@ export function Workspace({
                       searchSerial.current++;
                       setQuery(e.target.value);
                       setResults([]);
+                      setSearchedQuery("");
                       setSearching(false);
                     }}
                   />
@@ -1220,6 +1226,7 @@ export function Workspace({
                   toolbarHost={readingToolbar}
                   pageNavigation={pageNavigation}
                   searchResults={results}
+                  searchQuery={searchedQuery}
                   onReady={(engine, items) => {
                     setAdapter(engine);
                     setTOC(items);

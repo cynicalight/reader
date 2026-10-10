@@ -496,9 +496,6 @@ export class PDFReaderAdapter implements ReaderAdapter {
     this.blockData = blocks;
     this.blocks.setBlocks(blocks);
   }
-  setSearchBlocks(blockIds: string[]) {
-    this.blocks.setSearchBlocks(blockIds);
-  }
   async focusBlock(blockId: string, layout: "source" | "parallel") {
     this.fitWidth = false;
     this.clearSelection();
