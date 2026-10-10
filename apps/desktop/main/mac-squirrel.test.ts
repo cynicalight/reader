@@ -55,6 +55,15 @@ it("updates in place only from a certificate signature", async () => {
   ).toBe(false);
 });
 
+it("requests verbose signing details before deciding whether a signed app can update", async () => {
+  const run = async (_file: string, args: string[]) => ({
+    stderr: args.includes("--verbose=4")
+      ? "Signature size=2055\nAuthority=Reader Self-Signed\n"
+      : "Signature size=2055\n",
+  });
+  expect(await canUpdateInPlace("/Applications/Reader.app", run)).toBe(true);
+});
+
 it("serves the verified archive to Squirrel on loopback under a secret path", async () => {
   const bytes = Buffer.from("PK\u0003\u0004 verified archive");
   let received: Buffer | undefined;

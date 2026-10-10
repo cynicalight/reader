@@ -28,9 +28,11 @@ export async function canUpdateInPlace(
   run: Run = promisify(execFile),
 ): Promise<boolean> {
   try {
-    const { stderr } = await run("/usr/bin/codesign", ["-dv", bundle], {
-      timeout: 10_000,
-    });
+    const { stderr } = await run(
+      "/usr/bin/codesign",
+      ["-dv", "--verbose=4", bundle],
+      { timeout: 10_000 },
+    );
     return /^Authority=/m.test(stderr) && !/^Signature=adhoc$/m.test(stderr);
   } catch {
     return false;
