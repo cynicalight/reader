@@ -14,6 +14,7 @@ module.exports = {
     // The zip is the Squirrel.Mac in-place update payload.
     target: ["dmg", "zip"],
     category: "public.app-category.books",
+    icon: "../../assets/icons/macos/icon.icns",
     identity: "-",
     // Replaces the ad-hoc identity with the fixed release certificate when available.
     sign: (options) => require("./mac-sign.cjs")(options),
@@ -30,7 +31,9 @@ module.exports = {
   },
   win: {
     target: ["nsis"],
-    signAndEditExecutable: false,
+    icon: "../../assets/icons/windows/icon.ico",
+    // Skip only code signing; resource editing still embeds the icon and version info.
+    signExecutable: false,
     artifactName: "Reader-${version}-win-${arch}.${ext}",
   },
   nsis: {
