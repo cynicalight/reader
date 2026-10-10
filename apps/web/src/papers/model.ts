@@ -105,7 +105,9 @@ export function toggleColumn(columns: PaperColumn[], column: PaperColumn) {
 }
 
 const busy = (job?: Processing) =>
-  !!job && !["complete", "failed"].includes(job.status);
+  !!job &&
+  job.enabled !== false &&
+  !["complete", "failed", "paused"].includes(job.status);
 
 /** Categories nest by "/": "ML/Vision" is inside "ML". */
 export const categoryParent = (name: string) => {

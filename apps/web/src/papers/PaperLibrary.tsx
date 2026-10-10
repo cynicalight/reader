@@ -1026,7 +1026,14 @@ function PaperProcessing({ job }: { job?: Processing }) {
     retryLock.current = false;
     setRetrying(false);
   }, [job?.updatedAt]);
-  if (!job || job.phase === "ready" || job.status === "complete") return null;
+  if (
+    !job ||
+    job.enabled === false ||
+    job.status === "paused" ||
+    job.phase === "ready" ||
+    job.status === "complete"
+  )
+    return null;
   const parsing = job.phase === "learning";
   const status = parsing ? job.status : (job.translating?.status ?? job.status);
   const name = parsing ? "解析" : "翻译";
