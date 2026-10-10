@@ -339,6 +339,12 @@ export function EPUBReadingView({
   };
   const toolbar = (
     <div className="translation-toolbar">
+      <AssistanceControls
+        documentId={doc.id}
+        processing={processing}
+        library="books"
+        epubChapter={() => position.current}
+      />
       <Tabs value={mode} onValueChange={(value) => changeMode(value as Mode)}>
         <TabsList>
           <TabsTrigger value="source">仅原文</TabsTrigger>
@@ -346,12 +352,6 @@ export function EPUBReadingView({
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
-      <AssistanceControls
-        documentId={doc.id}
-        processing={processing}
-        library="books"
-        epubChapter={() => position.current}
-      />
     </div>
   );
   return (
