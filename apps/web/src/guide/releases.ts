@@ -22,6 +22,10 @@ export const releaseNotes: Record<string, ReleaseItem[]> = {
       title: "从 Zotero 导入",
       body: "在「导入论文」中预览并迁移本机 Zotero 的 PDF、论文信息、分类、标签、笔记和可转换的批注。",
     },
+    {
+      title: "从浏览器收录论文",
+      body: "安装 Reader Connector 后，可从论文页面收录 PDF，并选择 Reader 论文库中已有的分类和标签。",
+    },
   ],
 };
 
