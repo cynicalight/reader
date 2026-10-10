@@ -1,0 +1,78 @@
+.guide-dialog {
+  max-height: min(760px, calc(100dvh - 2rem));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.guide-dialog::-webkit-scrollbar {
+  display: none;
+}
+.guide-stage {
+  overflow: hidden;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--muted) 60%, var(--background));
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.guide-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.guide-footer {
+  align-items: center;
+}
+div.guide-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.guide-dots {
+  display: flex;
+  gap: 6px;
+  margin-right: auto;
+}
+.guide-dots > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  transition:
+    width 200ms ease,
+    background-color 200ms ease;
+}
+.guide-dots > span[data-active] {
+  width: 16px;
+  background: var(--foreground);
+}
+.guide-browser {
+  padding: 20px;
+}
+.guide-layout.guide-layout {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  gap: 24px;
+}
+.guide-nav [data-slot="tabs-trigger"] {
+  gap: 10px;
+  font-weight: 400;
+}
+.guide-nav [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+.guide-nav [data-slot="tabs-trigger"][data-active] {
+  background: color-mix(in oklch, var(--foreground) 6%, var(--background));
+  color: var(--foreground);
+}
+.guide-panel {
+  display: grid;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .guide-layout.guide-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-dots > span {
+    transition: none;
+  }
+}
