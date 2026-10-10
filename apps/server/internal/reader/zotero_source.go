@@ -88,7 +88,12 @@ func readZotero(ctx context.Context, directory, linkedBase string) (*zoteroScan,
 	if err != nil || !info.Mode().IsRegular() {
 		return nil, errors.New("目录中没有 zotero.sqlite，请在 Zotero 设置 → 高级中查看资料目录")
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(dbPath)}
+	sqlitePath := filepath.ToSlash(dbPath)
+	// Windows drive paths need file:///C:/..., not a URI with C: as host.
+	if !strings.HasPrefix(sqlitePath, "/") {
+		sqlitePath = "/" + sqlitePath
+	}
+	u := url.URL{Scheme: "file", Path: sqlitePath}
 	q := url.Values{"mode": {"ro"}, "_pragma": {"query_only(1)", "busy_timeout(3000)"}}
 	u.RawQuery = q.Encode()
 	db, err := sql.Open("sqlite", u.String())
