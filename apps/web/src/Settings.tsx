@@ -82,8 +82,21 @@ export function Settings({
   const [apiModels, setAPIModels] = useState<AgentModel[]>([]);
   const [apiModelsError, setAPIModelsError] = useState("");
   const [apiDetails, setAPIDetails] = useState(false);
+  const [connector, setConnector] = useState<{
+    available: boolean;
+    paired: boolean;
+  } | null>(null);
+  const [pairCode, setPairCode] = useState("");
   useEffect(() => {
     if (!open) setAPIDetails(false);
+  }, [open]);
+  useEffect(() => {
+    if (open)
+      void api
+        .connectorStatus()
+        .then(setConnector)
+        .catch(() => setConnector(null));
+    else setPairCode("");
   }, [open]);
   const {
     theme,
@@ -600,6 +613,64 @@ export function Settings({
           <TabsContent value="papers" className="settings-panel" keepMounted>
             <section>
               <h3 className="mb-3 text-sm font-medium">论文库</h3>
+              <div className="mb-5 rounded-md border p-3 text-sm">
+                <div className="font-medium">浏览器收录插件</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  在 Chrome 插件中输入配对码，即可把带 PDF
+                  的论文保存到本机论文库。
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!connector?.available}
+                    onClick={() =>
+                      void api
+                        .connectorPairCode()
+                        .then((result) => {
+                          setPairCode(result.code);
+                          window.setTimeout(
+                            () => setPairCode(""),
+                            result.expiresIn * 1000,
+                          );
+                        })
+                        .catch((e) => toast.error(e.message))
+                    }
+                  >
+                    生成配对码
+                  </Button>
+                  {connector?.paired && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void api
+                          .connectorRevoke()
+                          .then(() => {
+                            setPairCode("");
+                            setConnector((current) =>
+                              current ? { ...current, paired: false } : current,
+                            );
+                            toast.success("已撤销浏览器插件配对");
+                          })
+                          .catch((e) => toast.error(e.message))
+                      }
+                    >
+                      撤销配对
+                    </Button>
+                  )}
+                  {pairCode && (
+                    <code className="select-all font-mono text-base tracking-wide">
+                      {pairCode}
+                    </code>
+                  )}
+                </div>
+                {connector && !connector.available && (
+                  <p className="mt-2 text-xs text-destructive">
+                    本机端口 17841 被占用，插件连接不可用。
+                  </p>
+                )}
+              </div>
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
                   className="mt-0.5"

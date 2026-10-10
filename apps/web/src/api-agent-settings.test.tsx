@@ -10,6 +10,7 @@ import { useReaderStore } from "./store";
 
 vi.mock("@reader/api", () => ({
   api: {
+    connectorStatus: vi.fn(async () => ({ available: true, paired: false })),
     providers: vi.fn(),
     aiConfig: vi.fn(),
     saveAIConfig: vi.fn(),

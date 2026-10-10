@@ -99,6 +99,21 @@ function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
 export type ZoteroScan = components["schemas"]["ZoteroScan"];
 export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
 export const api = {
+  connectorStatus: () =>
+    request<{ available: boolean; paired: boolean }>("/api/connector/status"),
+  connectorRevision: () =>
+    request<{ revision: number }>("/api/connector/revision"),
+  connectorPairCode: () =>
+    request<{ code: string; expiresIn: number; port: string }>(
+      "/api/connector/pair-code",
+      { method: "POST" },
+    ),
+  connectorRevoke: () =>
+    request<void>("/api/connector/pair", { method: "DELETE" }),
+  snapshotStatus: (id: string) =>
+    request<{ available: boolean; sourceUrl?: string }>(
+      `/api/documents/${encodeURIComponent(id)}/snapshot`,
+    ),
   zoteroDefaults: () => request<{ directory: string }>("/api/import/zotero"),
   scanZotero: (directory: string, linkedBase = "") =>
     request<ZoteroScan>("/api/import/zotero/scan", {
