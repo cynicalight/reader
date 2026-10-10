@@ -1,6 +1,10 @@
-# Reader
+<p align="center">
+  <img src="assets/logo/reader-logo.svg" width="112" alt="Reader logo" />
+</p>
 
-**简体中文** | [English](README.en.md) | [官网](https://cynicalight.github.io/reader/)
+<h1 align="center">Reader</h1>
+
+<p align="center"><b>简体中文</b> | <a href="README.en.md">English</a> | <a href="https://cynicalight.github.io/reader/">官网</a></p>
 
 一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
@@ -146,6 +150,7 @@ packages/
 └── api-client/    # OpenAPI 类型与 API 客户端
 docs/              # 范围、路线图、接口与验证记录
 website/           # 项目官网静态页面与 README 截图
+assets/            # Logo 源文件与应用图标
 ```
 
 业务模型围绕 `Document` 组织。PDF 用页码和坐标定位；EPUB 使用章节资源和 locator 定位。阅读界面通过 `ReaderAdapter` 调用各自的引擎。项目使用 pnpm workspace，不依赖 Nx 或 Turborepo。
