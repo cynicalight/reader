@@ -120,32 +120,56 @@
   new ResizeObserver(fit).observe(stage);
   fit();
 
-  /* Reading demo */
+  /* Reading demo: three scenes, each showing only the panes its task needs */
   const win = $("#window");
-  const page = $("#page");
-  const target = $("#target");
-  const toolbar = $("#toolbar");
-  const explain = $("#tb-explain");
+  const doc = $("#doc");
   const cursor = $("#cursor");
-  const chip = $("#chip");
-  const userMsg = $("#msg-user");
-  const aiMsg = $("#msg-ai");
-  const aiText = $("#ai-text");
-  const source = $("#source");
-  const hintEls = [$("#chat-hint"), $("#chat-s1"), $("#chat-s2")];
-  const steps = $$(".step");
-  const answer = [
-    ["作者区分了"],
-    ["目录", 1],
-    ["与"],
-    ["论证", 1],
+  const selBar = $("#sel-bar");
+  const notePop = $("#note-pop");
+  const noteText = $("#np-text");
+  const noteCount = $("#note-count");
+  const freshCards = [$("#card-hl"), $("#card-note")];
+  const empty = $("#ai-empty");
+  const userMsg = $("#m-user");
+  const refBtn = $("#ref-btn");
+  const refPop = $("#ref-pop");
+  const refCard = $("#ref-card");
+  const waiting = $("#m-wait");
+  const aiMsg = $("#m-ai");
+  const answer = $("#answer");
+  const actions = $("#m-actions");
+  const flows = [$("#src"), $("#tr")];
+  const sceneTabs = $$("#steps .step");
+  const scenes = sceneTabs.map((tab) => tab.dataset.scene);
+  const sentence = (n, flow = flows[0]) => $(`[data-s="${n}"]`, flow);
+  const sentences = (n) => flows.map((flow) => sentence(n, flow));
+  const blocks = (n) => flows.map((flow) => $(`p[data-b="${n}"]`, flow));
+  const note = "对照 4.2 节的消融实验，看结论是否超出证据。";
+  const reply = [
+    ["原文结论：", 1],
     [
-      "：目录只告诉你这一章“讲什么”，论证才说明结论“为什么成立”。\n\n阅读时可以先用目录搭起结构，再回到正文，逐段核对每一步推理所依赖的证据。",
+      "作者认为，不看原文段落就作答的助手，会让读者更难判断一句话出自哪里、是否成立。\n",
+    ],
+    ["补充说明：", 1],
+    [
+      "流畅本身不是问题，问题在于回答与原句脱节。读者无法回到出处核对时，容易把助手的概括当成作者的主张；所以作者主张每次解释都附着在引出它的那句原文上。",
     ],
   ];
-  const rel = (el, base, first = false) => {
+  const replyLength = reply.reduce((n, [text]) => n + text.length, 0);
+  const renderReply = (count, caret = false) => {
+    let left = count;
+    let html = "<p>";
+    for (const [text, bold] of reply) {
+      if (left <= 0) break;
+      const part = text.slice(0, left).replace(/\n/g, "</p><p>");
+      left -= text.length;
+      html += bold ? `<b>${part}</b>` : part;
+    }
+    return `${html}${caret ? '<span class="caret"></span>' : ""}</p>`;
+  };
+  const rel = (el, base = win) => {
     const b = base.getBoundingClientRect();
-    const r = first ? el.getClientRects()[0] : el.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
     return {
       x: (r.left - b.left) / scale,
       y: (r.top - b.top) / scale,
@@ -153,115 +177,243 @@
       h: r.height / scale,
     };
   };
+  const lineRects = (el) => {
+    const b = win.getBoundingClientRect();
+    return [...el.getClientRects()].map((r) => ({
+      left: (r.left - b.left) / scale,
+      right: (r.right - b.left) / scale,
+      top: (r.top - b.top) / scale,
+      bottom: (r.bottom - b.top) / scale,
+    }));
+  };
   const moveCursor = (x, y) =>
     (cursor.style.transform = `translate(${x}px, ${y}px)`);
-  const click = async (wait) => {
+  const parkCursor = () => moveCursor(1060, 640);
+  const mark = (n, kind) =>
+    sentences(n).forEach((el) => (el.dataset.mark = kind));
+  const pulse = (el) => {
+    delete el.dataset.pulse;
+    void el.offsetWidth;
+    el.dataset.pulse = "";
+  };
+  const clearHover = () => {
+    $$("p[data-hover]", win).forEach((p) => delete p.dataset.hover);
+    $$("[data-linked]", win).forEach((s) => delete s.dataset.linked);
+  };
+  // Pop-ups sit in the document pane, above or below the selected sentence.
+  const place = (pop, el, below) => {
+    const d = rel(doc);
+    const lines = lineRects(el);
+    const line = below ? lines[lines.length - 1] : lines[0];
+    const left = Math.min(
+      doc.clientWidth - pop.offsetWidth - 12,
+      Math.max(12, line.left - d.x - 10),
+    );
+    const top = below
+      ? line.bottom - d.y + 10
+      : line.top - d.y - pop.offsetHeight - 10;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  };
+
+  function reset(name, done = false) {
+    win.dataset.scene = name;
+    win.dataset.view = "src";
+    sceneTabs.forEach((tab) =>
+      tab.setAttribute("aria-selected", String(tab.dataset.scene === name)),
+    );
+    for (const el of $$("[data-s]", win)) {
+      delete el.dataset.mark;
+      delete el.dataset.sel;
+      delete el.dataset.pulse;
+    }
+    clearHover();
+    $$(".hit", win).forEach((el) => el.classList.remove("hit"));
+    flows.forEach((flow) => (flow.style.transform = ""));
+    [selBar, notePop, refPop].forEach((el) => el.classList.remove("on"));
+    // Later scenes keep the marks the first scene makes.
+    const annotated = done || name !== "notes";
+    mark(1, "hl");
+    mark(8, "q");
+    if (annotated) [3, 5].forEach((n) => mark(n, "hl"));
+    for (const card of freshCards) {
+      card.style.transition = "none";
+      card.classList.toggle("on", annotated);
+      card.classList.remove("flash");
+      void card.offsetWidth;
+      card.style.transition = "";
+    }
+    noteCount.textContent = annotated ? "4" : "2";
+    noteText.textContent = "";
+    empty.style.display = "";
+    [userMsg, waiting, aiMsg, actions].forEach((el) =>
+      el.classList.remove("on"),
+    );
+    answer.innerHTML = "";
+  }
+
+  function showFinal(name) {
+    reset(name, true);
+    if (name === "translate") {
+      win.dataset.view = "both";
+      blocks(2).forEach((p) => (p.dataset.hover = ""));
+      sentences(5).forEach((s) => (s.dataset.linked = ""));
+    }
+    if (name === "ask") {
+      empty.style.display = "none";
+      [userMsg, aiMsg, actions].forEach((el) => el.classList.add("on"));
+      answer.innerHTML = renderReply(replyLength);
+    }
+    moveCursor(-40, -40);
+  }
+
+  const wait = gate(win);
+  const cancelled = Symbol("cancelled");
+  let token = 0;
+
+  async function clickOn(el, step) {
+    const r = rel(el);
+    moveCursor(r.x + r.w / 2, r.y + r.h / 2);
+    await step(900);
+    el.classList.add("hit");
     cursor.classList.remove("click");
     void cursor.offsetWidth;
     cursor.classList.add("click");
-    await wait(260);
-  };
-  const setStep = (i) =>
-    steps.forEach((s, n) => s.classList.toggle("active", n === i));
-  const renderAnswer = (count) => {
-    let left = count;
-    let html = "";
-    for (const [text, bold] of answer) {
-      if (left <= 0) break;
-      const part = text.slice(0, left).replace(/\n/g, "<br />");
-      left -= text.length;
-      html += bold ? `<b>${part}</b>` : part;
-    }
-    return html;
-  };
-  const answerLength = answer.reduce((n, [t]) => n + t.length, 0);
-  const resetDemo = () => {
-    target.className = "sel";
-    toolbar.classList.remove("on");
-    explain.classList.remove("hit");
-    chip.classList.remove("on");
-    userMsg.classList.remove("on");
-    aiMsg.classList.remove("on");
-    source.classList.remove("on", "hit");
-    aiText.innerHTML = "";
-    hintEls.forEach((el) => (el.style.display = ""));
-  };
-  const finalDemo = () => {
-    target.className = "sel marked";
-    hintEls.forEach((el) => (el.style.display = "none"));
-    userMsg.classList.add("on");
-    aiMsg.classList.add("on");
-    aiText.innerHTML = renderAnswer(answerLength);
-    source.classList.add("on");
-    moveCursor(-40, -40);
-  };
-  async function runDemo() {
-    const wait = gate(win);
-    moveCursor(760, 560);
-    for (;;) {
-      resetDemo();
-      setStep(0);
-      await wait(900);
-      const t = rel(target, win, true);
-      moveCursor(t.x - 2, t.y + 4);
-      await wait(1000);
-      target.classList.add("on");
-      const end = target.getClientRects();
-      const last = end[end.length - 1];
-      const wb = win.getBoundingClientRect();
-      moveCursor(
-        (last.right - wb.left) / scale,
-        (last.top - wb.top) / scale + 4,
-      );
-      await wait(1100);
-      const tp = rel(target, page, true);
-      toolbar.style.left = `${Math.min(page.clientWidth - toolbar.offsetWidth - 16, Math.max(20, tp.x - 10))}px`;
-      toolbar.style.top = `${tp.y - 46}px`;
-      toolbar.classList.add("on");
-      await wait(700);
-      setStep(1);
-      const ex = rel(explain, win);
-      moveCursor(ex.x + ex.w / 2, ex.y + ex.h / 2);
-      await wait(950);
-      explain.classList.add("hit");
-      await click(wait);
-      toolbar.classList.remove("on");
-      target.style.transition = "none";
-      target.classList.remove("on");
-      void target.offsetWidth;
-      target.style.transition = "";
-      chip.classList.add("on");
-      await wait(600);
-      hintEls.forEach((el) => (el.style.display = "none"));
-      chip.classList.remove("on");
-      userMsg.classList.add("on");
-      await wait(700);
-      aiMsg.classList.add("on");
-      aiText.innerHTML = '<span class="caret"></span>';
-      await wait(500);
-      for (let i = 1; i <= answerLength; i += 2) {
-        aiText.innerHTML = renderAnswer(i) + '<span class="caret"></span>';
-        await wait(34);
+    await step(260);
+  }
+  async function select(n, step) {
+    const el = sentence(n);
+    const lines = lineRects(el);
+    moveCursor(lines[0].left - 2, lines[0].top + 4);
+    await step(950);
+    el.dataset.sel = "";
+    void el.offsetWidth;
+    el.dataset.sel = "on";
+    const last = lines[lines.length - 1];
+    moveCursor(last.right, last.top + 4);
+    await step(1100);
+    place(selBar, el, false);
+    selBar.classList.add("on");
+    await step(650);
+    return el;
+  }
+  async function hover(block, n, side, step) {
+    const target = sentence(n, flows[side]);
+    const r = lineRects(target)[0];
+    moveCursor((r.left + r.right) / 2, r.top + 6);
+    await step(850);
+    clearHover();
+    blocks(block).forEach((p) => (p.dataset.hover = ""));
+    sentences(n).forEach((s) => (s.dataset.linked = ""));
+    await step(1500);
+  }
+
+  const play = {
+    async notes(step) {
+      await step(700);
+      let s = await select(3, step);
+      await clickOn($('[data-tool="yellow"]', selBar), step);
+      selBar.classList.remove("on");
+      delete s.dataset.sel;
+      mark(3, "hl");
+      noteCount.textContent = "3";
+      freshCards[0].classList.add("on", "flash");
+      await step(1300);
+      freshCards[0].classList.remove("flash");
+      s = await select(5, step);
+      await clickOn($('[data-tool="note"]', selBar), step);
+      selBar.classList.remove("on");
+      place(notePop, s, true);
+      notePop.classList.add("on");
+      await step(500);
+      for (const ch of note) {
+        noteText.textContent += ch;
+        await step(55);
       }
-      aiText.innerHTML = renderAnswer(answerLength);
-      source.classList.add("on");
-      await wait(900);
-      setStep(2);
-      const s = rel(source, win);
-      moveCursor(s.x + s.w / 2, s.y + s.h / 2);
-      await wait(1000);
-      source.classList.add("hit");
-      await click(wait);
-      target.classList.add("marked", "pulse");
-      await wait(400);
-      moveCursor(t.x + 200, t.y + 90);
-      await wait(3200);
+      await clickOn($("#np-save"), step);
+      notePop.classList.remove("on");
+      delete s.dataset.sel;
+      mark(5, "hl");
+      noteCount.textContent = "4";
+      freshCards[1].classList.add("on", "flash");
+      await step(1300);
+      freshCards[1].classList.remove("flash");
+      // Every record leads back to its passage.
+      await clickOn(freshCards[0], step);
+      pulse(sentence(3));
+      await step(2600);
+    },
+    async translate(step) {
+      await step(600);
+      const both = $('.view-seg [data-view="both"]', win);
+      await clickOn(both, step);
+      both.classList.remove("hit");
+      win.dataset.view = "both";
+      await step(1400);
+      await hover(2, 5, 0, step);
+      await hover(2, 6, 1, step);
+      clearHover();
+      // The two panes scroll together.
+      flows.forEach((flow) => (flow.style.transform = "translateY(-110px)"));
+      await step(1300);
+      await hover(4, 10, 0, step);
+      await step(1600);
+    },
+    async ask(step) {
+      await step(700);
+      const s = await select(4, step);
+      await clickOn($('[data-tool="ask"]', selBar), step);
+      selBar.classList.remove("on");
+      delete s.dataset.sel;
+      empty.style.display = "none";
+      userMsg.classList.add("on");
+      await step(600);
+      waiting.classList.add("on");
+      await step(1800);
+      waiting.classList.remove("on");
+      aiMsg.classList.add("on");
+      for (let i = 1; i <= replyLength; i += 2) {
+        answer.innerHTML = renderReply(i, true);
+        await step(30);
+      }
+      answer.innerHTML = renderReply(replyLength);
+      actions.classList.add("on");
+      await step(900);
+      await clickOn(refBtn, step);
+      refPop.classList.add("on");
+      await step(700);
+      await clickOn(refCard, step);
+      refPop.classList.remove("on");
+      refBtn.classList.remove("hit");
+      blocks(2)[0].dataset.hover = "";
+      pulse(s);
+      await step(2800);
+    },
+  };
+
+  async function runDemo(from) {
+    const mine = ++token;
+    const step = async (ms) => {
+      await wait(ms);
+      if (mine !== token) throw cancelled;
+    };
+    try {
+      for (let i = from; ; i = (i + 1) % scenes.length) {
+        reset(scenes[i]);
+        parkCursor();
+        await play[scenes[i]](step);
+      }
+    } catch (error) {
+      if (error !== cancelled) throw error;
     }
   }
-  if (reduced) {
-    finalDemo();
-    setStep(2);
-  } else runDemo();
+  sceneTabs.forEach((tab, i) =>
+    tab.addEventListener("click", () =>
+      reduced ? showFinal(scenes[i]) : runDemo(i),
+    ),
+  );
+  if (reduced) showFinal(scenes[0]);
+  else runDemo(0);
 
   /* Cover processing stages */
   const panel = $("#stage-panel");
