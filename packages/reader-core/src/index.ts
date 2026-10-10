@@ -165,6 +165,13 @@ export interface LibraryPreferences {
   mode?: LibraryMode;
   papers?: PaperLibraryPreferences;
 }
+/** First-run guide and release notes, stored with the library. */
+export interface GuidePreferences {
+  /** The full onboarding was finished or skipped. */
+  onboarded?: boolean;
+  /** The app version whose release notes were last handled. */
+  seenVersion?: string;
+}
 export interface TagBoard {
   id: string;
   name: string;

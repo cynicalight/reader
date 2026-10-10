@@ -17,6 +17,7 @@ import {
   CirclePlus,
   Info,
   Trash2,
+  BookOpenText,
 } from "lucide-react";
 import { version } from "../../desktop/package.json";
 import { api, RequestError } from "@reader/api";
@@ -56,6 +57,7 @@ import { DocumentEditor, LibraryFilterBar } from "./DocumentManagement";
 import { TagBoards } from "./TagBoards";
 import { LibraryDocuments } from "./LibraryDocuments";
 import { filterDocuments, initialFilters } from "./library";
+import { GuideHost } from "./guide/GuideHost";
 const currentMode = () =>
   libraryMode(useReaderStore.getState().libraryPreferences);
 export function App() {
@@ -80,6 +82,7 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [about, setAbout] = useState(false);
+  const [guide, setGuide] = useState(false);
   const [filter, setFilter] = useState("all");
   const [filters, setFilters] = useState(initialFilters);
   const [libraryView, setLibraryView] = useState<"grid" | "list">("grid");
@@ -456,6 +459,14 @@ export function App() {
                 <Button
                   variant="ghost"
                   className="nav-item"
+                  onClick={() => setGuide(true)}
+                >
+                  <BookOpenText className="size-4" />
+                  指南
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="nav-item"
                   onClick={() => setAbout(true)}
                 >
                   <Info className="size-4" />
@@ -659,6 +670,18 @@ export function App() {
           open={importingPaper}
           onOpenChange={setImportingPaper}
           onChooseFiles={chooseFiles}
+        />
+        <GuideHost
+          ready={!loading && !error}
+          version={version}
+          hasDocuments={allDocuments.length > 0}
+          open={guide}
+          onOpenChange={setGuide}
+          onAction={(action) => {
+            if (action === "settings") setSettings(true);
+            else if (currentMode() === "papers") setImportingPaper(true);
+            else chooseFiles();
+          }}
         />
         <Dialog open={about} onOpenChange={setAbout}>
           <DialogContent className="sm:max-w-sm">

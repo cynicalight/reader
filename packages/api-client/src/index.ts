@@ -24,6 +24,7 @@ import type {
   AgentModel,
   LibraryMode,
   LibraryPreferences,
+  GuidePreferences,
   PaperMetadata,
   PaperMetadataField,
   ReadingStatus,
@@ -411,6 +412,12 @@ export const api = {
     request<LibraryPreferences>("/api/preferences/library"),
   saveLibraryPreferences: (preferences: LibraryPreferences) =>
     request<LibraryPreferences>("/api/preferences/library", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    }),
+  guidePreferences: () => request<GuidePreferences>("/api/preferences/guide"),
+  saveGuidePreferences: (preferences: GuidePreferences) =>
+    request<GuidePreferences>("/api/preferences/guide", {
       method: "PUT",
       body: JSON.stringify(preferences),
     }),

@@ -2000,7 +2000,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    key: "library";
+                    key: "library" | "guide";
                 };
                 cookie?: never;
             };
@@ -2033,7 +2033,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    key: "library";
+                    key: "library" | "guide";
                 };
                 cookie?: never;
             };

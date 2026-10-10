@@ -178,6 +178,15 @@ func TestLibraryPreferences(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"mode":"papers"`) {
 		t.Fatal(w.Body.String())
 	}
+	if w = request(t, s, "PUT", "/api/preferences/guide", strings.NewReader(`{"onboarded":true,"seenVersion":"0.3.0"}`)); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w = request(t, s, "GET", "/api/preferences/guide", nil); !strings.Contains(w.Body.String(), `"seenVersion":"0.3.0"`) {
+		t.Fatal(w.Body.String())
+	}
+	if w = request(t, s, "GET", "/api/preferences/library", nil); strings.Contains(w.Body.String(), "seenVersion") {
+		t.Fatalf("keys share a value: %s", w.Body.String())
+	}
 	if w = request(t, s, "PUT", "/api/preferences/other", strings.NewReader(`{}`)); w.Code != 404 {
 		t.Fatalf("unknown key: %d", w.Code)
 	}
