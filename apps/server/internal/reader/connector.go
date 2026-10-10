@@ -185,7 +185,7 @@ func (s *Server) connectorFolders(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, out)
 }
 func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 60<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		fail(w, 400, "上传超过限制或内容无效")
 		return
@@ -240,8 +240,8 @@ func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	snapshot := r.FormValue("snapshot")
-	if len(snapshot) > 3<<20 {
-		fail(w, 400, "网页快照超过 3 MB")
+	if len(snapshot) > 10<<20 {
+		fail(w, 400, "网页快照超过 10 MB")
 		return
 	}
 	temp, err := os.CreateTemp(s.Store.Root, "connector-*.pdf")
@@ -300,7 +300,7 @@ func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if snapshot != "" {
-		safe := sanitizeConnectorSnapshot(snapshot)
+		safe := sanitizeConnectorSnapshot(snapshot, sourceURL)
 		_, err = s.Store.DB.Exec("INSERT INTO connector_snapshots(document_id,source_url,body,created_at) VALUES(?,?,?,?) ON CONFLICT(document_id) DO NOTHING", d.ID, sourceURL.String(), safe, now())
 		if err != nil {
 			fail(w, 500, "论文已保存，但快照保存失败")
@@ -359,7 +359,7 @@ func (s *Server) mergeConnectorLabels(id string, tags, folders []string) ([]stri
 	}
 	return nil, errors.New("labels changed concurrently")
 }
-func sanitizeConnectorSnapshot(source string) string {
+func sanitizeConnectorSnapshot(source string, base *url.URL) string {
 	root, err := nethtml.Parse(strings.NewReader(source))
 	if err != nil {
 		return ""
@@ -390,11 +390,14 @@ func sanitizeConnectorSnapshot(source string) string {
 				value := strings.TrimSpace(a.Val)
 				if tag == "a" && key == "href" {
 					u, e := url.Parse(value)
-					if e == nil && (u.Scheme == "http" || u.Scheme == "https") {
-						fmt.Fprintf(&b, ` href="%s" rel="noreferrer" target="_blank"`, html.EscapeString(value))
+					if e == nil {
+						u = base.ResolveReference(u)
+					}
+					if e == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+						fmt.Fprintf(&b, ` href="%s" rel="noreferrer" target="_blank"`, html.EscapeString(u.String()))
 					}
 				}
-				if tag == "img" && key == "src" && len(value) < 1<<20 && snapshotImage.MatchString(value) {
+				if tag == "img" && key == "src" && len(value) < 3<<20 && snapshotImage.MatchString(value) {
 					fmt.Fprintf(&b, ` src="%s"`, value)
 				}
 				if tag == "img" && key == "alt" {

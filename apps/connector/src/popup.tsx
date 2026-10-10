@@ -73,7 +73,29 @@ function App() {
         setItems(detection.items);
         setSelected(detection.items.map((_, i) => i));
       } catch (error) {
-        setMessage((error as Error).message || "无法读取此页面");
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (tab?.url && /^https?:\/\//.test(tab.url)) {
+          // Chrome's built-in PDF viewer does not allow page script injection.
+          // The worker validates the PDF signature before sending anything to Reader.
+          setItems([
+            {
+              title: tab.title || "PDF",
+              sourceUrl: tab.url,
+              pdfUrl: tab.url,
+              metadata: {
+                title: tab.title || "PDF",
+                url: tab.url,
+                itemType: "journal",
+              },
+              snapshot: "",
+            },
+          ]);
+          setSelected([0]);
+          setMessage("无法读取页面内容；如果当前标签页是 PDF，仍可尝试收录。");
+        } else setMessage((error as Error).message || "无法读取此页面");
       }
     })();
   }, []);
@@ -104,7 +126,7 @@ function App() {
   async function prepare(candidate: Candidate): Promise<Candidate> {
     if (
       candidate.pdfUrl === candidate.sourceUrl &&
-      /\.pdf(?:$|[?#])/i.test(candidate.sourceUrl)
+      (!candidate.snapshot || /\.pdf(?:$|[?#])/i.test(candidate.sourceUrl))
     )
       return {
         ...candidate,
@@ -147,7 +169,7 @@ function App() {
         ? (candidate.sourceUrl.match(/\/(?:abs|pdf)\/([^/?#]+)/) || [])[1]
         : "") ||
       "";
-    const pdf =
+    let pdf =
       candidate.pdfUrl ||
       absolute(meta("citation_pdf_url")) ||
       absolute(
@@ -190,45 +212,121 @@ function App() {
       ).slice(0, 20000),
     };
     if (authors.length) metadata.creators = authors;
+    if (metadata.doi) {
+      try {
+        const response = await fetch(
+          `https://api.crossref.org/works/${encodeURIComponent(String(metadata.doi))}`,
+        );
+        if (response.ok) {
+          const { message: work } = await response.json();
+          if (work && typeof work === "object") {
+            if (
+              !meta("citation_title") &&
+              Array.isArray(work.title) &&
+              work.title[0]
+            )
+              metadata.title = String(work.title[0]).slice(0, 300);
+            if (!authors.length && Array.isArray(work.author))
+              metadata.creators = work.author
+                .map((a: { given?: string; family?: string }) => ({
+                  name: [a.given, a.family].filter(Boolean).join(" "),
+                }))
+                .filter((a: { name: string }) => a.name);
+            if (!metadata.venue && Array.isArray(work["container-title"]))
+              metadata.venue = String(work["container-title"][0] || "").slice(
+                0,
+                500,
+              );
+            if (!metadata.date) {
+              const parts = work.published?.["date-parts"]?.[0];
+              if (Array.isArray(parts))
+                metadata.date = cleanDate(parts.join("-"));
+            }
+            if (!pdf && Array.isArray(work.link)) {
+              const link = work.link.find(
+                (x: { "content-type"?: string; URL?: string }) =>
+                  x["content-type"] === "application/pdf",
+              );
+              pdf = absolute(link?.URL || "");
+            }
+          }
+        }
+      } catch {
+        /* A DOI lookup is optional when the publisher page already has data. */
+      }
+    }
     const main = page.querySelector("main,article") || page.body;
     let snapshot = main?.outerHTML || "";
-    // Embed small images so the sanitized snapshot remains readable offline.
+    const snapshotWarnings: string[] = [];
+    // Embed images within the snapshot size budget for offline reading.
     const clone = main?.cloneNode(true) as Element | undefined;
     if (clone) {
+      clone
+        .querySelectorAll(
+          "script,style,iframe,object,embed,form,svg,template,noscript",
+        )
+        .forEach((node) => node.remove());
+      let omittedImages = 0;
       for (const img of Array.from(
         clone.querySelectorAll<HTMLImageElement>("img"),
-      ).slice(0, 12)) {
+      )) {
         try {
-          const src = absolute(img.getAttribute("src") || "");
-          if (!src) continue;
+          const src = absolute(
+            img.getAttribute("src") || img.getAttribute("data-src") || "",
+          );
+          if (!src) {
+            omittedImages++;
+            img.removeAttribute("src");
+            continue;
+          }
           const response = await fetch(src, { credentials: "include" });
+          if (!response.ok) throw Error("image fetch failed");
           const blob = await response.blob();
           if (
             !blob.type.match(/^image\/(png|jpeg|webp|gif)$/) ||
-            blob.size > 150_000
+            blob.size > 2_000_000
           )
-            continue;
+            throw Error("image too large or unsupported");
           const data = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result));
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
+          if (
+            new TextEncoder().encode(clone.outerHTML).length + data.length >
+            10 * 1024 * 1024
+          )
+            throw Error("snapshot size limit");
           img.src = data;
         } catch {
+          omittedImages++;
           img.removeAttribute("src");
         }
       }
+      if (omittedImages)
+        snapshotWarnings.push(`${omittedImages} 张图片未能离线保存`);
       snapshot = clone.outerHTML;
     }
-    if (snapshot.length > 3 * 1024 * 1024) snapshot = "";
-    return { ...candidate, title, pdfUrl: pdf, metadata, snapshot };
+    if (new TextEncoder().encode(snapshot).length > 10 * 1024 * 1024) {
+      snapshot = "";
+      snapshotWarnings.push("网页快照超过 10 MB，未保存快照");
+    }
+    return {
+      ...candidate,
+      title: String(metadata.title),
+      pdfUrl: pdf,
+      metadata,
+      snapshot,
+      snapshotWarnings,
+    };
   }
   async function save() {
     if (!secret || selected.length === 0) return;
     setBusy(true);
     setMessage("");
     let success = 0;
+    const outcomes: string[] = [];
     const failures: string[] = [];
     const warnings: string[] = [];
     try {
@@ -271,15 +369,26 @@ function App() {
             });
           if (result.ok) {
             success++;
+            outcomes.push(`✓ ${item.title}`);
+            if (prepared.snapshotWarnings?.length)
+              warnings.push(
+                `${item.title}：${prepared.snapshotWarnings.join("；")}`,
+              );
             if (result.warnings?.length)
               warnings.push(`${item.title}：${result.warnings.join("；")}`);
-          } else failures.push(`${item.title}：${result.error || "失败"}`);
+          } else {
+            const failure = `${item.title}：${result.error || "失败"}`;
+            failures.push(failure);
+            outcomes.push(`✕ ${failure}`);
+          }
         } catch (error) {
-          failures.push(`${item.title}：${(error as Error).message}`);
+          const failure = `${item.title}：${(error as Error).message}`;
+          failures.push(failure);
+          outcomes.push(`✕ ${failure}`);
         }
       }
       setMessage(
-        `已收录 ${success} 篇，失败 ${failures.length} 篇${failures.length ? "\n" + failures.join("\n") : ""}${warnings.length ? "\n提醒：" + warnings.join("\n") : ""}`,
+        `已收录 ${success} 篇，失败 ${failures.length} 篇\n${outcomes.join("\n")}${warnings.length ? "\n提醒：" + warnings.join("\n") : ""}`,
       );
     } catch (error) {
       setMessage((error as Error).message);

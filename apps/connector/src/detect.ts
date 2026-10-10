@@ -4,6 +4,7 @@ export type Candidate = {
   pdfUrl: string;
   metadata: Record<string, unknown>;
   snapshot: string;
+  snapshotWarnings?: string[];
 };
 export type Detection = { items: Candidate[]; kind: "single" | "list" };
 

@@ -87,6 +87,7 @@ export function Settings({
     paired: boolean;
   } | null>(null);
   const [pairCode, setPairCode] = useState("");
+  const pairCodeTimer = useRef<number | null>(null);
   useEffect(() => {
     if (!open) setAPIDetails(false);
   }, [open]);
@@ -96,7 +97,17 @@ export function Settings({
         .connectorStatus()
         .then(setConnector)
         .catch(() => setConnector(null));
-    else setPairCode("");
+    else {
+      setPairCode("");
+      if (pairCodeTimer.current !== null)
+        window.clearTimeout(pairCodeTimer.current);
+      pairCodeTimer.current = null;
+    }
+    return () => {
+      if (pairCodeTimer.current !== null)
+        window.clearTimeout(pairCodeTimer.current);
+      pairCodeTimer.current = null;
+    };
   }, [open]);
   const {
     theme,
@@ -628,11 +639,13 @@ export function Settings({
                       void api
                         .connectorPairCode()
                         .then((result) => {
+                          if (pairCodeTimer.current !== null)
+                            window.clearTimeout(pairCodeTimer.current);
                           setPairCode(result.code);
-                          window.setTimeout(
-                            () => setPairCode(""),
-                            result.expiresIn * 1000,
-                          );
+                          pairCodeTimer.current = window.setTimeout(() => {
+                            setPairCode("");
+                            pairCodeTimer.current = null;
+                          }, result.expiresIn * 1000);
                         })
                         .catch((e) => toast.error(e.message))
                     }

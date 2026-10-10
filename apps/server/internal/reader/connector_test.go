@@ -66,7 +66,7 @@ func TestConnectorPairAndImport(t *testing.T) {
 	_ = m.WriteField("sourceUrl", "https://example.org/paper")
 	_ = m.WriteField("tags", `["research"]`)
 	_ = m.WriteField("folders", `["Web"]`)
-	_ = m.WriteField("snapshot", `<article><h1>Saved</h1><script>alert(1)</script><img src="https://evil.example/a"><a href="javascript:alert(1)">bad</a></article>`)
+	_ = m.WriteField("snapshot", `<article><h1>Saved</h1><script>alert(1)</script><img src="https://evil.example/a"><a href="javascript:alert(1)">bad</a><a href="/paper/related">related</a></article>`)
 	f, _ := m.CreateFormFile("pdf", "paper.pdf")
 	_, _ = f.Write(testPDF(2))
 	_ = m.Close()
@@ -87,6 +87,9 @@ func TestConnectorPairAndImport(t *testing.T) {
 	}
 	if !strings.Contains(snapshot.Header().Get("Content-Security-Policy"), "sandbox") {
 		t.Fatal("snapshot missing CSP sandbox")
+	}
+	if !strings.Contains(snapshot.Body.String(), `href="https://example.org/paper/related"`) {
+		t.Fatal("relative snapshot link was not made absolute")
 	}
 	manual := request(t, s, "PATCH", "/api/documents/"+result.Document.ID, strings.NewReader(`{"title":"My edited title","metadata":{"venue":"My venue"}}`))
 	if manual.Code != 200 {
