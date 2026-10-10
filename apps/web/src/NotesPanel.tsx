@@ -9,6 +9,7 @@ import {
   ListPlus,
   Loader2,
   Pencil,
+  Search,
   Sparkles,
   StickyNote,
   Trash2,
@@ -425,6 +426,9 @@ export function NotesPanel({
   const [openOnly, setOpenOnly] = useState(false);
   const [color, setColor] = useState("");
   const [tag, setTag] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => setSearch(""), [doc.id]);
+  const query = search.trim().toLocaleLowerCase();
   const facets = annotationFacets(annotations);
   const palette = highlightPalette(useReaderStore((s) => s.theme));
   // A facet that no longer exists (deleted, retagged) stops filtering.
@@ -454,18 +458,22 @@ export function NotesPanel({
           (a.kind !== "bookmark" &&
             a.color.toLowerCase() === activeColor.toLowerCase())) &&
         (!activeTag ||
-          !!a.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())),
+          !!a.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())) &&
+        (!query || `${a.quote} ${a.note}`.toLocaleLowerCase().includes(query)),
     )
     .sort(documentOrder);
   const byId = new Map(messages.map((m) => [m.id, m]));
   return (
     <div className="notes-panel">
-      <div className="notes-heading">
-        <span>{annotations.length} 条记录</span>
-        <Button size="sm" variant="ghost" onClick={onExport}>
-          <Download />
-          导出
-        </Button>
+      <div className="notes-search">
+        <Search aria-hidden="true" />
+        <Input
+          type="search"
+          aria-label="搜索批注内容"
+          placeholder="搜索批注内容"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="notes-list">
@@ -546,7 +554,13 @@ export function NotesPanel({
           {!visible.length && (
             <div className="notes-empty">
               <StickyNote />
-              <p>{annotations.length ? "没有这类记录" : "暂无批注"}</p>
+              <p>
+                {query
+                  ? "没有匹配的记录"
+                  : annotations.length
+                    ? "没有这类记录"
+                    : "暂无批注"}
+              </p>
               {!annotations.length && (
                 <small>选中文字添加高亮、批注或问题。</small>
               )}
@@ -570,6 +584,13 @@ export function NotesPanel({
           ))}
         </div>
       </ScrollArea>
+      <div className="notes-footer">
+        <span>{annotations.length} 条记录</span>
+        <Button size="sm" variant="ghost" onClick={onExport}>
+          <Download />
+          导出
+        </Button>
+      </div>
     </div>
   );
 }
