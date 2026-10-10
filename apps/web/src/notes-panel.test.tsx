@@ -132,6 +132,36 @@ it("lists records in reading order", () => {
   ]);
 });
 
+it("searches quoted text and note content within the active filter", async () => {
+  const search = host.querySelector<HTMLInputElement>(
+    'input[aria-label="搜索批注内容"]',
+  )!;
+  const enter = async (value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  await enter("  CLAIM  ");
+  expect(cards()).toEqual(["a claim"]);
+  await enter("converge");
+  expect(cards()).toEqual(["Why?"]);
+  await act(async () => button("划线").click());
+  expect(cards()).toEqual([]);
+  expect(host.textContent).toContain("没有匹配的记录");
+  await enter("");
+  expect(cards()).toEqual(["page two"]);
+  expect(host.querySelector(".notes-footer")?.textContent).toContain(
+    "4 条记录",
+  );
+  await act(async () => button("导出").click());
+  expect(handlers.onExport).toHaveBeenCalledOnce();
+});
+
 it("edits a note in place", async () => {
   await act(async () => button("编辑批注").click());
   const field = host.querySelector<HTMLTextAreaElement>('[aria-label="批注"]')!;

@@ -1204,24 +1204,51 @@ kbd {
   }
 }
 .notes-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1;
 }
-.notes-heading {
+.notes-search {
+  position: relative;
+  padding: 12px 15px 8px;
+}
+.notes-search > svg {
+  position: absolute;
+  top: 20px;
+  left: 25px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.notes-search input {
+  padding-left: 34px;
+  font-size: 12px;
+}
+.notes-footer {
+  position: absolute;
+  z-index: 1;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 8%);
   font-size: 11px;
   color: var(--muted-foreground);
 }
-.notes-heading button {
+.notes-footer button {
   font-size: 10px;
 }
 .notes-list {
-  padding: 0 15px;
+  padding: 0 15px 76px;
 }
 .notes-empty {
   text-align: center;
