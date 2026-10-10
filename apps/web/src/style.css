@@ -48,6 +48,7 @@
 :root[data-theme="sepia"] {
   color-scheme: light;
   --brand: #c2643e;
+  --brand-10: color-mix(in srgb, var(--brand) 10%, transparent);
   --brand-30: color-mix(in srgb, var(--brand) 30%, transparent);
   --background: #f7f6f2;
   --foreground: #1f1e1d;
@@ -71,13 +72,13 @@
   background: #eeede7;
 }
 :root[data-theme="sepia"] .nav-item.active {
-  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  background: var(--brand-10);
   color: var(--primary);
 }
 :root[data-theme="sepia"] .book-card[data-selected="true"],
 :root[data-theme="sepia"] :is(.paper-row, .paper-table-row)[data-selected],
 :root[data-theme="sepia"] :is(.paper-row, .paper-table-row)[data-picked] {
-  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  background: var(--brand-10);
 }
 :root[data-theme="sepia"]
   .model-select-menu

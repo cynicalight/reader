@@ -249,11 +249,11 @@
     [data-translation-block][data-focused],
     [data-block-kind="text"][data-hovered]
   ) {
-  background: var(--brand-30);
+  background: var(--brand-10);
 }
 :root[data-theme="sepia"] .reader-block-hover[data-block-kind="text"],
 :root[data-theme="sepia"] .reader-block-hover.reader-block-focus {
-  border-color: var(--brand-30);
+  border-color: var(--brand-10);
 }
 :root[data-theme="sepia"]
   .translation-document
@@ -261,14 +261,14 @@
     [data-translation-block][data-focused],
     [data-block-kind="text"][data-hovered]
   ) {
-  outline-color: var(--brand-30);
+  outline-color: var(--brand-10);
 }
 
 .reader-sentence-hover-mark {
   background: rgb(128 128 128 / 22%);
 }
 :root[data-theme="sepia"] .reader-sentence-hover-mark {
-  background: var(--brand-30);
+  background: var(--brand-10);
 }
 
 .reader-block-focus[data-fading] {
