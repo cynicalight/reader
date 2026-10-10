@@ -413,3 +413,28 @@ it("lists tag views and smart tag categories that need every tag", () => {
   expect(prefs.smartCategories).toEqual([]);
   expect(prefs.pinned).toEqual([]);
 });
+
+it("excludes paused and disabled work from the processing view", () => {
+  const doc = paper({ id: "zotero" });
+  const job: Processing = {
+    documentId: doc.id,
+    enabled: false,
+    phase: "learning",
+    status: "paused",
+    pagesDone: 0,
+    pagesTotal: 0,
+    translationsDone: 0,
+    translationsTotal: 0,
+    detail: "翻译未开始",
+    updatedAt: "2026-10-10T09:00:00Z",
+  };
+  const matches = (patch: Partial<Processing>) =>
+    matchesView(doc, "processing", new Map([[doc.id, { ...job, ...patch }]]));
+  expect(matches({})).toBe(false);
+  expect(matches({ enabled: true, status: "paused" })).toBe(false);
+  expect(matches({ enabled: false, status: "queued" })).toBe(false);
+  for (const status of ["queued", "running", "waiting"] as const)
+    expect(matches({ enabled: true, status })).toBe(true);
+  for (const status of ["complete", "failed"] as const)
+    expect(matches({ enabled: true, status })).toBe(false);
+});

@@ -563,3 +563,42 @@ it("resizes table columns at their shared boundary", async () => {
   expect(prefs().columnWidths).toEqual({ authors: 176, year: 48 });
   rects.mockRestore();
 });
+
+it.each(["list", "table"] as const)(
+  "does not show paused Zotero imports as parsing in %s view",
+  async (layout) => {
+    jobs = new Map([
+      [
+        "a",
+        {
+          documentId: "a",
+          enabled: false,
+          phase: "learning",
+          status: "paused",
+          pagesDone: 0,
+          pagesTotal: 0,
+          translationsDone: 0,
+          translationsTotal: 0,
+          detail: "翻译未开始",
+          updatedAt: "2026-10-10T09:00:00Z",
+        },
+      ],
+    ]);
+    await act(async () => {
+      useReaderStore.setState({
+        libraryPreferences: { mode: "papers", papers: { layout } },
+      });
+      root.render(<Harness />);
+    });
+    expect(
+      row("Attention Is All You Need").querySelector(".paper-title-processing"),
+    ).toBeNull();
+    expect(navButton("解析中")).toBeUndefined();
+    expect(api.process).not.toHaveBeenCalled();
+    // When explicitly started, both the row progress and sidebar return.
+    jobs.set("a", { ...jobs.get("a")!, enabled: true, status: "running" });
+    await act(async () => root.render(<Harness />));
+    expect(row("Attention Is All You Need").textContent).toContain("解析中");
+    expect(navButton("解析中")).toBeDefined();
+  },
+);
