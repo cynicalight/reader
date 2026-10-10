@@ -18,16 +18,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	nethtml "golang.org/x/net/html"
 )
 
 const ConnectorPort = "17841"
+const connectorExtensionOrigin = "chrome-extension://afojfnpkeokahhniipldpdpecaljdnbe"
 
 func (s *Server) SetConnectorAvailable(available bool) { s.connectorAvailable = available }
 
-var extensionOrigin = regexp.MustCompile(`^chrome-extension://[a-p]{32}$`)
 var snapshotImage = regexp.MustCompile(`^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$`)
 
 func connectorSetting(db *sql.DB, key string) string {
@@ -51,37 +50,8 @@ func connectorHash(value string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func (s *Server) connectorPairCode(w http.ResponseWriter, r *http.Request) {
-	s.connectorMu.Lock()
-	defer s.connectorMu.Unlock()
-	if !s.connectorAvailable {
-		fail(w, 503, "浏览器连接入口不可用")
-		return
-	}
-	code := randomHex(5)
-	if code == "" {
-		fail(w, 500, "无法生成配对码")
-		return
-	}
-	s.connectorCode = code
-	s.connectorCodeExpires = time.Now().Add(5 * time.Minute).Unix()
-	s.connectorFailures = 0
-	respond(w, 200, map[string]any{"code": code, "expiresIn": 300, "port": ConnectorPort})
-}
-func (s *Server) connectorRevoke(w http.ResponseWriter, r *http.Request) {
-	s.connectorMu.Lock()
-	defer s.connectorMu.Unlock()
-	s.connectorCode = ""
-	s.connectorCodeExpires = 0
-	if err := connectorSet(s.Store.DB, "secret", ""); err != nil {
-		fail(w, 500, "无法撤销配对")
-		return
-	}
-	_ = connectorSet(s.Store.DB, "origin", "")
-	w.WriteHeader(204)
-}
 func (s *Server) connectorStatus(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, map[string]any{"available": s.connectorAvailable, "paired": connectorSetting(s.Store.DB, "secret") != ""})
+	respond(w, 200, map[string]any{"available": s.connectorAvailable})
 }
 func (s *Server) connectorRevisionStatus(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]int64{"revision": s.connectorRevision.Load()})
@@ -92,7 +62,7 @@ func (s *Server) connectorRevisionStatus(w http.ResponseWriter, r *http.Request)
 func (s *Server) ConnectorHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]bool{"running": true}) })
-	mux.HandleFunc("POST /v1/pair", s.connectorPair)
+	mux.HandleFunc("POST /v1/session", s.connectorSession)
 	mux.HandleFunc("GET /v1/folders", s.connectorFolders)
 	mux.HandleFunc("POST /v1/import", s.connectorImport)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +72,7 @@ func (s *Server) ConnectorHandler() http.Handler {
 			return
 		}
 		origin := r.Header.Get("Origin")
-		if !extensionOrigin.MatchString(origin) {
+		if origin != connectorExtensionOrigin {
 			fail(w, 403, "invalid origin")
 			return
 		}
@@ -115,52 +85,30 @@ func (s *Server) ConnectorHandler() http.Handler {
 			w.WriteHeader(204)
 			return
 		}
-		if r.URL.Path != "/v1/pair" && r.URL.Path != "/v1/status" {
-			savedOrigin := connectorSetting(s.Store.DB, "origin")
+		if r.URL.Path != "/v1/session" && r.URL.Path != "/v1/status" {
 			savedHash := connectorSetting(s.Store.DB, "secret")
 			provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			actualHash := connectorHash(provided)
-			if savedOrigin != origin || savedHash == "" || subtle.ConstantTimeCompare([]byte(savedHash), []byte(actualHash)) != 1 {
-				fail(w, 401, "请重新与 Reader 配对")
+			if savedHash == "" || subtle.ConstantTimeCompare([]byte(savedHash), []byte(actualHash)) != 1 {
+				fail(w, 401, "本机访问凭据已失效")
 				return
 			}
 		}
 		mux.ServeHTTP(w, r)
 	})
 }
-func (s *Server) connectorPair(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Code string `json:"code"`
-	}
-	if !decode(w, r, &input) {
-		return
-	}
+func (s *Server) connectorSession(w http.ResponseWriter, r *http.Request) {
 	s.connectorMu.Lock()
 	defer s.connectorMu.Unlock()
-	if s.connectorFailures >= 10 {
-		fail(w, 429, "配对尝试过多，请在 Reader 中生成新配对码")
-		return
-	}
-	if s.connectorCode == "" || time.Now().Unix() > s.connectorCodeExpires || subtle.ConstantTimeCompare([]byte(input.Code), []byte(s.connectorCode)) != 1 {
-		s.connectorFailures++
-		fail(w, 403, "配对码无效或已过期")
-		return
-	}
 	secret := randomHex(32)
 	if secret == "" {
 		fail(w, 500, "无法生成凭据")
 		return
 	}
 	if err := connectorSet(s.Store.DB, "secret", connectorHash(secret)); err != nil {
-		fail(w, 500, "无法保存配对")
+		fail(w, 500, "无法保存本机访问凭据")
 		return
 	}
-	if err := connectorSet(s.Store.DB, "origin", r.Header.Get("Origin")); err != nil {
-		fail(w, 500, "无法保存配对")
-		return
-	}
-	s.connectorCode = ""
-	s.connectorCodeExpires = 0
 	respond(w, 200, map[string]string{"secret": secret})
 }
 func (s *Server) connectorFolders(w http.ResponseWriter, r *http.Request) {

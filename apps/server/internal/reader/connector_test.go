@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const testExtensionOrigin = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const testExtensionOrigin = connectorExtensionOrigin
 
 func bridgeRequest(s *Server, method, path, secret string, body *bytes.Buffer, contentType string) *httptest.ResponseRecorder {
 	var r *http.Request
@@ -30,36 +30,25 @@ func bridgeRequest(s *Server, method, path, secret string, body *bytes.Buffer, c
 	s.ConnectorHandler().ServeHTTP(w, r)
 	return w
 }
-func pairTestConnector(t *testing.T, s *Server) string {
+func sessionTestConnector(t *testing.T, s *Server) string {
 	t.Helper()
 	s.SetConnectorAvailable(true)
-	w := request(t, s, "POST", "/api/connector/pair-code", nil)
+	w := bridgeRequest(s, "POST", "/v1/session", "", nil, "")
 	if w.Code != 200 {
-		t.Fatal(w.Body.String())
+		t.Fatalf("session %d: %s", w.Code, w.Body.String())
 	}
-	var code struct {
-		Code string `json:"code"`
-	}
-	_ = json.Unmarshal(w.Body.Bytes(), &code)
-	w = bridgeRequest(s, "POST", "/v1/pair", "", bytes.NewBufferString(`{"code":"`+code.Code+`"}`), "application/json")
-	if w.Code != 200 {
-		t.Fatalf("pair %d: %s", w.Code, w.Body.String())
-	}
-	var paired struct {
+	var session struct {
 		Secret string `json:"secret"`
 	}
-	_ = json.Unmarshal(w.Body.Bytes(), &paired)
-	return paired.Secret
+	_ = json.Unmarshal(w.Body.Bytes(), &session)
+	return session.Secret
 }
-func TestConnectorPairAndImport(t *testing.T) {
+func TestConnectorSessionAndImport(t *testing.T) {
 	s := testServer(t)
 	if w := bridgeRequest(s, "GET", "/v1/folders", "", nil, ""); w.Code != 401 {
 		t.Fatalf("unauthorized: %d", w.Code)
 	}
-	secret := pairTestConnector(t, s)
-	if w := bridgeRequest(s, "POST", "/v1/pair", "", bytes.NewBufferString(`{"code":"wrong"}`), "application/json"); w.Code != 403 {
-		t.Fatalf("reused code: %d", w.Code)
-	}
+	secret := sessionTestConnector(t, s)
 	var body bytes.Buffer
 	m := multipart.NewWriter(&body)
 	_ = m.WriteField("metadata", `{"title":"Test connector paper","doi":"10.1000/test","url":"https://example.org/paper","itemType":"journal"}`)
@@ -110,30 +99,25 @@ func TestConnectorPairAndImport(t *testing.T) {
 	if err != nil || updated.Title != "My edited title" || updated.Metadata.Venue != "My venue" {
 		t.Fatalf("manual metadata overwritten: %+v %v", updated, err)
 	}
-	if w = request(t, s, "DELETE", "/api/connector/pair", nil); w.Code != 204 {
-		t.Fatal(w.Body.String())
-	}
+	_ = sessionTestConnector(t, s)
 	if w = bridgeRequest(s, "GET", "/v1/folders", secret, nil, ""); w.Code != 401 {
-		t.Fatalf("revoked credential: %d", w.Code)
+		t.Fatalf("rotated credential: %d", w.Code)
 	}
 }
-func TestConnectorOriginAndPairRateLimit(t *testing.T) {
+func TestConnectorOriginRestriction(t *testing.T) {
 	s := testServer(t)
 	s.SetConnectorAvailable(true)
-	for i := 0; i < 10; i++ {
-		w := bridgeRequest(s, "POST", "/v1/pair", "", bytes.NewBufferString(`{"code":"wrong"}`), "application/json")
-		if w.Code != 403 {
-			t.Fatalf("attempt %d: %d", i, w.Code)
-		}
-	}
-	if w := bridgeRequest(s, "POST", "/v1/pair", "", bytes.NewBufferString(`{"code":"wrong"}`), "application/json"); w.Code != 429 {
-		t.Fatalf("rate limit: %d", w.Code)
-	}
 	r := httptest.NewRequest("GET", "http://127.0.0.1:17841/v1/status", nil)
 	r.Header.Set("Origin", "https://evil.example")
 	w := httptest.NewRecorder()
 	s.ConnectorHandler().ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatalf("web origin: %d", w.Code)
+	}
+	r.Header.Set("Origin", "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	w = httptest.NewRecorder()
+	s.ConnectorHandler().ServeHTTP(w, r)
+	if w.Code != 403 {
+		t.Fatalf("other extension origin: %d", w.Code)
 	}
 }

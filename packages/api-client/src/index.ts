@@ -100,16 +100,9 @@ export type ZoteroScan = components["schemas"]["ZoteroScan"];
 export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
 export const api = {
   connectorStatus: () =>
-    request<{ available: boolean; paired: boolean }>("/api/connector/status"),
+    request<{ available: boolean }>("/api/connector/status"),
   connectorRevision: () =>
     request<{ revision: number }>("/api/connector/revision"),
-  connectorPairCode: () =>
-    request<{ code: string; expiresIn: number; port: string }>(
-      "/api/connector/pair-code",
-      { method: "POST" },
-    ),
-  connectorRevoke: () =>
-    request<void>("/api/connector/pair", { method: "DELETE" }),
   snapshotStatus: (id: string) =>
     request<{ available: boolean; sourceUrl?: string }>(
       `/api/documents/${encodeURIComponent(id)}/snapshot`,

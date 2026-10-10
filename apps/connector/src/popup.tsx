@@ -15,7 +15,6 @@ const cleanDate = (value: unknown) => {
 };
 function App() {
   const [secret, setSecret] = useState("");
-  const [code, setCode] = useState("");
   const [items, setItems] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [folder, setFolder] = useState("");
@@ -24,20 +23,33 @@ function App() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    void chrome.storage.local.get("secret").then(async (stored) => {
-      if (typeof stored.secret === "string") {
-        setSecret(stored.secret);
-        try {
-          const r = await fetch(bridge + "/v1/folders", {
-            headers: { Authorization: `Bearer ${stored.secret}` },
+    void (async () => {
+      try {
+        const stored = await chrome.storage.local.get("secret");
+        let credential = typeof stored.secret === "string" ? stored.secret : "";
+        let response = credential
+          ? await fetch(bridge + "/v1/folders", {
+              headers: { Authorization: `Bearer ${credential}` },
+            })
+          : null;
+        if (!response || response.status === 401) {
+          const session = await fetch(bridge + "/v1/session", {
+            method: "POST",
           });
-          if (r.ok) setFolders(await r.json());
-          else setMessage("配对已失效，请在 Reader 中重新配对");
-        } catch {
-          setMessage("请先打开 Reader");
+          if (!session.ok) throw Error("无法连接 Reader");
+          credential = (await session.json()).secret;
+          await chrome.storage.local.set({ secret: credential });
+          response = await fetch(bridge + "/v1/folders", {
+            headers: { Authorization: `Bearer ${credential}` },
+          });
         }
+        if (!response.ok) throw Error("无法读取 Reader 论文库");
+        setFolders(await response.json());
+        setSecret(credential);
+      } catch {
+        setMessage("请先打开 Reader 桌面应用");
       }
-    });
+    })();
   }, []);
   useEffect(() => {
     void (async () => {
@@ -99,30 +111,6 @@ function App() {
       }
     })();
   }, []);
-  async function pair() {
-    setBusy(true);
-    try {
-      const response = await fetch(bridge + "/v1/pair", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim().toLowerCase() }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw Error(data.error);
-      await chrome.storage.local.set({ secret: data.secret });
-      setSecret(data.secret);
-      setMessage("已连接 Reader");
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function revoke() {
-    await chrome.storage.local.remove("secret");
-    setSecret("");
-    setMessage("已移除本机配对信息。请在 Reader 中撤销原配对。");
-  }
   async function prepare(candidate: Candidate): Promise<Candidate> {
     if (
       candidate.pdfUrl === candidate.sourceUrl &&
@@ -401,32 +389,9 @@ function App() {
       <main>
         <h1>Reader Connector</h1>
         {!secret ? (
-          <>
-            <p>在 Reader「设置 → 论文库」生成配对码，然后在这里输入。</p>
-            <label htmlFor="code">配对码</label>
-            <input
-              id="code"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              autoComplete="off"
-            />
-            <div className="row" style={{ marginTop: 10 }}>
-              <button
-                className="primary"
-                disabled={busy || code.trim().length !== 10}
-                onClick={() => void pair()}
-              >
-                连接 Reader
-              </button>
-            </div>
-          </>
+          <p>正在连接本机 Reader…</p>
         ) : (
           <>
-            <div className="row">
-              <span className="muted">已与 Reader 配对</span>
-              <button onClick={() => void revoke()}>移除配对</button>
-            </div>
             <p>
               {items.length > 1
                 ? `识别到 ${items.length} 篇，选择要收录的论文。`

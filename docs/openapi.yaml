@@ -12,7 +12,7 @@
                 {
                   "200":
                     {
-                      "description": "Connector bridge availability and pairing state",
+                      "description": "Connector bridge availability",
                       "content":
                         {
                           "application/json":
@@ -21,11 +21,8 @@
                                 {
                                   "type": "object",
                                   "properties":
-                                    {
-                                      "available": { "type": "boolean" },
-                                      "paired": { "type": "boolean" },
-                                    },
-                                  "required": ["available", "paired"],
+                                    { "available": { "type": "boolean" } },
+                                  "required": ["available"],
                                 },
                             },
                         },
@@ -49,51 +46,14 @@
                               "schema":
                                 {
                                   "type": "object",
-                                  "properties": { "revision": { "type": "integer" } },
+                                  "properties":
+                                    { "revision": { "type": "integer" } },
                                   "required": ["revision"],
                                 },
                             },
                         },
                     },
                 },
-            },
-        },
-      "/api/connector/pair-code":
-        {
-          "post":
-            {
-              "responses":
-                {
-                  "200":
-                    {
-                      "description": "One-time pairing code",
-                      "content":
-                        {
-                          "application/json":
-                            {
-                              "schema":
-                                {
-                                  "type": "object",
-                                  "properties":
-                                    {
-                                      "code": { "type": "string" },
-                                      "expiresIn": { "type": "integer" },
-                                      "port": { "type": "string" },
-                                    },
-                                  "required": ["code", "expiresIn", "port"],
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-      "/api/connector/pair":
-        {
-          "delete":
-            {
-              "responses":
-                { "204": { "description": "Pairing revoked" } },
             },
         },
       "/api/documents/{id}/snapshot":

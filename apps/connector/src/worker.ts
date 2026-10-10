@@ -16,7 +16,7 @@ async function save(
   allowLarge = false,
 ): Promise<Result> {
   const { secret } = await chrome.storage.local.get("secret");
-  if (!secret) return { ok: false, error: "请先与 Reader 配对" };
+  if (!secret) return { ok: false, error: "请先打开 Reader 后重新打开插件" };
   if (!candidate.pdfUrl) return { ok: false, error: "页面没有可下载的 PDF" };
   let pdf: Response;
   try {

@@ -25,9 +25,6 @@ import (
 
 type Server struct {
 	connectorMu            sync.Mutex
-	connectorCode          string
-	connectorCodeExpires   int64
-	connectorFailures      int
 	connectorAvailable     bool
 	connectorRevision      atomic.Int64
 	zoteroMu               sync.Mutex
@@ -92,8 +89,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("GET /api/import/zotero", s.zoteroDefaults)
-	mux.HandleFunc("POST /api/connector/pair-code", s.connectorPairCode)
-	mux.HandleFunc("DELETE /api/connector/pair", s.connectorRevoke)
 	mux.HandleFunc("GET /api/connector/status", s.connectorStatus)
 	mux.HandleFunc("GET /api/connector/revision", s.connectorRevisionStatus)
 	mux.HandleFunc("GET /api/documents/{id}/snapshot", s.connectorSnapshotStatus)
