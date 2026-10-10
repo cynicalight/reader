@@ -6,6 +6,7 @@ import type {
   PDFBlock,
   ReaderAdapter,
   ReaderEvents,
+  SearchResult,
   TranslationBlock,
 } from "@reader/core";
 import { translatedAnnotationRanges } from "./annotations";
@@ -14,6 +15,7 @@ import {
   translatedSentenceRanges,
   validParts,
 } from "./sentence-links";
+import { searchRanges } from "./search-ranges";
 
 type Mark = { annotation: Annotation; range: Range };
 const hit = (range: Range, x: number, y: number) =>
@@ -37,10 +39,26 @@ export function useSentenceMarks(
   linked: boolean,
   mode: string,
   events: ReaderEvents,
+  searchQuery = "",
+  searchResults: SearchResult[] = [],
 ) {
   const prefix = `reader-sentences-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const latest = useRef({ blocks, translations, annotations, events });
-  latest.current = { blocks, translations, annotations, events };
+  const latest = useRef({
+    blocks,
+    translations,
+    annotations,
+    events,
+    searchQuery,
+    searchResults,
+  });
+  latest.current = {
+    blocks,
+    translations,
+    annotations,
+    events,
+    searchQuery,
+    searchResults,
+  };
   const repaint = useRef<(() => void) | undefined>(undefined);
   const pointer = useRef<{ target: Element; x: number; y: number } | undefined>(
     undefined,
@@ -55,6 +73,7 @@ export function useSentenceMarks(
     let marks: Mark[] = [],
       names: string[] = [],
       frame = 0;
+    const searchName = `${prefix}-search`;
     const cache = new Map<string, Range[]>();
     let geometry = new WeakMap<Range, DOMRect[]>();
     const containsPoint = (range: Range, x: number, y: number) => {
@@ -127,8 +146,10 @@ export function useSentenceMarks(
       geometry = new WeakMap();
       targetCache.clear();
       hover.invalidate();
-      const { annotations, translations } = latest.current;
+      const { annotations, translations, blocks, searchQuery, searchResults } =
+        latest.current;
       names.forEach((name) => registry.delete(name));
+      registry.delete(searchName);
       names = [];
       marks = translatedAnnotationRanges(host, annotations, translations);
       if (linked)
@@ -172,6 +193,10 @@ export function useSentenceMarks(
         }
         groups.get(name)!.push(mark.range);
       }
+      rules.push(
+        `::highlight(${searchName}) { background-color: color-mix(in srgb, var(--primary) 25%, transparent); }`,
+        `.textLayer ::highlight(${searchName}) { color: transparent; }`,
+      );
       const css = rules.join("\n");
       if (style.textContent !== css) style.textContent = css;
       for (const [name, ranges] of groups) {
@@ -179,6 +204,64 @@ export function useSentenceMarks(
         highlight.priority = 1;
         registry.set(name, highlight);
         names.push(name);
+      }
+      if (searchQuery.trim() && searchResults.length) {
+        const ranges: Range[] = [];
+        const found = new Set<string>();
+        for (const result of searchResults) {
+          if (!result.blockId || !result.side) continue;
+          const key = `${result.blockId}:${result.side}`;
+          if (found.has(key)) continue;
+          found.add(key);
+          const block = blocks.find((item) => item.id === result.blockId);
+          if (!block) continue;
+          const translation = translations.find(
+            (item) => item.blockId === block.id,
+          );
+          if (result.side === "translation") {
+            translation?.sentences.forEach((sentence, index) => {
+              if (
+                sentence.target
+                  .toLocaleLowerCase()
+                  .includes(searchQuery.trim().toLocaleLowerCase())
+              )
+                ranges.push(
+                  ...searchRanges(targetRanges(block.id, index), searchQuery),
+                );
+            });
+          } else if (
+            translation?.status === "complete" &&
+            translation.sentences.length
+          ) {
+            translation.sentences.forEach((sentence, index) => {
+              if (
+                sentence.source
+                  .toLocaleLowerCase()
+                  .includes(searchQuery.trim().toLocaleLowerCase())
+              )
+                ranges.push(
+                  ...searchRanges(
+                    sourceRanges(translation, index),
+                    searchQuery,
+                  ),
+                );
+            });
+          } else {
+            ranges.push(
+              ...searchRanges(
+                engine.sentenceRanges?.([
+                  { blockId: block.id, sources: [block.text] },
+                ]) ?? [],
+                searchQuery,
+              ),
+            );
+          }
+        }
+        if (ranges.length) {
+          const highlight = new Highlight(...ranges);
+          highlight.priority = 2;
+          registry.set(searchName, highlight);
+        }
       }
       if (pointer.current && activeRanges.length && leaveTimer === undefined)
         resolveHover(pointer.current);
@@ -395,10 +478,11 @@ export function useSentenceMarks(
       repaint.current = undefined;
       hover.destroy();
       names.forEach((name) => registry.delete(name));
+      registry.delete(searchName);
       style.remove();
     };
   }, [root, engine, linked, mode, prefix]);
   useEffect(() => {
     repaint.current?.();
-  }, [blocks, translations, annotations]);
+  }, [blocks, translations, annotations, searchQuery, searchResults]);
 }

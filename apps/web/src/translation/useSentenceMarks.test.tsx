@@ -6,6 +6,7 @@ import type {
   Annotation,
   PDFBlock,
   ReaderAdapter,
+  SearchResult,
   TranslationBlock,
 } from "@reader/core";
 // Geometry/lifecycle assertions are independent of the composited hover renderer.
@@ -49,10 +50,14 @@ function App({
   linked = true,
   annotations = [],
   translations = [t],
+  searchQuery = "",
+  searchResults = [],
 }: {
   linked?: boolean;
   annotations?: Annotation[];
   translations?: TranslationBlock[];
+  searchQuery?: string;
+  searchResults?: SearchResult[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useSentenceMarks(
@@ -64,6 +69,8 @@ function App({
     linked,
     "parallel",
     events,
+    searchQuery,
+    searchResults,
   );
   return (
     <div ref={ref}>
@@ -137,6 +144,36 @@ const hover = () =>
   [...registry.entries()].find(([name]) => name.endsWith("-hover"))?.[1];
 const texts = (ranges: Set<Range> | undefined) =>
   [...(ranges ?? [])].map((r) => r.toString());
+const search = () =>
+  [...registry.entries()].find(([name]) => name.endsWith("-search"))?.[1];
+it("highlights only matching words in translation and clears when search changes", async () => {
+  const result: SearchResult = {
+    id: "p1-b1:translation:0",
+    blockId: "p1-b1",
+    side: "translation",
+    excerpt: "翻译句子。",
+    location: { type: "pdf", page: 1 },
+  };
+  await act(async () =>
+    root.render(<App searchQuery="翻译" searchResults={[result]} />),
+  );
+  expect(texts(search())).toEqual(["翻译"]);
+  await act(async () => root.render(<App />));
+  expect(search()).toBeUndefined();
+});
+it("maps original search words through PDF sentence ranges", async () => {
+  const result: SearchResult = {
+    id: "p1-b1:source:0",
+    blockId: "p1-b1",
+    side: "source",
+    excerpt: "Original sentence.",
+    location: { type: "pdf", page: 1 },
+  };
+  await act(async () =>
+    root.render(<App searchQuery="Original" searchResults={[result]} />),
+  );
+  expect(texts(search())).toEqual(["Original"]);
+});
 async function pointer(selector: string, type: string, x: number, buttons = 0) {
   await act(async () => {
     host.querySelector(selector)!.dispatchEvent(
@@ -298,9 +335,11 @@ it("waits for dwell, tolerates line gaps, and cancels pending work on interrupti
   await act(async () => root.render(<App />));
   const matching = vi.spyOn(engine, "sentenceRanges");
   const send = (x: number, type = "pointermove") =>
-    host.querySelector("[data-source]")!.dispatchEvent(
-      new MouseEvent(type, { bubbles: true, clientX: x, clientY: 5 }),
-    );
+    host
+      .querySelector("[data-source]")!
+      .dispatchEvent(
+        new MouseEvent(type, { bubbles: true, clientX: x, clientY: 5 }),
+      );
   const advance = async (ms: number) => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(ms);

@@ -9,6 +9,7 @@ import {
   type ReaderAdapter,
   type ReaderEvents,
   type ReaderTheme,
+  type SearchResult,
   type TranslationBlock,
 } from "@reader/core";
 const fixture = vi.hoisted(() => ({
@@ -117,6 +118,7 @@ beforeEach(async () => {
 async function renderView(
   theme: ReaderTheme = defaultTheme,
   extraBlocks: PDFBlock[] = [],
+  searchResults: SearchResult[] = [],
 ) {
   await act(async () =>
     root.render(
@@ -124,6 +126,7 @@ async function renderView(
         document={{ id: "doc", type: "pdf" } as Document}
         theme={theme}
         annotations={[]}
+        searchResults={searchResults}
         blocks={[
           {
             id: "p1-b1",
@@ -142,6 +145,33 @@ async function renderView(
     ),
   );
 }
+
+it("uses repaired text for search and focuses the matching block", async () => {
+  const results = await fixture.ready!.search("第二句");
+  expect(results).toHaveLength(1);
+  expect(results[0]).toMatchObject({ blockId: "p1-b1", side: "translation" });
+  await renderView(defaultTheme, [], results);
+  await click("原文译文");
+  expect(
+    host
+      .querySelector('[data-translation-block="p1-b1"]')
+      ?.hasAttribute("data-search-hit"),
+  ).toBe(true);
+  await act(async () => fixture.ready!.focusLocation!(results[0].location));
+  expect(adapter.focusBlock).toHaveBeenCalledWith("p1-b1", "parallel");
+});
+
+it("retains PDF.js search on pages without parsed blocks", async () => {
+  adapter.getPageCount = () => 2;
+  vi.mocked(adapter.search).mockResolvedValueOnce([
+    { id: "2", excerpt: "raw page", location: { type: "pdf", page: 2 } },
+  ]);
+  const results = await fixture.ready!.search("raw");
+  expect(results).toMatchObject([
+    { id: "2", location: { type: "pdf", page: 2 } },
+  ]);
+  delete adapter.getPageCount;
+});
 
 afterEach(async () => {
   await act(async () => root.unmount());

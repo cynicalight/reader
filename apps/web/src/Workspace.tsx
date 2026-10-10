@@ -315,6 +315,8 @@ export function Workspace({
   const [leftTab, setLeftTab] = useState("toc");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
@@ -375,6 +377,30 @@ export function Workspace({
   const [pageInput, setPageInput] = useState("");
   const abort = useRef<AbortController | null>(null);
   const searchSerial = useRef(0);
+  useEffect(() => {
+    searchSerial.current++;
+    setQuery("");
+    setResults([]);
+    setSearchedQuery("");
+    setSearching(false);
+  }, [doc.id]);
+  useEffect(() => {
+    const find = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "f"
+      ) {
+        event.preventDefault();
+        setLeft(true);
+        setLeftTab("search");
+        requestAnimationFrame(() => searchInput.current?.focus());
+      }
+    };
+    window.addEventListener("keydown", find);
+    return () => window.removeEventListener("keydown", find);
+  }, []);
   useEffect(() => {
     let alive = true;
     session.activate();
@@ -619,12 +645,21 @@ export function Workspace({
     setSearching(true);
     try {
       const found = await adapter.search(query.trim());
-      if (serial === searchSerial.current) setResults(found);
+      if (serial === searchSerial.current) {
+        setResults(found);
+        setSearchedQuery(query.trim());
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       if (serial === searchSerial.current) setSearching(false);
     }
+  };
+  const openSearchResult = (result: SearchResult) => {
+    const go = adapter?.focusLocation
+      ? adapter.focusLocation(result.location)
+      : adapter?.goTo(result.location);
+    void go?.catch((error) => toast.error(error.message));
   };
   const addQuote = () => {
     if (selection) {
@@ -1125,9 +1160,16 @@ export function Workspace({
                 >
                   <Input
                     aria-label="搜索文档"
+                    ref={searchInput}
                     placeholder="搜索文档内容…"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => {
+                      searchSerial.current++;
+                      setQuery(e.target.value);
+                      setResults([]);
+                      setSearchedQuery("");
+                      setSearching(false);
+                    }}
                   />
                   <Button
                     size="icon"
@@ -1147,9 +1189,16 @@ export function Workspace({
                       key={result.id}
                       variant="ghost"
                       className="search-result"
-                      onClick={() => move(result.location)}
+                      onClick={() => openSearchResult(result)}
                     >
-                      <small>{locationLabel(result.location)}</small>
+                      <small>
+                        {locationLabel(result.location)}
+                        {result.side === "translation"
+                          ? " · 译文"
+                          : result.side === "source"
+                            ? " · 原文"
+                            : ""}
+                      </small>
                       <span>{result.excerpt}</span>
                     </Button>
                   ))}
@@ -1176,6 +1225,8 @@ export function Workspace({
                   processing={processing}
                   toolbarHost={readingToolbar}
                   pageNavigation={pageNavigation}
+                  searchResults={results}
+                  searchQuery={searchedQuery}
                   onReady={(engine, items) => {
                     setAdapter(engine);
                     setTOC(items);
