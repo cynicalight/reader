@@ -2324,7 +2324,7 @@
                     "in": "path",
                     "name": "key",
                     "required": true,
-                    "schema": { "enum": ["library"] },
+                    "schema": { "enum": ["library", "guide"] },
                   },
                 ],
               "responses":
@@ -2366,7 +2366,7 @@
                     "in": "path",
                     "name": "key",
                     "required": true,
-                    "schema": { "enum": ["library"] },
+                    "schema": { "enum": ["library", "guide"] },
                   },
                 ],
               "requestBody":
