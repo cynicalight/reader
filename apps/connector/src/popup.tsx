@@ -21,6 +21,10 @@ function App() {
   const [tags, setTags] = useState("");
   const [folders, setFolders] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<
+    "neutral" | "success" | "error"
+  >("neutral");
+  const [outcomes, setOutcomes] = useState<{ ok: boolean; text: string }[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     void (async () => {
@@ -48,6 +52,7 @@ function App() {
         setSecret(credential);
       } catch {
         setMessage("请先打开 Reader 桌面应用");
+        setMessageTone("error");
       }
     })();
   }, []);
@@ -107,7 +112,11 @@ function App() {
           ]);
           setSelected([0]);
           setMessage("无法读取页面内容；如果当前标签页是 PDF，仍可尝试收录。");
-        } else setMessage((error as Error).message || "无法读取此页面");
+          setMessageTone("neutral");
+        } else {
+          setMessage((error as Error).message || "无法读取此页面");
+          setMessageTone("error");
+        }
       }
     })();
   }, []);
@@ -313,8 +322,10 @@ function App() {
     if (!secret || selected.length === 0) return;
     setBusy(true);
     setMessage("");
+    setMessageTone("neutral");
+    setOutcomes([]);
     let success = 0;
-    const outcomes: string[] = [];
+    const completed: { ok: boolean; text: string }[] = [];
     const failures: string[] = [];
     const warnings: string[] = [];
     try {
@@ -327,6 +338,7 @@ function App() {
         setMessage(
           `正在收录 ${success + failures.length + 1}/${selected.length}：${item.title}`,
         );
+        setMessageTone("neutral");
         try {
           const prepared = await prepare(item);
           const request = {
@@ -357,7 +369,7 @@ function App() {
             });
           if (result.ok) {
             success++;
-            outcomes.push(`✓ ${item.title}`);
+            completed.push({ ok: true, text: `✓ ${item.title}` });
             if (prepared.snapshotWarnings?.length)
               warnings.push(
                 `${item.title}：${prepared.snapshotWarnings.join("；")}`,
@@ -367,19 +379,22 @@ function App() {
           } else {
             const failure = `${item.title}：${result.error || "失败"}`;
             failures.push(failure);
-            outcomes.push(`✕ ${failure}`);
+            completed.push({ ok: false, text: `✕ ${failure}` });
           }
         } catch (error) {
           const failure = `${item.title}：${(error as Error).message}`;
           failures.push(failure);
-          outcomes.push(`✕ ${failure}`);
+          completed.push({ ok: false, text: `✕ ${failure}` });
         }
       }
       setMessage(
-        `已收录 ${success} 篇，失败 ${failures.length} 篇\n${outcomes.join("\n")}${warnings.length ? "\n提醒：" + warnings.join("\n") : ""}`,
+        `已收录 ${success} 篇，失败 ${failures.length} 篇${warnings.length ? "\n提醒：" + warnings.join("\n") : ""}`,
       );
+      setMessageTone(failures.length ? "error" : "success");
+      setOutcomes(completed);
     } catch (error) {
       setMessage((error as Error).message);
+      setMessageTone("error");
     } finally {
       setBusy(false);
     }
@@ -447,8 +462,13 @@ function App() {
           </>
         )}
         {message && (
-          <div className={`status ${message.includes("失败") ? "error" : ""}`}>
+          <div className={`status ${messageTone}`}>
             {message}
+            {outcomes.map((outcome, index) => (
+              <div className={outcome.ok ? "success" : "error"} key={index}>
+                {outcome.text}
+              </div>
+            ))}
           </div>
         )}
       </main>
