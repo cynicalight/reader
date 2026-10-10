@@ -55,6 +55,12 @@ const submit = async () =>
       new Event("submit", { bubbles: true, cancelable: true }),
     ),
   );
+const openAPI = async () =>
+  act(async () =>
+    (
+      host.querySelector('[aria-label="配置 API Key"]') as HTMLButtonElement
+    ).click(),
+  );
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
@@ -124,7 +130,10 @@ afterEach(async () => {
 it("saves the API endpoint and key, then tests the new connection", async () => {
   await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
   expect(host.textContent).toContain("未配置");
+  expect(host.textContent).toContain("点击卡片配置你的apikey");
+  expect(input("API 地址")).toBeNull();
   expect(api.testAI).not.toHaveBeenCalled();
+  await openAPI();
   await type("API 地址", "https://api.deepseek.com");
   await type("API Key", "sk-test");
   await submit();
@@ -148,6 +157,12 @@ it("saves the API endpoint and key, then tests the new connection", async () => 
   expect(toast.warning).not.toHaveBeenCalled();
   expect(input("API Key").value).toBe("");
   expect(input("API Key").placeholder).toBe("已保存，留空保持不变");
+  await act(async () =>
+    (host.querySelector('[aria-label="返回 Agent 设置"]') as HTMLButtonElement).click(),
+  );
+  expect(input("API 地址")).toBeNull();
+  expect(host.textContent).toContain("点击卡片查看 API 配置");
+  await openAPI();
   // Editing only the address keeps the saved key without resending it.
   await type("API 地址", "https://api.deepseek.com/v1");
   await submit();
@@ -167,6 +182,7 @@ it("warns when no listed model passes the vision check", async () => {
   config.api = { url: "https://api.example.com", model: "", hasKey: true };
   listed = { "text-only": false };
   await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
+  await openAPI();
   expect(api.testAI).toHaveBeenCalledWith("api", "vision", "text-only");
   expect(toast.warning).toHaveBeenCalledOnce();
 });
@@ -177,6 +193,7 @@ it("adds and removes a model ID by hand and checks it", async () => {
     "api:deepseek-v4-pro": { text: true, vision: false, checkedAt: "saved" },
   };
   await act(async () => root.render(<Settings open onOpenChange={() => {}} />));
+  await openAPI();
   expect(api.testAI).not.toHaveBeenCalled();
   await type("添加模型 ID", "my-model");
   await act(async () =>

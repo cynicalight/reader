@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ChevronLeft,
   Bot,
   Check,
   CircleCheck,
@@ -80,6 +81,10 @@ export function Settings({
   const [loading, setLoading] = useState(false);
   const [apiModels, setAPIModels] = useState<AgentModel[]>([]);
   const [apiModelsError, setAPIModelsError] = useState("");
+  const [apiDetails, setAPIDetails] = useState(false);
+  useEffect(() => {
+    if (!open) setAPIDetails(false);
+  }, [open]);
   const {
     theme,
     setTheme,
@@ -337,12 +342,110 @@ export function Settings({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
+          <DialogTitle>
+            {apiDetails ? (
+              <Button
+                variant="ghost"
+                className="-ml-2 gap-1 px-2 text-base"
+                onClick={() => setAPIDetails(false)}
+                aria-label="返回 Agent 设置"
+              >
+                <ChevronLeft />
+                API 配置
+              </Button>
+            ) : (
+              "设置"
+            )}
+          </DialogTitle>
           <DialogDescription className="sr-only">
             Agent 连接、显示、阅读与文献库
           </DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="agent" className="settings-tabs">
+        {apiDetails && (
+          <div className="settings-panel">
+            <section>
+              {config && (
+                <APIAgentForm
+                  connection={config.api}
+                  disabled={saving || testing.size > 0}
+                  onSave={saveAPI}
+                />
+              )}
+              {config &&
+                providers.some((p) => p.id === "api" && p.installed) && (
+                  <div className="mt-6">
+                    <h3 className="mb-1 text-sm font-medium">模型</h3>
+                    <ul className="api-model-list">
+                      {apiModels.map((model) => {
+                        const id = `api:${model.id}`;
+                        const result = config.capabilities[id];
+                        return (
+                          <li
+                            key={model.id}
+                            className="flex min-h-9 items-center gap-3"
+                          >
+                            <span
+                              className="min-w-0 flex-1 truncate text-sm"
+                              title={model.id}
+                            >
+                              {model.name}
+                            </span>
+                            {testing.has(id) ||
+                            result ||
+                            errors[`${id}:text`] ? (
+                              checkStatus(id, result)
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={saving}
+                                onClick={() => void checkModel(model)}
+                              >
+                                检测
+                              </Button>
+                            )}
+                            {model.custom && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`移除 ${model.name}`}
+                                title="移除"
+                                disabled={saving || testing.has(id)}
+                                onClick={() =>
+                                  void saveAPIModels((models) =>
+                                    models.filter((item) => item !== model.id),
+                                  )
+                                }
+                              >
+                                <X />
+                              </Button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {apiModelsError && (
+                      <p
+                        className="mt-1 text-xs text-muted-foreground"
+                        role="alert"
+                      >
+                        {apiModelsError}
+                      </p>
+                    )}
+                    <APIModelForm
+                      disabled={saving}
+                      onAdd={(id) => saveAPIModels((models) => [...models, id])}
+                    />
+                  </div>
+                )}
+            </section>
+          </div>
+        )}
+        <Tabs
+          defaultValue="agent"
+          className="settings-tabs"
+          style={{ display: apiDetails ? "none" : undefined }}
+        >
           <TabsList aria-label="设置分类" className="settings-nav">
             <TabsTrigger value="agent">
               <Bot />
@@ -570,105 +673,43 @@ export function Settings({
                   const capability = config?.capabilities[name];
                   const pending = testing.has(name);
 
+                  if (name === "api")
+                    return (
+                      <Button
+                        key={name}
+                        variant="outline"
+                        className="h-auto min-h-28 min-w-0 flex-col items-stretch gap-0 rounded-xl border-border bg-transparent p-4 text-left font-normal whitespace-normal hover:bg-muted/50 dark:border-border dark:bg-transparent"
+                        onClick={() => setAPIDetails(true)}
+                        aria-label="配置 API Key"
+                      >
+                        <span className="flex w-full items-center gap-3">
+                          <span className="flex-1 text-base font-medium">
+                            <ProviderIdentity provider={name} size={36} />
+                          </span>
+                          {!loading && !p?.installed && (
+                            <Badge variant="outline">未配置</Badge>
+                          )}
+                        </span>
+                        <span className="mt-3 text-xs text-muted-foreground">
+                          {p?.installed
+                            ? "点击卡片查看 API 配置"
+                            : "点击卡片配置你的apikey"}
+                        </span>
+                      </Button>
+                    );
+
                   return (
-                    <div
-                      key={name}
-                      className={`min-w-0 rounded-xl border p-4 ${name === "api" ? "sm:col-span-2" : ""}`}
-                    >
+                    <div key={name} className="min-h-28 min-w-0 rounded-xl border p-4">
                       <div className="flex items-center gap-3">
                         <span className="flex-1 text-base font-medium">
                           <ProviderIdentity provider={name} size={36} />
                         </span>
                         {!loading && !p?.installed && (
-                          <Badge variant="outline">
-                            {name === "api" ? "未配置" : "未安装"}
-                          </Badge>
+                          <Badge variant="outline">未安装</Badge>
                         )}
                       </div>
-                      {name !== "api" &&
-                        (pending || p?.installed || capability) &&
+                      {(pending || p?.installed || capability) &&
                         checkStatus(name, capability)}
-                      {name === "api" && config && (
-                        <>
-                          <APIAgentForm
-                            connection={config.api}
-                            disabled={saving || testing.size > 0}
-                            onSave={saveAPI}
-                          />
-                          {p?.installed && (
-                            <div className="mt-4">
-                              <h4 className="mb-1 text-xs font-medium text-muted-foreground">
-                                模型
-                              </h4>
-                              <ul className="api-model-list">
-                                {apiModels.map((model) => {
-                                  const id = `api:${model.id}`;
-                                  const result = config.capabilities[id];
-                                  return (
-                                    <li
-                                      key={model.id}
-                                      className="flex min-h-9 items-center gap-3"
-                                    >
-                                      <span
-                                        className="min-w-0 flex-1 truncate text-sm"
-                                        title={model.id}
-                                      >
-                                        {model.name}
-                                      </span>
-                                      {testing.has(id) ||
-                                      result ||
-                                      errors[`${id}:text`] ? (
-                                        checkStatus(id, result)
-                                      ) : (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          disabled={saving}
-                                          onClick={() => void checkModel(model)}
-                                        >
-                                          检测
-                                        </Button>
-                                      )}
-                                      {model.custom && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon-sm"
-                                          aria-label={`移除 ${model.name}`}
-                                          title="移除"
-                                          disabled={saving || testing.has(id)}
-                                          onClick={() =>
-                                            void saveAPIModels((models) =>
-                                              models.filter(
-                                                (item) => item !== model.id,
-                                              ),
-                                            )
-                                          }
-                                        >
-                                          <X />
-                                        </Button>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                              {apiModelsError && (
-                                <p
-                                  className="mt-1 text-xs text-muted-foreground"
-                                  role="alert"
-                                >
-                                  {apiModelsError}
-                                </p>
-                              )}
-                              <APIModelForm
-                                disabled={saving}
-                                onAdd={(id) =>
-                                  saveAPIModels((models) => [...models, id])
-                                }
-                              />
-                            </div>
-                          )}
-                        </>
-                      )}
                     </div>
                   );
                 })}
