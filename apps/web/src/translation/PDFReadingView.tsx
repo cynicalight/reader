@@ -19,6 +19,7 @@ import type {
   ReaderEvents,
   ReaderSelection,
   ReaderTheme,
+  SearchResult,
   TOCItem,
   TranslationBlock,
 } from "@reader/core";
@@ -51,6 +52,7 @@ import "./translation.css";
 
 import { AssistanceControls } from "./AssistanceControls";
 import { chapterRange } from "./chapters";
+import { searchPDFBlocks } from "./pdf-search";
 
 type Mode = "source" | "parallel" | "translation";
 export function PDFReadingView({
@@ -61,6 +63,7 @@ export function PDFReadingView({
   processing,
   toolbarHost,
   pageNavigation,
+  searchResults = [],
   onReady,
   events,
 }: {
@@ -71,6 +74,7 @@ export function PDFReadingView({
   processing?: Processing;
   toolbarHost?: HTMLElement | null;
   pageNavigation?: ReactNode;
+  searchResults?: SearchResult[];
   onReady: (adapter: ReaderAdapter, toc: TOCItem[]) => void;
   events: ReaderEvents;
 }) {
@@ -180,6 +184,19 @@ export function PDFReadingView({
   const visibleBlocks = blocks.filter(
     (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
   );
+  const searchBlockIds = useMemo(
+    () => [
+      ...new Set(
+        searchResults
+          .map((result) => result.blockId)
+          .filter((id): id is string => !!id),
+      ),
+    ],
+    [searchResults],
+  );
+  useEffect(() => {
+    engine?.setSearchBlocks?.(searchBlockIds);
+  }, [engine, searchBlockIds]);
   useEffect(() => {
     if (pane.current) return installTranslationSelectionHighlight(pane.current);
   }, [mode, doc.id]);
@@ -426,6 +443,29 @@ export function PDFReadingView({
           };
         if (key === "goTo")
           return (l: DocumentLocation) => actions.current.go(l);
+        if (key === "search")
+          return async (query: string) => {
+            const current = state.current;
+            if (!current.blocks.length) return target.search(query);
+            const found = searchPDFBlocks(
+              query,
+              current.blocks,
+              current.translations,
+            );
+            const parsedPages = new Set(
+              current.blocks.map((block) => block.page),
+            );
+            if (
+              parsedPages.size >= (target.getPageCount?.() ?? parsedPages.size)
+            )
+              return found;
+            const unparsed = (await target.search(query)).filter(
+              (result) =>
+                result.location.type === "pdf" &&
+                !parsedPages.has(result.location.page),
+            );
+            return [...found, ...unparsed].slice(0, 100);
+          };
         if (key === "focusLocation")
           return (l: DocumentLocation) => actions.current.focus(l);
         if (key === "next" || key === "previous")
@@ -987,6 +1027,9 @@ export function PDFReadingView({
                     data-label={block.label}
                     data-hovered={hoveredBlock === block.id || undefined}
                     data-focused={focusedBlock === block.id || undefined}
+                    data-search-hit={
+                      searchBlockIds.includes(block.id) || undefined
+                    }
                     aria-current={focusedBlock === block.id || undefined}
                     tabIndex={0}
                     onClick={(event) => {

@@ -323,6 +323,10 @@ app
             altKey: input.alt,
             isComposing: input.isComposing,
           }) ||
+            ((input.meta || input.control) &&
+              !input.shift &&
+              !input.alt &&
+              input.key.toLowerCase() === "f") ||
             zoomCommand({
               key: input.key,
               code: input.code,

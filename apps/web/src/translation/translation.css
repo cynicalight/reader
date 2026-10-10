@@ -225,6 +225,9 @@
   outline: 1px solid rgb(88 122 104 / 30%);
   box-shadow: 0 0 0 3px rgb(97 137 113 / 3%);
 }
+.translation-document [data-translation-block][data-search-hit] {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
 
 .translation-document [data-translation-block][data-focused],
 .reader-block-hover.reader-block-focus,
