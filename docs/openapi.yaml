@@ -21,7 +21,14 @@
                                 {
                                   "type": "object",
                                   "properties":
-                                    { "available": { "type": "boolean" } },
+                                    {
+                                      "available": { "type": "boolean" },
+                                      "reason":
+                                        {
+                                          "type": "string",
+                                          "enum": ["disabled", "port-in-use"],
+                                        },
+                                    },
                                   "required": ["available"],
                                 },
                             },

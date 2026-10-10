@@ -26,6 +26,7 @@ import (
 type Server struct {
 	connectorMu            sync.Mutex
 	connectorAvailable     bool
+	connectorReason        string
 	connectorRevision      atomic.Int64
 	zoteroMu               sync.Mutex
 	zoteroScans            map[string]*zoteroScan

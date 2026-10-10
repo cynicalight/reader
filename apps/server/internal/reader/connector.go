@@ -25,7 +25,15 @@ import (
 const ConnectorPort = "17841"
 const connectorExtensionOrigin = "chrome-extension://afojfnpkeokahhniipldpdpecaljdnbe"
 
-func (s *Server) SetConnectorAvailable(available bool) { s.connectorAvailable = available }
+func (s *Server) SetConnectorAvailable(available bool) {
+	s.connectorAvailable = available
+	s.connectorReason = ""
+}
+
+func (s *Server) SetConnectorUnavailable(reason string) {
+	s.connectorAvailable = false
+	s.connectorReason = reason
+}
 
 var snapshotImage = regexp.MustCompile(`^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$`)
 
@@ -51,7 +59,10 @@ func connectorHash(value string) string {
 }
 
 func (s *Server) connectorStatus(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, map[string]any{"available": s.connectorAvailable})
+	respond(w, 200, struct {
+		Available bool   `json:"available"`
+		Reason    string `json:"reason,omitempty"`
+	}{s.connectorAvailable, s.connectorReason})
 }
 func (s *Server) connectorRevisionStatus(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]int64{"revision": s.connectorRevision.Load()})

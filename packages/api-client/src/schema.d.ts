@@ -28,6 +28,8 @@ export interface paths {
                     content: {
                         "application/json": {
                             available: boolean;
+                            /** @enum {string} */
+                            reason?: "disabled" | "port-in-use";
                         };
                     };
                 };
