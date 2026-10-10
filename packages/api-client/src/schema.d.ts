@@ -119,6 +119,19 @@ export interface paths {
                         "application/json": components["schemas"]["ZoteroScan"];
                     };
                 };
+                /** @description Zotero is holding a database lock; quit Zotero and retry the scan */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            /** @constant */
+                            code: "zotero-locked";
+                        };
+                    };
+                };
                 /** @description Error */
                 default: {
                     headers: {

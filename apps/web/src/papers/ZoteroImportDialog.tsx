@@ -207,7 +207,8 @@ export function ZoteroImportDialog({
               </div>
               <p className="text-muted-foreground text-xs">
                 可在 Zotero「设置 → 高级 →
-                资料目录」查看。请先下载所需附件；扫描期间避免整理或同步资料库。
+                资料目录」查看。先下载所需附件，再完全退出 Zotero 后扫描（macOS
+                按 ⌘Q，关闭窗口不等于退出）。
               </p>
             </div>
             <details className="text-sm">

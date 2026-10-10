@@ -329,3 +329,52 @@ func TestZoteroHTTPScanAndImport(t *testing.T) {
 		t.Fatal(response.Body.String(), err)
 	}
 }
+
+func TestZoteroLockedLibraryCanRetry(t *testing.T) {
+	for _, mode := range []string{"DELETE", "WAL"} {
+		t.Run(mode, func(t *testing.T) {
+			dir, owner := zoteroFixture(t)
+			owner.SetMaxOpenConns(1)
+			// Zotero keeps an exclusive connection-lifetime lock even between writes.
+			if _, err := owner.Exec(`PRAGMA journal_mode=` + mode + `; PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT`); err != nil {
+				t.Fatal(err)
+			}
+			s := testServer(t)
+			body, err := json.Marshal(map[string]string{"directory": dir})
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := request(t, s, "POST", "/api/import/zotero/scan", bytes.NewReader(body))
+			var failure struct {
+				Code  string `json:"code"`
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &failure); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != 409 || failure.Code != "zotero-locked" || !strings.Contains(failure.Error, "完全退出 Zotero") || strings.Contains(failure.Error, "SQLITE_BUSY") {
+				t.Errorf("locked library needs actionable guidance: status=%d body=%s", response.Code, response.Body.String())
+			}
+			if len(s.zoteroScans) != 0 {
+				t.Fatal("failed scan cached a partial preview")
+			}
+			docs, err := s.Store.Documents()
+			if err != nil || len(docs) != 0 {
+				t.Fatalf("failed scan changed Reader: %v %v", docs, err)
+			}
+			// Closing the owner's connection models quitting Zotero, without changing
+			// lock settings or copying an active database. The same scan can then retry.
+			if err := owner.Close(); err != nil {
+				t.Fatal(err)
+			}
+			response = request(t, s, "POST", "/api/import/zotero/scan", bytes.NewReader(body))
+			if response.Code != 200 {
+				t.Fatalf("scan after release: %d %s", response.Code, response.Body.String())
+			}
+			var scan zoteroScan
+			if err := json.Unmarshal(response.Body.Bytes(), &scan); err != nil || len(scan.Entries) != 1 {
+				t.Fatalf("incomplete preview after release: %+v %v", scan, err)
+			}
+		})
+	}
+}

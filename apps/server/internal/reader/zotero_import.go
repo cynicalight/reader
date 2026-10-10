@@ -16,6 +16,9 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type zoteroImportResult struct {
@@ -46,6 +49,19 @@ func (s *Server) scanZotero(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	scan, err := readZotero(ctx, body.Directory, body.LinkedBase)
 	if err != nil {
+		// Zotero holds an exclusive connection-lifetime lock, even in WAL
+		// mode. Waiting or retrying cannot release it while Zotero is open.
+		var sqliteErr *sqlite.Error
+		if errors.As(err, &sqliteErr) {
+			switch sqliteErr.Code() & 0xff {
+			case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED:
+				respond(w, http.StatusConflict, map[string]string{
+					"code":  "zotero-locked",
+					"error": "Zotero 资料库正被占用。请先完全退出 Zotero（macOS 按 ⌘Q，关闭窗口不等于退出），再点击“扫描资料库”。本次尚未导入任何文件。",
+				})
+				return
+			}
+		}
 		fail(w, 400, err.Error())
 		return
 	}

@@ -132,6 +132,30 @@
                             },
                         },
                     },
+                  "409":
+                    {
+                      "description": "Zotero is holding a database lock; quit Zotero and retry the scan",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["error", "code"],
+                                  "properties":
+                                    {
+                                      "error": { "type": "string" },
+                                      "code":
+                                        {
+                                          "type": "string",
+                                          "const": "zotero-locked",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
                   "default":
                     {
                       "description": "Error",
