@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { detectPage, type Candidate, type Detection } from "./detect";
 const bridge = "http://127.0.0.1:17841";
+const outdatedReaderMessage = "请重启 pnpm desktop，更新本机分类和标签接口";
 const cleanDate = (value: unknown) => {
   const match = String(value || "").match(
     /^(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?/,
@@ -48,6 +49,7 @@ function App() {
             headers: { Authorization: `Bearer ${credential}` },
           });
         }
+        if (response.status === 404) throw Error(outdatedReaderMessage);
         if (!response.ok) throw Error("无法读取 Reader 论文库");
         const labels = (await response.json()) as {
           folders: string[];
@@ -56,8 +58,12 @@ function App() {
         setFolders(labels.folders);
         setExistingTags(labels.tags);
         setSecret(credential);
-      } catch {
-        setMessage("请先打开 Reader 桌面应用");
+      } catch (error) {
+        setMessage(
+          error instanceof Error && error.message === outdatedReaderMessage
+            ? error.message
+            : "请先打开 Reader 桌面应用",
+        );
         setMessageTone("error");
       }
     })();
