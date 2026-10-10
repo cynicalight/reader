@@ -4,6 +4,173 @@
   "security": [{ "session": [] }],
   "paths":
     {
+      "/api/import/zotero":
+        {
+          "get":
+            {
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "properties":
+                                    { "directory": { "type": "string" } },
+                                  "required": ["directory"],
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+          "post":
+            {
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "scanId": { "type": "string" },
+                                  "entryId": { "type": "string" },
+                                },
+                              "required": ["scanId", "entryId"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "$ref": "#/components/schemas/ZoteroImportResult",
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+      "/api/import/zotero/scan":
+        {
+          "post":
+            {
+              "requestBody":
+                {
+                  "required": true,
+                  "content":
+                    {
+                      "application/json":
+                        {
+                          "schema":
+                            {
+                              "type": "object",
+                              "properties":
+                                {
+                                  "directory": { "type": "string" },
+                                  "linkedBase": { "type": "string" },
+                                },
+                              "required": ["directory"],
+                            },
+                        },
+                    },
+                },
+              "responses":
+                {
+                  "200":
+                    {
+                      "description": "Success",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/ZoteroScan" },
+                            },
+                        },
+                    },
+                  "409":
+                    {
+                      "description": "Zotero is holding a database lock; quit Zotero and retry the scan",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                {
+                                  "type": "object",
+                                  "required": ["error", "code"],
+                                  "properties":
+                                    {
+                                      "error": { "type": "string" },
+                                      "code":
+                                        {
+                                          "type": "string",
+                                          "const": "zotero-locked",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                  "default":
+                    {
+                      "description": "Error",
+                      "content":
+                        {
+                          "application/json":
+                            {
+                              "schema":
+                                { "$ref": "#/components/schemas/Error" },
+                            },
+                        },
+                    },
+                },
+            },
+        },
       "/api/documents":
         {
           "get":
@@ -2969,6 +3136,73 @@
       "securitySchemes": { "session": { "type": "http", "scheme": "bearer" } },
       "schemas":
         {
+          "ZoteroEntry":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "filename": { "type": "string" },
+                  "collections":
+                    { "type": "array", "items": { "type": "string" } },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "notes": { "type": "integer", "minimum": 0 },
+                  "annotations": { "type": "integer", "minimum": 0 },
+                  "size": { "type": "integer", "minimum": 0 },
+                  "issue": { "type": "string" },
+                  "warnings":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required":
+                [
+                  "id",
+                  "title",
+                  "filename",
+                  "collections",
+                  "tags",
+                  "notes",
+                  "annotations",
+                  "size",
+                  "warnings",
+                ],
+            },
+          "ZoteroScan":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "id": { "type": "string" },
+                  "directory": { "type": "string" },
+                  "entries":
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ZoteroEntry" },
+                    },
+                  "warnings":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required": ["id", "directory", "entries", "warnings"],
+            },
+          "ZoteroImportResult":
+            {
+              "type": "object",
+              "properties":
+                {
+                  "documentId": { "type": "string" },
+                  "status":
+                    {
+                      "type": "string",
+                      "enum": ["imported", "merged", "exists"],
+                    },
+                  "notes": { "type": "integer", "minimum": 0 },
+                  "annotations": { "type": "integer", "minimum": 0 },
+                  "warnings":
+                    { "type": "array", "items": { "type": "string" } },
+                },
+              "required":
+                ["documentId", "status", "notes", "annotations", "warnings"],
+            },
           "DocumentLocation":
             {
               "oneOf":

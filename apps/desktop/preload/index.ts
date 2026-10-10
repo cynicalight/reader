@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("readerDesktop", {
   },
   setAppearance: (appearance: "light" | "sepia" | "dark" | "system") =>
     ipcRenderer.invoke("reader:appearance", appearance),
+  chooseZoteroDirectory: () =>
+    ipcRenderer.invoke("reader:choose-zotero-directory"),
   importFiles: (library: "books" | "papers") =>
     ipcRenderer.invoke("reader:import", library),
   importLargePapers: (ids: string[], library: "books" | "papers") =>

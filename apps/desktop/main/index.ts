@@ -412,6 +412,18 @@ app
         throw new Error("Invalid link");
       await shell.openExternal(new URL(url).toString());
     });
+    ipcMain.handle("reader:choose-zotero-directory", async (event) => {
+      if (
+        event.sender !== window?.webContents ||
+        event.senderFrame !== window.webContents.mainFrame
+      )
+        throw new Error("Invalid sender");
+      const selected = await dialog.showOpenDialog(window, {
+        title: "选择 Zotero 目录",
+        properties: ["openDirectory"],
+      });
+      return selected.canceled ? null : selected.filePaths[0] || null;
+    });
     ipcMain.handle("reader:import", async (event, library: unknown) => {
       if (
         event.sender !== window?.webContents ||

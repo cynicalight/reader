@@ -82,6 +82,8 @@ func OpenStore(root string) (*Store, error) {
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
  CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,type TEXT NOT NULL,title TEXT NOT NULL,author TEXT NOT NULL,size INTEGER NOT NULL,created_at TEXT NOT NULL,last_opened_at TEXT NOT NULL,favorite INTEGER NOT NULL DEFAULT 0,progress TEXT,percentage REAL NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS zotero_imports(source_id TEXT NOT NULL,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,body TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,document_id));
+ CREATE TABLE IF NOT EXISTS zotero_note_imports(source_id TEXT NOT NULL,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,PRIMARY KEY(source_id,document_id));
  CREATE TABLE IF NOT EXISTS annotations(id TEXT PRIMARY KEY,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,body TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,body TEXT NOT NULL,created_at TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS document_processing(document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,phase TEXT NOT NULL,status TEXT NOT NULL,body TEXT NOT NULL);

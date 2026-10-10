@@ -96,7 +96,20 @@ function annotationRequest<T>(path: string, init: RequestInit): Promise<T> {
   );
   return operation;
 }
+export type ZoteroScan = components["schemas"]["ZoteroScan"];
+export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
 export const api = {
+  zoteroDefaults: () => request<{ directory: string }>("/api/import/zotero"),
+  scanZotero: (directory: string, linkedBase = "") =>
+    request<ZoteroScan>("/api/import/zotero/scan", {
+      method: "POST",
+      body: JSON.stringify({ directory, linkedBase }),
+    }),
+  importZotero: (scanId: string, entryId: string) =>
+    request<ZoteroImportResult>("/api/import/zotero", {
+      method: "POST",
+      body: JSON.stringify({ scanId, entryId }),
+    }),
   chatUsage: (id: string) =>
     request<ProcessingUsage>(
       `/api/documents/${encodeURIComponent(id)}/chat-usage`,
