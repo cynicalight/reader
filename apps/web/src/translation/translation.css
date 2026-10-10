@@ -197,6 +197,9 @@
   border-radius: 3px;
   background: #e6b94c;
 }
+:root[data-theme="sepia"] .translation-note-indicator {
+  background: var(--brand-30);
+}
 @media (prefers-reduced-motion: reduce) {
   .translation-document {
     scroll-behavior: auto;
@@ -237,6 +240,35 @@
 .translation-document [data-translation-block][data-focused],
 .translation-document [data-block-kind="text"][data-hovered] {
   outline: 0.5px solid rgb(128 128 128 / 22%);
+}
+:root[data-theme="sepia"] .reader-block-hover[data-block-kind="text"],
+:root[data-theme="sepia"] .reader-block-hover.reader-block-focus,
+:root[data-theme="sepia"]
+  .translation-document
+  :is(
+    [data-translation-block][data-focused],
+    [data-block-kind="text"][data-hovered]
+  ) {
+  background: var(--brand-10);
+}
+:root[data-theme="sepia"] .reader-block-hover[data-block-kind="text"],
+:root[data-theme="sepia"] .reader-block-hover.reader-block-focus {
+  border-color: var(--brand-10);
+}
+:root[data-theme="sepia"]
+  .translation-document
+  :is(
+    [data-translation-block][data-focused],
+    [data-block-kind="text"][data-hovered]
+  ) {
+  outline-color: var(--brand-10);
+}
+
+.reader-sentence-hover-mark {
+  background: rgb(128 128 128 / 22%);
+}
+:root[data-theme="sepia"] .reader-sentence-hover-mark {
+  background: var(--brand-10);
 }
 
 .reader-block-focus[data-fading] {

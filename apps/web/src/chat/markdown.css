@@ -104,6 +104,9 @@
 .dark .message-markdown a[href^="#reader-citation?"] {
   color: #60a5fa;
 }
+:root[data-theme="sepia"] .message-markdown a[href^="#reader-citation?"] {
+  color: var(--brand-text);
+}
 .message-markdown a[href^="#reader-citation?"]:hover {
   text-decoration: underline;
   text-underline-offset: 3px;

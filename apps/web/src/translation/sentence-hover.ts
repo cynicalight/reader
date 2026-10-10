@@ -90,13 +90,13 @@ export class SentenceHover {
     });
     for (const box of boxes) {
       const mark = document.createElement("div");
+      mark.className = "reader-sentence-hover-mark";
       Object.assign(mark.style, {
         position: "absolute",
         left: `${box.left - left}px`,
         top: `${box.top - top}px`,
         width: `${box.width}px`,
         height: `${box.height}px`,
-        background: "rgb(128 128 128 / 22%)",
       });
       layer.append(mark);
     }
