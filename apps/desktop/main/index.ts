@@ -23,6 +23,16 @@ import {
 import { writeClipboardText } from "./clipboard";
 import { childProxyEnvironment } from "./proxy";
 import { startUpdateService } from "./update-service";
+import { devIsolation } from "./dev-isolation";
+const isolation = devIsolation({
+  isPackaged: app.isPackaged,
+  env: process.env,
+});
+if (isolation.userDataDirectory)
+  app.setPath(
+    "userData",
+    join(app.getPath("appData"), isolation.userDataDirectory),
+  );
 let updateService: Awaited<ReturnType<typeof startUpdateService>> | undefined;
 let child: ChildProcess | undefined;
 let serverURL = "";
@@ -76,6 +86,7 @@ async function startServer() {
       join(app.getPath("userData"), "library"),
       "--web",
       web,
+      ...(!isolation.enableConnector ? ["--connector=false"] : []),
     ],
     {
       env: {
@@ -212,11 +223,13 @@ app
   .then(async () => {
     if (!primary) return;
     // Development runs need the entry script registered beside Electron.
-    if (process.defaultApp && process.argv.length >= 2)
-      app.setAsDefaultProtocolClient(READER_SCHEME, process.execPath, [
-        resolve(process.argv[1]),
-      ]);
-    else app.setAsDefaultProtocolClient(READER_SCHEME);
+    if (isolation.registerProtocol) {
+      if (process.defaultApp && process.argv.length >= 2)
+        app.setAsDefaultProtocolClient(READER_SCHEME, process.execPath, [
+          resolve(process.argv[1]),
+        ]);
+      else app.setAsDefaultProtocolClient(READER_SCHEME);
+    }
     const url = await startServer();
     session.defaultSession.setPermissionRequestHandler(
       (contents, permission, callback, details) => {

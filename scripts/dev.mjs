@@ -21,7 +21,13 @@ const binary =
   process.platform === "win32" ? "reader-server.exe" : "reader-server";
 const server = spawn(
   `../desktop/bin/${binary}`,
-  ["--data", "../../.reader", "--port", "17840"],
+  [
+    "--data",
+    "../../.reader",
+    "--port",
+    "17840",
+    ...(process.env.READER_DEV_CONNECTOR === "1" ? [] : ["--connector=false"]),
+  ],
   {
     cwd: new URL("../apps/server/", import.meta.url),
     env: {

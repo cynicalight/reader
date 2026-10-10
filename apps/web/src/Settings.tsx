@@ -82,9 +82,9 @@ export function Settings({
   const [apiModels, setAPIModels] = useState<AgentModel[]>([]);
   const [apiModelsError, setAPIModelsError] = useState("");
   const [apiDetails, setAPIDetails] = useState(false);
-  const [connector, setConnector] = useState<{
-    available: boolean;
-  } | null>(null);
+  const [connector, setConnector] = useState<Awaited<
+    ReturnType<typeof api.connectorStatus>
+  > | null>(null);
   useEffect(() => {
     if (!open) setAPIDetails(false);
   }, [open]);
@@ -616,8 +616,12 @@ export function Settings({
                   启动 Reader 后，Chrome 插件会自动连接本机论文库。
                 </p>
                 {connector && !connector.available && (
-                  <p className="mt-2 text-xs text-destructive">
-                    本机端口 17841 被占用，插件连接不可用。
+                  <p
+                    className={`mt-2 text-xs ${connector.reason === "disabled" ? "text-muted-foreground" : "text-destructive"}`}
+                  >
+                    {connector.reason === "disabled"
+                      ? "开发模式未启用插件连接。"
+                      : "本机端口 17841 被占用，插件连接不可用。"}
                   </p>
                 )}
               </div>

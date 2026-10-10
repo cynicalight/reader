@@ -101,7 +101,9 @@ export type ZoteroScan = components["schemas"]["ZoteroScan"];
 export type ZoteroImportResult = components["schemas"]["ZoteroImportResult"];
 export const api = {
   connectorStatus: () =>
-    request<{ available: boolean }>("/api/connector/status"),
+    request<
+      paths["/api/connector/status"]["get"]["responses"][200]["content"]["application/json"]
+    >("/api/connector/status"),
   connectorRevision: () =>
     request<{ revision: number }>("/api/connector/revision"),
   snapshotStatus: (id: string) =>

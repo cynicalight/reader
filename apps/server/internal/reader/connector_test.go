@@ -12,6 +12,41 @@ import (
 
 const testExtensionOrigin = connectorExtensionOrigin
 
+func TestConnectorStatusReason(t *testing.T) {
+	s := testServer(t)
+	for _, tc := range []struct {
+		name      string
+		reason    string
+		available bool
+	}{
+		{"disabled", "disabled", false},
+		{"port in use", "port-in-use", false},
+		{"available", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.available {
+				s.SetConnectorAvailable(true)
+			} else {
+				s.SetConnectorUnavailable(tc.reason)
+			}
+			w := request(t, s, "GET", "/api/connector/status", nil)
+			if w.Code != 200 {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+			var status struct {
+				Available bool   `json:"available"`
+				Reason    string `json:"reason"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+				t.Fatal(err)
+			}
+			if status.Available != tc.available || status.Reason != tc.reason {
+				t.Fatalf("unexpected status: %+v", status)
+			}
+		})
+	}
+}
+
 func bridgeRequest(s *Server, method, path, secret string, body *bytes.Buffer, contentType string) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body == nil {
