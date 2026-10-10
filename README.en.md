@@ -1,6 +1,10 @@
-# Reader
+<p align="center">
+  <img src="assets/logo/reader-logo.svg" width="112" alt="Reader logo" />
+</p>
 
-[简体中文](README.md) | **English** | [Website](https://cynicalight.github.io/reader/)
+<h1 align="center">Reader</h1>
+
+<p align="center"><a href="README.md">简体中文</a> | <b>English</b> | <a href="https://cynicalight.github.io/reader/">Website</a></p>
 
 A local-first EPUB / PDF reader for books and papers, with annotations and AI assistance grounded in the text you are reading.
 
@@ -154,6 +158,7 @@ packages/
 └── api-client/    # OpenAPI types and API client
 docs/              # Scope, roadmap, API contract, and verification notes
 website/           # Static project website and README screenshots
+assets/            # Logo sources and app icons
 ```
 
 The domain model centers on `Document`. PDF positions use page numbers and coordinates; EPUB positions use chapter resources and locators. The reading interface accesses each engine through `ReaderAdapter`. The project uses pnpm workspaces without Nx or Turborepo.

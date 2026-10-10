@@ -1,24 +1,25 @@
-# Reader
+<p align="center">
+  <img src="assets/logo/reader-logo.svg" width="112" alt="Reader logo" />
+</p>
 
-**简体中文** | [English](README.en.md) | [官网](https://cynicalight.github.io/reader/)
+<h1 align="center">Reader</h1>
+
+<p align="center"><b>简体中文</b> | <a href="README.en.md">English</a> | <a href="https://cynicalight.github.io/reader/">官网</a></p>
 
 一个本地优先的 EPUB / PDF AI 阅读器，用于阅读电子书与论文、记录批注，以及结合原文向 AI 提问。
 
 <p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="website/assets/screenshots/pdf-dark.webp" />
-  <img src="website/assets/screenshots/pdf-light.webp" alt="Reader 的 PDF 阅读界面：左侧目录，右侧 AI 助读" />
-</picture>
+  <img src="website/assets/screenshots/pdf-bilingual-ai.webp" alt="Reader 的 PDF 双语阅读界面：左侧目录，中间原文与译文，右侧 AI 助读" />
 </p>
 
-Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与文献库分开管理，并通过 Readium 和 PDF.js 提供目录、搜索、批注与阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code、Codex CLI 或 Kimi Code CLI 调用，无需在 Reader 中另填 API Key。
+Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与论文库分开管理，并通过 Readium 和 PDF.js 提供目录、搜索、批注与阅读能力。文档、阅读进度和笔记保存在本机；AI 功能通过已登录的 Claude Code、Codex CLI 或 Kimi Code CLI 调用，无需在 Reader 中另填 API Key。
 
 可从[官网](https://cynicalight.github.io/reader/)了解项目，或在 [GitHub Releases](https://github.com/cynicalight/reader/releases) 下载已发布的安装包。也支持从源码运行；发布 Release 后，CI 会构建 macOS（Apple Silicon）的 DMG 和 Windows x64 的 EXE。安装包没有开发者证书，首次运行可能需要允许系统安全提示。流程与验证范围见[安装包与发版说明](docs/releasing.md)。尚未完成 Windows 安装后的人工验收，Linux 不提供安装包。
 
 ## 功能
 
-- **图书库与文献库**：分别管理电子书和论文，可在两库间移动文档。图书库支持 EPUB / PDF；文献库只收 PDF，单个文件不超过 50 MB、150 页；页数无法读取时仅检查大小。
-- **文献管理**：编辑作者、年份、出处、DOI、arXiv、摘要等信息；通过编号、链接或标题导入论文，在线补全不覆盖手动修改。支持嵌套分类、标签、列表与表格视图、阅读状态、批量操作、重复论文检测与合并、相关文献关联。
+- **图书库与论文库**：分别管理电子书和论文，可在两库间移动文档。图书库支持 EPUB / PDF；论文库只收 PDF，单个文件不超过 50 MB、150 页；页数无法读取时仅检查大小。
+- **论文管理**：编辑作者、年份、出处、DOI、arXiv、摘要等信息；通过编号、链接或标题导入论文，在线补全不覆盖手动修改。支持嵌套分类、标签、列表与表格视图、阅读状态、批量操作、重复论文检测与合并、相关论文关联。
 - **引用导出**：支持 GB/T 7714、APA、BibTeX 和 RIS，可复制单篇引用或批量导出。
 - **回收站**：删除后保留原文件、批注和对话，可撤销或恢复；确认彻底删除后才移除数据。
 - **统一阅读界面**：左侧目录与搜索，中间正文，右侧 AI 对话与笔记；可调整侧栏宽度或收起侧栏。
@@ -27,7 +28,7 @@ Reader 以 EPUB 和 PDF 为两种核心文档格式。它将图书库与文献�
 - **AI 助读**：选区翻译与解释、多选区引用、EPUB 当前章节或 PDF 当前页总结、对话历史和生成取消。
 - **CLI 账户接入**：检测本机 Claude Code / Codex CLI / Kimi Code CLI 的安装与登录状态，通过官方 CLI 使用已有账户。
 
-文献库的收录限制、联网查找、重复合并与人工检查步骤见[文献库说明](docs/paper-library.md)。
+论文库的收录限制、联网查找、重复合并与人工检查步骤见[论文库说明](docs/paper-library.md)。
 
 两种格式各自保留适合其排版的阅读方式：
 
@@ -94,7 +95,7 @@ CLI 在临时空目录中运行。Claude 配置为禁用工具与 MCP；Codex �
 
 ## 本地数据
 
-原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Reader 没有内置云同步。论文元数据查找和在线导入会访问公开的文献服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。
+原文件存放在文件系统，文档信息、进度、批注、对话与设置存放在 SQLite。Reader 没有内置云同步。论文元数据查找和在线导入会访问公开的论文服务；自动补全仅发送识别到的 DOI 或 arXiv 编号，可在设置中关闭。
 
 | 运行方式 | 数据目录                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------------------- |
@@ -149,6 +150,7 @@ packages/
 └── api-client/    # OpenAPI 类型与 API 客户端
 docs/              # 范围、路线图、接口与验证记录
 website/           # 项目官网静态页面与 README 截图
+assets/            # Logo 源文件与应用图标
 ```
 
 业务模型围绕 `Document` 组织。PDF 用页码和坐标定位；EPUB 使用章节资源和 locator 定位。阅读界面通过 `ReaderAdapter` 调用各自的引擎。项目使用 pnpm workspace，不依赖 Nx 或 Turborepo。

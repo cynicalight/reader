@@ -59,7 +59,7 @@ export function RelatedPapers({ doc }: { doc: Document }) {
   return (
     <section className="paper-related">
       <div className="flex items-center justify-between">
-        <h3>相关文献</h3>
+        <h3>相关论文</h3>
         <Popover
           open={open}
           onOpenChange={(next) => {

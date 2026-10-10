@@ -253,7 +253,7 @@ export function PaperDetail({
           </dd>
         </dl>
         <div className="paper-fields-heading">
-          <h3>文献信息</h3>
+          <h3>论文信息</h3>
           {m.lookup === "pending" && (
             <span className="text-xs text-muted-foreground">
               解析后自动查找
@@ -271,7 +271,7 @@ export function PaperDetail({
             }}
           >
             {lookingUp ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            查找文献信息
+            查找论文信息
           </Button>
         </div>
         <dl className="paper-fields">
@@ -283,7 +283,7 @@ export function PaperDetail({
                 if (value) void saveField(doc, "itemType", value);
               }}
             >
-              <SelectTrigger size="sm" aria-label="文献类型" className="w-full">
+              <SelectTrigger size="sm" aria-label="论文类型" className="w-full">
                 <SelectValue>
                   {m.itemType ? itemTypeLabels[m.itemType] : "未设置"}
                 </SelectValue>

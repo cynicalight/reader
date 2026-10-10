@@ -114,6 +114,10 @@ const navButton = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>(".paper-nav-item")].find((b) =>
     b.textContent?.includes(label),
   )!;
+const button = (label: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+    (b) => b.textContent?.trim() === label,
+  )!;
 
 it("shows details on click and saves an edited field as manual metadata", async () => {
   await act(async () => row("Attention Is All You Need").click());
@@ -144,6 +148,61 @@ it("selects all visible papers and changes their status together", async () => {
   )!;
   await act(async () => star.click());
   expect(api.update).toHaveBeenCalledExactlyOnceWith("b", { favorite: true });
+});
+
+it("leaves batch mode after selected papers move to the trash", async () => {
+  vi.mocked(api.trashDocument).mockResolvedValue(docs[0]);
+  await act(async () => button("批量").click());
+  await act(async () => row("Attention Is All You Need").click());
+  expect(host.textContent).toContain("已选 1 篇");
+
+  await act(async () => button("移到回收站").click());
+
+  expect(usePaperUI.getState().picking).toBe(false);
+  expect(usePaperUI.getState().picked.size).toBe(0);
+  expect(button("批量")).toBeDefined();
+});
+
+it("leaves batch mode after trashing selected papers from their context menu", async () => {
+  vi.mocked(api.trashDocument).mockResolvedValue(docs[0]);
+  await act(async () => button("批量").click());
+  await act(async () => row("Attention Is All You Need").click());
+  await act(async () =>
+    row("Attention Is All You Need").dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    ),
+  );
+  const trash = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent?.includes("移到回收站"))!;
+
+  await act(async () => trash.click());
+
+  expect(usePaperUI.getState().picking).toBe(false);
+  expect(usePaperUI.getState().picked.size).toBe(0);
+});
+
+it("keeps failed papers selected in batch mode for retry", async () => {
+  await act(async () =>
+    row("Attention Is All You Need").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", metaKey: true, bubbles: true }),
+    ),
+  );
+  vi.mocked(api.trashDocument).mockImplementation(async (id) => {
+    if (id === "b") throw Error("offline");
+    return docs[0];
+  });
+
+  await act(async () => button("移到回收站").click());
+
+  expect(usePaperUI.getState().picking).toBe(true);
+  expect([...usePaperUI.getState().picked]).toEqual(["b"]);
+  expect(host.textContent).toContain("已选 1 篇");
 });
 
 it("renames a category everywhere through the library endpoint", async () => {

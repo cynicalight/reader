@@ -89,11 +89,15 @@ export function LibraryDocuments({
         (current) =>
           new Set([...current].filter((id) => !result.deleted.includes(id))),
       );
+      return result;
     } finally {
       pending.current = false;
     }
   };
-  const removeSelected = () => void trash([...selected]);
+  const removeSelected = () =>
+    void trash([...selected]).then((result) => {
+      if (result && !result.failed.length) changeEditing(false);
+    });
   return (
     <section
       aria-label="文档列表"
@@ -337,7 +341,7 @@ export function LibraryDocuments({
                   }
                 >
                   <ArrowRightLeft />
-                  {doc.library === "papers" ? "移到图书库" : "移到文献库"}
+                  {doc.library === "papers" ? "移到图书库" : "移到论文库"}
                 </ContextMenuItem>
               )}
               <ContextMenuSeparator />

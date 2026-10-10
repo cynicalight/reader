@@ -267,7 +267,7 @@ export async function lookupPaper(doc: Document) {
   try {
     await api.lookupMetadata(doc.id);
     await refreshLibrary().catch(() => {});
-    toast.success("已更新文献信息");
+    toast.success("已更新论文信息");
   } catch (e) {
     toast.error((e as Error).message);
   }

@@ -269,7 +269,7 @@
   const pct = $("#stage-pct");
   const bar = $("#stage-bar");
   const labels = () =>
-    root.lang === "en" ? ["Learning", "Consolidating"] : ["学习中", "沉淀中"];
+    root.lang === "en" ? ["Learning", "Translating"] : ["学习中", "翻译中"];
   async function runCover() {
     const wait = gate(panel);
     for (;;) {
@@ -340,6 +340,26 @@
     typed.textContent = "证据";
     results.forEach((r) => r.classList.add("on"));
   } else runSearch();
+
+  /* Citation formats */
+  const citeFormats = $$("#cite .fmts span");
+  const citeText = $("#cite-text");
+  const citations = [
+    citeText.textContent,
+    "Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention is all you need. Advances in Neural Information Processing Systems, 30.",
+    "@inproceedings{vaswani2017attention,\n  title  = {Attention Is All You Need},\n  author = {Vaswani, Ashish and …},\n  year   = {2017}\n}",
+    "TY  - CONF\nTI  - Attention Is All You Need\nAU  - Vaswani, Ashish\nPY  - 2017\nER  -",
+  ];
+  async function runCite() {
+    const wait = gate($("#cite"));
+    for (let i = 0; ; ) {
+      await wait(2600);
+      i = (i + 1) % citations.length;
+      citeFormats.forEach((s, n) => s.classList.toggle("on", n === i));
+      citeText.textContent = citations[i];
+    }
+  }
+  if (!reduced) runCite();
 
   /* Theme mini cycle */
   const themeSeg = $$("#themes .seg-theme span");

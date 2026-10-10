@@ -201,7 +201,7 @@ export function App() {
     if (accepted.length < files.length)
       toast.info(
         target === "papers"
-          ? "文献库只支持 PDF，已跳过其他文件"
+          ? "论文库只支持 PDF，已跳过其他文件"
           : "仅支持 EPUB 和 PDF，已跳过其他文件",
       );
     if (!accepted.length) return;

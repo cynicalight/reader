@@ -30,7 +30,6 @@ export function ImagePreview({
   renderImage?: (id: string, signal: AbortSignal) => Promise<Blob>;
 }) {
   const [zoom, setZoom] = useState(1);
-  const [size, setSize] = useState<{ width: number; height: number }>();
   const [error, setError] = useState(false);
   const [highResolution, setHighResolution] = useState<string>();
   const [rendering, setRendering] = useState(!!renderImage);
@@ -68,6 +67,23 @@ export function ImagePreview({
             附件原图，可放大查看细节
           </DialogDescription>
         </DialogHeader>
+        {rendering && (
+          <span className="image-preview-loading" role="status">
+            正在加载高清预览…
+          </span>
+        )}
+        <div className="image-preview-scroll">
+          {error ? (
+            <p role="alert">图片暂时无法加载，请稍后重试。</p>
+          ) : (
+            <img
+              style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
+              src={highResolution || blockImageURL(documentId, image.id)}
+              alt={image.caption || imageLabel(image)}
+              onError={() => setError(true)}
+            />
+          )}
+        </div>
         <div className="image-preview-controls">
           <Button
             variant="ghost"
@@ -90,33 +106,6 @@ export function ImagePreview({
           >
             <Plus />
           </Button>
-          {rendering ? (
-            <span>正在加载高清预览…</span>
-          ) : (
-            size && (
-              <span>
-                {size.width} × {size.height}
-              </span>
-            )
-          )}
-        </div>
-        <div className="image-preview-scroll">
-          {error ? (
-            <p role="alert">图片暂时无法加载，请稍后重试。</p>
-          ) : (
-            <img
-              style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
-              src={highResolution || blockImageURL(documentId, image.id)}
-              alt={image.caption || imageLabel(image)}
-              onLoad={(event) =>
-                setSize({
-                  width: event.currentTarget.naturalWidth,
-                  height: event.currentTarget.naturalHeight,
-                })
-              }
-              onError={() => setError(true)}
-            />
-          )}
         </div>
       </DialogContent>
     </Dialog>

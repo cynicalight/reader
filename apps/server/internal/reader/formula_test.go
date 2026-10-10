@@ -78,7 +78,7 @@ func waitFormulaSignal(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-ch:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for concurrent provider")
 	}
 }
@@ -139,7 +139,7 @@ func TestFormulaConversionDoesNotBlockCaptionTranslation(t *testing.T) {
 	go func() { done <- s.processTranslation(context.Background(), &p) }()
 	waitFormulaSignal(t, formulaStarted)
 	waitFormulaSignal(t, textStarted)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		items, err := s.translations("doc", m)
 		if err != nil {

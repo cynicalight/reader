@@ -129,6 +129,8 @@ it("moves selected documents to the trash, keeps failures and offers an undo", a
   expect(toast.error).toHaveBeenCalledWith(
     "1 份未能移到回收站，已保留，可重试",
   );
+  expect(button("完成")).toBeDefined();
+  expect(host.textContent).toContain("已选 1 份");
   const undo = vi.mocked(toast.success).mock.calls[0];
   expect(undo[0]).toBe("已将 1 份移到回收站");
   const action = (undo[1] as unknown as { action: { onClick: () => void } })
@@ -136,6 +138,25 @@ it("moves selected documents to the trash, keeps failures and offers an undo", a
   await act(async () => action.onClick());
   expect(api.restoreDocument).toHaveBeenCalledExactlyOnceWith("0");
   expect(open).not.toHaveBeenCalled();
+});
+it("leaves selection mode after all selected documents move to the trash", async () => {
+  await act(async () => button("编辑").click());
+  await act(async () =>
+    host.querySelector("article")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "a",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  vi.mocked(api.trashDocument).mockResolvedValue(docs[0]);
+
+  await act(async () => button("移到回收站").click());
+
+  expect(button("编辑")).toBeDefined();
+  expect(host.textContent).not.toContain("已选");
 });
 it("opens the context menu on the targeted document and edits that document", async () => {
   const card = host.querySelectorAll("article")[1];

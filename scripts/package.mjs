@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -90,4 +90,25 @@ run(
   ],
   desktop,
 );
+if (process.platform === "darwin" && !process.argv.includes("--dir")) {
+  // LZMA needs macOS 10.15, below Electron's minimum; it is about a quarter
+  // smaller than the builder's zlib or bzip2 images.
+  const dmg = join(
+    root,
+    "release",
+    `Reader-${app.version}-mac-${process.arch}.dmg`,
+  );
+  const compressed = `${dmg}.ulmo.dmg`;
+  await rm(compressed, { force: true });
+  run("hdiutil", [
+    "convert",
+    dmg,
+    "-format",
+    "ULMO",
+    "-quiet",
+    "-o",
+    compressed,
+  ]);
+  await rename(compressed, dmg);
+}
 run(process.execPath, [join(root, "scripts/package-smoke.mjs")]);

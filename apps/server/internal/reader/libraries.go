@@ -55,13 +55,13 @@ func pdfPageCount(path string) (pages int, err error) {
 // An unreadable page tree does not block import; the size limit still applies.
 func paperLimit(kind string, size int64, path string) string {
 	if kind != "pdf" {
-		return "文献库只支持 PDF"
+		return "论文库只支持 PDF"
 	}
 	if size > maxPaperBytes {
-		return fmt.Sprintf("文献库只收录 %d MB 以内的 PDF，可导入图书库", maxPaperBytes>>20)
+		return fmt.Sprintf("论文库只收录 %d MB 以内的 PDF，可导入图书库", maxPaperBytes>>20)
 	}
 	if pages, err := pdfPageCount(path); err == nil && pages > maxPaperPages {
-		return fmt.Sprintf("这份 PDF 有 %d 页，文献库只收录 %d 页以内的论文，可导入图书库", pages, maxPaperPages)
+		return fmt.Sprintf("这份 PDF 有 %d 页，论文库只收录 %d 页以内的论文，可导入图书库", pages, maxPaperPages)
 	}
 	return ""
 }

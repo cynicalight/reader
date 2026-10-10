@@ -350,7 +350,12 @@ export interface ReaderAdapter {
   setEPUBBlocks?(blocks: EPUBReadingBlock[]): void;
   focusEPUBLocations?(locations: EPUBLocation[]): Promise<void>;
   hoverBlock?(blockId: string | null): void;
-  renderBlockImage?(blockId: string, signal: AbortSignal): Promise<Blob>;
+  /** Re-renders a PDF block from vectors; `width` targets device pixels. */
+  renderBlockImage?(
+    blockId: string,
+    signal: AbortSignal,
+    width?: number,
+  ): Promise<Blob>;
   followBlock?(anchor: PDFReadingAnchor): Promise<void>;
   previewCitation?(
     location: PDFLocation,

@@ -122,7 +122,7 @@
       </if>
     </choose>
   </macro>
-  <!-- 文献类型标识 -->
+  <!-- 论文类型标识 -->
   <macro name="type-id">
     <choose>
       <if type="article bill collection hearing legal_case legislation personal_communication regulation treaty" match="any">
@@ -172,7 +172,7 @@
       </else>
     </choose>
   </macro>
-  <!-- 文献载体标识 -->
+  <!-- 论文载体标识 -->
   <macro name="medium-id">
     <choose>
       <if variable="medium">
@@ -314,8 +314,8 @@
         <text macro="accessed-date"/>
       </else-if>
       <else-if variable="URL DOI" match="any">
-        <!-- 纯电子资源联机网络文献的格式“(更新或修改日期)[引用日期]”。
-          原国标中，电子公告、无出版社的报告、法规等文献都可以作为“纯电子文献”。
+        <!-- 纯电子资源联机网络论文的格式“(更新或修改日期)[引用日期]”。
+          原国标中，电子公告、无出版社的报告、法规等论文都可以作为“纯电子论文”。
         -->
         <text macro="issued-date" prefix="(" suffix=")"/>
         <text macro="accessed-date"/>
@@ -349,7 +349,7 @@
       </else>
     </choose>
   </macro>
-  <!-- 出版日期，用于报纸文献、专利的“公告日期或公开日期”、电子资源的“更新或修改日期” -->
+  <!-- 出版日期，用于报纸论文、专利的“公告日期或公开日期”、电子资源的“更新或修改日期” -->
   <macro name="issued-date">
     <date variable="issued" form="numeric"/>
   </macro>
@@ -368,7 +368,7 @@
       <text variable="DOI" prefix="DOI:"/>
     </group>
   </macro>
-  <!-- 参考文献表格式 -->
+  <!-- 参考论文表格式 -->
   <macro name="entry-layout">
     <group delimiter=". ">
       <text macro="author"/>
@@ -380,12 +380,12 @@
           <text macro="publisher"/>
         </if>
         <else-if type="article-journal article-magazine article-newspaper" match="any">
-          <!-- 4.4 连续出版物中的析出文献 -->
+          <!-- 4.4 连续出版物中的析出论文 -->
           <text macro="title"/>
           <text macro="container-periodical"/>
         </else-if>
         <else-if type="patent">
-          <!-- 4.5 专利文献 -->
+          <!-- 4.5 专利论文 -->
           <text macro="title"/>
           <text macro="publisher"/>
         </else-if>
@@ -395,7 +395,7 @@
           <text macro="publisher"/>
         </else-if>
         <else-if type="chapter entry-dictionary entry-encyclopedia paper-conference" variable="container-title" match="any">
-          <!-- 4.2 专著中的析出文献 -->
+          <!-- 4.2 专著中的析出论文 -->
           <group delimiter="//">
             <group delimiter=". ">
               <text macro="title"/>
@@ -429,7 +429,7 @@
     </layout>
   </citation>
   <bibliography entry-spacing="0" et-al-min="4" et-al-use-first="3" second-field-align="flush">
-    <!-- 取消这部分注释可以开启 CSL-M 的多语言功能：按照文献的语言输出“et al.”等术语 -->
+    <!-- 取消这部分注释可以开启 CSL-M 的多语言功能：按照论文的语言输出“et al.”等术语 -->
     <!-- <layout suffix="." locale="en"><text variable="citation-number" prefix="[" suffix="]"/><text macro="entry-layout"/></layout>
     -->
     <layout suffix=".">

@@ -543,7 +543,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
   ) {
     return this.navigation.matchSentences(location, translations);
   }
-  async renderBlockImage(blockId: string, signal: AbortSignal): Promise<Blob> {
+  async renderBlockImage(
+    blockId: string,
+    signal: AbortSignal,
+    width?: number,
+  ): Promise<Blob> {
     const block = this.blockData.find((item) => item.id === blockId);
     if (!block || !this.pdf || this.disposed) throw new Error("图片位置不可用");
     signal.throwIfAborted();
@@ -552,7 +556,11 @@ export class PDFReaderAdapter implements ReaderAdapter {
     const base = page.getViewport({ scale: 1 });
     const bounds = block.bounds;
     const area = base.width * bounds.width * base.height * bounds.height;
-    const scale = Math.min(6, Math.sqrt(8_000_000 / area));
+    const scale = Math.min(
+      6,
+      Math.sqrt(8_000_000 / area),
+      width ? width / (base.width * bounds.width) : Infinity,
+    );
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.ceil(viewport.width * bounds.width));

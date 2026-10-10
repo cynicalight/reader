@@ -399,7 +399,7 @@ export function Settings({
             )}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Agent 连接、显示、阅读与文献库
+            Agent 连接、显示、阅读与论文库
           </DialogDescription>
         </DialogHeader>
         {apiDetails && (
@@ -502,7 +502,7 @@ export function Settings({
             </TabsTrigger>
             <TabsTrigger value="papers">
               <Library />
-              文献库
+              论文库
             </TabsTrigger>
           </TabsList>
           <TabsContent value="display" className="settings-panel" keepMounted>
@@ -599,7 +599,7 @@ export function Settings({
           </TabsContent>
           <TabsContent value="papers" className="settings-panel" keepMounted>
             <section>
-              <h3 className="mb-3 text-sm font-medium">文献库</h3>
+              <h3 className="mb-3 text-sm font-medium">论文库</h3>
               <label className="flex items-start gap-2 text-sm">
                 <Checkbox
                   className="mt-0.5"
@@ -611,7 +611,7 @@ export function Settings({
                   }
                 />
                 <span>
-                  导入 PDF 后自动补全文献信息
+                  导入 PDF 后自动补全论文信息
                   <span className="block text-xs text-muted-foreground">
                     只把文中的 DOI 或 arXiv 编号发送给 arXiv、Crossref 与
                     Semantic Scholar
@@ -629,7 +629,7 @@ export function Settings({
                 <span>
                   导入后自动翻译
                   <span className="block text-xs text-muted-foreground">
-                    开启后，新导入的文献会自动翻译全文。
+                    开启后，新导入的论文会自动翻译全文。
                   </span>
                 </span>
               </label>

@@ -2,7 +2,7 @@ import { FormulaRow } from "./FormulaRow";
 import type { PDFBlock, TranslationBlock } from "@reader/core";
 import { blockImageURL } from "@reader/api";
 import { Button } from "@reader/ui/components/button";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ReadingLinkNavigation } from "../reading-links";
 import { ErrorBoundary } from "../ErrorBoundary";
 const FormulaFragment = lazy(() => import("./FormulaFragment"));
@@ -33,6 +33,58 @@ function MessageMarkdown({
 }
 
 /** A paragraph that fails to render shows a notice instead of taking down the reader. */
+// Algorithms render as a code block; the fence outgrows any backtick run inside.
+const algorithmMarkdown = (text: string) => {
+  const fence = "`".repeat(
+    Math.max(3, ...Array.from(text.matchAll(/`+/g), (m) => m[0].length + 1)),
+  );
+  return `${fence}algorithm\n${text}\n${fence}`;
+};
+
+/**
+ * Layout crops are rasterized with the whole page, so figures look soft once
+ * shown at full width. After the lazy crop loads, a vector render at the
+ * displayed device-pixel width replaces it without changing the layout.
+ */
+function BlockImage({
+  src,
+  alt,
+  render,
+}: {
+  src: string;
+  alt: string;
+  render?: (width: number) => Promise<string>;
+}) {
+  const [sharp, setSharp] = useState<{ url: string; width: number }>();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return (
+    <img
+      className="translation-image"
+      src={sharp?.url ?? src}
+      width={sharp?.width}
+      alt={alt}
+      loading="lazy"
+      onLoad={(event) => {
+        if (sharp || !render) return;
+        const image = event.currentTarget;
+        const width = image.naturalWidth;
+        const pixels = Math.min(width, image.clientWidth || width);
+        render(Math.ceil(pixels * (window.devicePixelRatio || 1)))
+          .then((url) => {
+            if (mounted.current) setSharp({ url, width });
+          })
+          .catch(() => {});
+      }}
+    />
+  );
+}
+
 export function TranslationText(props: TranslationTextProps) {
   return (
     <ErrorBoundary
@@ -54,6 +106,7 @@ function TranslationContent({
   formulaNumber,
   onCitation,
   imageURL,
+  renderImage,
 }: {
   // PDF blocks and EPUB paragraphs share these fields.
   block: Pick<PDFBlock, "id" | "label" | "text" | "image" | "caption"> &
@@ -68,6 +121,8 @@ function TranslationContent({
   onCitation?: (blockId: string, label: string) => void;
   /** EPUB images come from the publication rather than the PDF asset store. */
   imageURL?: string;
+  /** Replaces the low-resolution layout crop with a render sized for display. */
+  renderImage?: (blockId: string, width: number) => Promise<string>;
 }) {
   const formula = ["display_formula", "inline_formula"].includes(block.label);
   const idle = translation?.status === "idle";
@@ -75,11 +130,15 @@ function TranslationContent({
   const asset =
     !!block.image || ["table", "chart", "image"].includes(block.label);
   const image = block.image ? (
-    <img
-      className="translation-image"
+    <BlockImage
+      key={block.id}
       src={imageURL ?? blockImageURL(documentId, block.id)}
       alt={block.caption || block.text || block.label}
-      loading="lazy"
+      render={
+        imageURL || !renderImage
+          ? undefined
+          : (width) => renderImage(block.id, width)
+      }
     />
   ) : null;
   const formulaFallback = image || <MessageMarkdown content={block.text} />;
@@ -145,7 +204,9 @@ function TranslationContent({
       {preserve ? (
         !asset &&
         (block.label === "algorithm" ? (
-          <pre>{block.text}</pre>
+          <div className="translation-algorithm">
+            <MessageMarkdown content={algorithmMarkdown(block.text)} />
+          </div>
         ) : (
           <MessageMarkdown
             content={block.text}

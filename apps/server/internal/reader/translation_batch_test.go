@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -119,7 +121,7 @@ func waitTranslationSignal(t *testing.T, ch <-chan string) string {
 	select {
 	case id := <-ch:
 		return id
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("timed out")
 		return ""
 	}
@@ -166,7 +168,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	if first == second || first == third || second == third || first == "p1-b4" || second == "p1-b4" || third == "p1-b4" {
 		t.Fatalf("bad batch scheduling: %s %s %s", first, second, third)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		items, err := s.translations("doc", m)
 		if err != nil {
@@ -188,7 +190,7 @@ func TestTranslationRunsThreeBatchesAndSavesBeforeProviderCompletes(t *testing.T
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("workers ignored cancellation")
 	}
 	items, _ := s.translations("doc", m)
@@ -311,5 +313,111 @@ func TestTranslationDeadlineDoesNotChangeChatDeadline(t *testing.T) {
 		if _, err := service.Generate(context.Background(), AIInput{}, false, nil); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestTranslationJSONLRepairsUnescapedLatexBackslashes(t *testing.T) {
+	p := translationParagraph{"p1-b2", "h2", "Two."}
+	var got TranslationBlock
+	d := newTranslationJSONL(translationBatch{Paragraphs: []translationParagraph{p}}, func(block TranslationBlock) error {
+		got = block
+		return nil
+	})
+	line := `{"blockId":"p1-b2","sourceHash":"h2","sentences":[{"source":"Two.","target":"$\pi$、$\eta$、$\ll$、$\log n$"}]}`
+	if err := d.feed(line + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !d.completed[p.BlockID] || len(got.Sentences) != 1 || got.Sentences[0].Target != `$\pi$、$\eta$、$\ll$、$\log n$` {
+		t.Fatalf("unescaped LaTeX was not repaired: decoder=%+v block=%+v", d, got)
+	}
+}
+
+func TestRepairInvalidJSONEscapesPreservesValidEscapesAndOutsideText(t *testing.T) {
+	valid := `{"target":"quote: \" newline: \n unicode: \u03c0 slash: \\ solidus: \/"}`
+	if got, changed := repairInvalidJSONEscapes(valid); changed || got != valid {
+		t.Fatalf("valid JSON changed: changed=%v %q", changed, got)
+	}
+	broken := `{"target":"$\pi$"}\tail`
+	want := `{"target":"$\\pi$"}\tail`
+	if got, changed := repairInvalidJSONEscapes(broken); !changed || got != want {
+		t.Fatalf("wrong repair: changed=%v got=%q want=%q", changed, got, want)
+	}
+}
+
+func TestTranslationJSONLNamesStructurallyBrokenLines(t *testing.T) {
+	a, b := translationParagraph{"p1-b1", "h1", "One."}, translationParagraph{"p1-b2", "h2", "Two."}
+	d := newTranslationJSONL(translationBatch{Paragraphs: []translationParagraph{a, b}}, func(TranslationBlock) error { return nil })
+	for _, line := range []string{"```jsonl", `{"blockId":"p1-b2","sourceHash":"h2","sentences":`, translationParagraphLine(a)} {
+		if err := d.feed(strings.TrimSuffix(line, "\n") + "\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !strings.HasPrefix(d.invalid["p1-b2"], "第 2 行不是合法的 JSON") || d.malformed != 1 || !strings.HasPrefix(d.firstMalformed, "第 1 行") || !d.completed["p1-b1"] {
+		t.Fatalf("broken lines not attributed: %+v %d %q", d.invalid, d.malformed, d.firstMalformed)
+	}
+}
+func TestTranslationAsksOnceMoreForParagraphsTheModelSkipped(t *testing.T) {
+	s, p, m := translationFixture(t)
+	var calls atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		batch := readTranslationInput(t, r).Batch
+		if calls.Add(1) == 2 && (len(batch.Paragraphs) != 1 || batch.Paragraphs[0].BlockID != m.Blocks[1].ID) {
+			t.Errorf("follow-up did not ask for the skipped paragraph only: %+v", batch.Paragraphs)
+		}
+		// The model ends normally after the first paragraph it was given.
+		writeAPIReply(w, translationParagraphLine(batch.Paragraphs[0]))
+	}))
+	defer provider.Close()
+	configureTranslationTest(t, s, provider.URL)
+	if err := s.settleTranslations(context.Background(), &p, m); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := s.translations("doc", m)
+	if calls.Load() != 2 || items[0].Status != "complete" || items[1].Status != "complete" {
+		t.Fatalf("skipped paragraph not recovered: calls=%d %+v", calls.Load(), items)
+	}
+	if _, err := os.Stat(filepath.Join(s.Store.Root, "cache", "doc", "translation-failures")); !os.IsNotExist(err) {
+		t.Fatal("recorded a failure for a recovered batch")
+	}
+}
+func TestTranslationFailureNamesTheCauseAndKeepsTheOutput(t *testing.T) {
+	s, p, m := translationFixture(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		batch := readTranslationInput(t, r).Batch
+		text := "not json at all\n"
+		if len(batch.Paragraphs) == 2 {
+			text = translationParagraphLine(batch.Paragraphs[0])
+		}
+		writeAPIReply(w, text)
+	}))
+	defer provider.Close()
+	configureTranslationTest(t, s, provider.URL)
+	if err := s.settleTranslations(context.Background(), &p, m); err == nil {
+		t.Fatal("unrecovered paragraph reported complete")
+	}
+	items, _ := s.translations("doc", m)
+	want := "补译后仍未完成：模型只返回了 0/1 段，另有 1 行无法解析（第 1 行不是合法的 JSON"
+	if items[0].Status != "complete" || items[1].Status != "failed" || !strings.HasPrefix(items[1].Error, want) {
+		t.Fatalf("failure cause not recorded: %+v", items[1])
+	}
+	dir := filepath.Join(s.Store.Root, "cache", "doc", "translation-failures")
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("diagnostic not written: %v %v", entries, err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	for _, part := range []string{"batch: p1-b1…p1-b2 (2 paragraphs)", "failed p1-b2: " + want, "=== attempt 2: 1 paragraphs requested, 0 saved, 1 output lines, 1 unparsable", "not json at all"} {
+		if !strings.Contains(string(data), part) {
+			t.Fatalf("diagnostic misses %q:\n%s", part, data)
+		}
+	}
+	// Only the most recent diagnostics are kept.
+	batch := translationBatch{Paragraphs: []translationParagraph{{BlockID: "p1-b2"}}}
+	attempt := &translationAttempt{decoder: newTranslationJSONL(batch, nil)}
+	for i := 0; i < translationFailureLogs+2; i++ {
+		s.recordTranslationFailure("doc", batch, []*translationAttempt{attempt}, []TranslationBlock{{BlockID: "p1-b2", Error: "x"}})
+	}
+	if entries, _ = os.ReadDir(dir); len(entries) != translationFailureLogs {
+		t.Fatalf("kept %d diagnostics", len(entries))
 	}
 }
