@@ -187,6 +187,7 @@ describe("guide host", () => {
   it("walks a new user through every onboarding step and remembers it", async () => {
     vi.mocked(api.guidePreferences).mockResolvedValue({});
     await render(false);
+    expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
     const pages = onboardingPages();
     for (const page of pages.slice(0, -1)) {
       expect(document.body.textContent).toContain(page.step.title);

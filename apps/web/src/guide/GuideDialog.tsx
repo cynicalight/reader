@@ -89,6 +89,8 @@ export function OnboardingDialog({
     <Dialog open={open} onOpenChange={(value) => !value && onFinish()}>
       <DialogContent
         className="guide-dialog sm:max-w-2xl"
+        // The footer offers Skip; a corner close would read as dismissing.
+        showCloseButton={false}
         onKeyDown={arrowKeys(back, () => !last && next())}
       >
         <GuideStepView page={page} />
