@@ -74,7 +74,7 @@ it("orders by author, reorders by hand and copies the preview", async () => {
 });
 it("switches to GB/T 7714 and sends incomplete papers to the editor", async () => {
   await act(async () =>
-    [...document.querySelectorAll<HTMLButtonElement>("button")]
+    [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
       .find((b) => b.textContent === "GB/T 7714")!
       .click(),
   );

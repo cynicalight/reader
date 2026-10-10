@@ -24,10 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@reader/ui/components/select";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@reader/ui/components/toggle-group";
+import { Tabs, TabsList, TabsTrigger } from "@reader/ui/components/tabs";
 import { copyText } from "../chat/clipboard";
 import { downloadText } from "../download";
 import { useReaderStore } from "../store";
@@ -111,27 +108,24 @@ export function CitationDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <ToggleGroup
-            aria-label="引用格式"
-            variant="outline"
-            size="sm"
-            spacing={0}
-            value={[style]}
-            onValueChange={(value: string[]) => {
-              if (!value[0]) return;
-              setStyle(value[0] as CitationStyle);
+          <Tabs
+            value={style}
+            onValueChange={(value) => {
+              setStyle(value as CitationStyle);
               void savePaperPreferences((p) => ({
                 ...p,
-                citationStyle: value[0] as CitationStyle,
+                citationStyle: value as CitationStyle,
               }));
             }}
           >
-            {(Object.keys(citationStyles) as CitationStyle[]).map((key) => (
-              <ToggleGroupItem key={key} value={key} className="px-2.5">
-                {citationStyles[key].label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            <TabsList aria-label="引用格式">
+              {(Object.keys(citationStyles) as CitationStyle[]).map((key) => (
+                <TabsTrigger key={key} value={key} className="px-2.5">
+                  {citationStyles[key].label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <Select
             value={order}
             onValueChange={(value) =>
