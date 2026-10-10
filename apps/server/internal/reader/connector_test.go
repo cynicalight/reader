@@ -121,3 +121,26 @@ func TestConnectorOriginRestriction(t *testing.T) {
 		t.Fatalf("other extension origin: %d", w.Code)
 	}
 }
+
+func TestConnectorOriginlessBrowserRequestNeedsCredential(t *testing.T) {
+	s := testServer(t)
+	secret := sessionTestConnector(t, s)
+	requestWithoutOrigin := func(path, credential string) int {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:17841"+path, nil)
+		if credential != "" {
+			r.Header.Set("Authorization", "Bearer "+credential)
+		}
+		w := httptest.NewRecorder()
+		s.ConnectorHandler().ServeHTTP(w, r)
+		return w.Code
+	}
+	if code := requestWithoutOrigin("/v1/folders", secret); code != 200 {
+		t.Fatalf("Arc extension omits Origin on authenticated GET: %d", code)
+	}
+	if code := requestWithoutOrigin("/v1/folders", ""); code != 401 {
+		t.Fatalf("originless request without credential: %d", code)
+	}
+	if code := requestWithoutOrigin("/v1/session", ""); code != 403 {
+		t.Fatalf("originless session request: %d", code)
+	}
+}

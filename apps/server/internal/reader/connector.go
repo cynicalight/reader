@@ -72,11 +72,17 @@ func (s *Server) ConnectorHandler() http.Handler {
 			return
 		}
 		origin := r.Header.Get("Origin")
-		if origin != connectorExtensionOrigin {
+		if origin != "" && origin != connectorExtensionOrigin {
 			fail(w, 403, "invalid origin")
 			return
 		}
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		if origin == "" && (r.URL.Path == "/v1/session" || r.URL.Path == "/v1/status") {
+			fail(w, 403, "missing extension origin")
+			return
+		}
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Vary", "Origin")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
