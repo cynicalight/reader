@@ -23,6 +23,8 @@ import (
 )
 
 type Server struct {
+	zoteroMu               sync.Mutex
+	zoteroScans            map[string]*zoteroScan
 	annotationMu           sync.Mutex
 	annotationHistory      []annotationChange
 	codexChat              codexChatCache
@@ -82,6 +84,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tag-boards", s.saveTagBoard)
 	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
+	mux.HandleFunc("GET /api/import/zotero", s.zoteroDefaults)
+	mux.HandleFunc("POST /api/import/zotero/scan", s.scanZotero)
+	mux.HandleFunc("POST /api/import/zotero", s.importZotero)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
 	mux.HandleFunc("POST /api/documents/resolve", s.resolveDocument)
 	mux.HandleFunc("GET /api/documents/{id}/note", s.documentNote)
