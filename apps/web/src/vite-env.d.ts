@@ -9,6 +9,7 @@ interface Window {
       appearance: "light" | "sepia" | "dark" | "system",
     ) => Promise<void>;
     /** Resolves with long papers that need the reader's confirmation. */
+    chooseZoteroDirectory?: () => Promise<string | null>;
     importFiles: (
       library: "books" | "papers",
     ) => Promise<Array<{ id: string; name: string; pages: number }>>;

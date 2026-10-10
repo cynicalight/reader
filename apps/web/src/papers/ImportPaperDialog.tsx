@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { libraryModes } from "../LibraryModeSwitcher";
 import { importReference } from "./actions";
+import { ZoteroImportDialog } from "./ZoteroImportDialog";
 
 export function ImportPaperDialog({
   open,
@@ -22,6 +23,7 @@ export function ImportPaperDialog({
   onOpenChange: (open: boolean) => void;
   onChooseFiles: () => void;
 }) {
+  const [zotero, setZotero] = useState(false);
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
@@ -42,6 +44,16 @@ export function ImportPaperDialog({
       setBusy(false);
     }
   };
+  if (zotero)
+    return (
+      <ZoteroImportDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setZotero(false);
+          onOpenChange(next);
+        }}
+      />
+    );
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
@@ -82,6 +94,13 @@ export function ImportPaperDialog({
         >
           <FileUp />
           选择 PDF 文件
+        </Button>
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={() => setZotero(true)}
+        >
+          从 Zotero 导入
         </Button>
       </DialogContent>
     </Dialog>
