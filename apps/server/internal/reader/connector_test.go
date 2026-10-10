@@ -104,6 +104,47 @@ func TestConnectorSessionAndImport(t *testing.T) {
 		t.Fatalf("rotated credential: %d", w.Code)
 	}
 }
+func TestConnectorLabelsIncludeSavedEmptyCategoriesAndPaperTags(t *testing.T) {
+	s := testServer(t)
+	secret := sessionTestConnector(t, s)
+	if w := bridgeRequest(s, "GET", "/v1/labels", "", nil, ""); w.Code != 401 {
+		t.Fatalf("labels without credential: %d", w.Code)
+	}
+	w := request(t, s, "PUT", "/api/preferences/library", strings.NewReader(`{"papers":{"categories":["Empty","ML/NLP"]}}`))
+	if w.Code != 200 {
+		t.Fatalf("preferences: %d %s", w.Code, w.Body.String())
+	}
+	var body bytes.Buffer
+	m := multipart.NewWriter(&body)
+	_ = m.WriteField("metadata", `{"title":"Tagged paper","url":"https://example.org/tagged"}`)
+	_ = m.WriteField("sourceUrl", "https://example.org/tagged")
+	_ = m.WriteField("folders", `["ML/NLP","Reading"]`)
+	_ = m.WriteField("tags", `["Security","Web"]`)
+	f, _ := m.CreateFormFile("pdf", "paper.pdf")
+	_, _ = f.Write(testPDF(2))
+	_ = m.Close()
+	w = bridgeRequest(s, "POST", "/v1/import", secret, &body, m.FormDataContentType())
+	if w.Code != 201 {
+		t.Fatalf("import: %d %s", w.Code, w.Body.String())
+	}
+	w = bridgeRequest(s, "GET", "/v1/labels", secret, nil, "")
+	if w.Code != 200 {
+		t.Fatalf("labels: %d %s", w.Code, w.Body.String())
+	}
+	var labels struct {
+		Folders []string `json:"folders"`
+		Tags    []string `json:"tags"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &labels); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(labels.Folders, ","); got != "Empty,ML,ML/NLP,Reading" {
+		t.Fatalf("folders: %q", got)
+	}
+	if got := strings.Join(labels.Tags, ","); got != "Security,Web" {
+		t.Fatalf("tags: %q", got)
+	}
+}
 func TestConnectorOriginRestriction(t *testing.T) {
 	s := testServer(t)
 	s.SetConnectorAvailable(true)
@@ -136,6 +177,9 @@ func TestConnectorOriginlessBrowserRequestNeedsCredential(t *testing.T) {
 	}
 	if code := requestWithoutOrigin("/v1/folders", secret); code != 200 {
 		t.Fatalf("Arc extension omits Origin on authenticated GET: %d", code)
+	}
+	if code := requestWithoutOrigin("/v1/labels", secret); code != 200 {
+		t.Fatalf("Arc extension omits Origin on authenticated labels GET: %d", code)
 	}
 	if code := requestWithoutOrigin("/v1/folders", ""); code != 401 {
 		t.Fatalf("originless request without credential: %d", code)

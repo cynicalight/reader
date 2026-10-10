@@ -64,6 +64,7 @@ func (s *Server) ConnectorHandler() http.Handler {
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]bool{"running": true}) })
 	mux.HandleFunc("POST /v1/session", s.connectorSession)
 	mux.HandleFunc("GET /v1/folders", s.connectorFolders)
+	mux.HandleFunc("GET /v1/labels", s.connectorLabels)
 	mux.HandleFunc("POST /v1/import", s.connectorImport)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, port, err := net.SplitHostPort(r.Host)
@@ -118,25 +119,84 @@ func (s *Server) connectorSession(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]string{"secret": secret})
 }
 func (s *Server) connectorFolders(w http.ResponseWriter, r *http.Request) {
-	docs, err := s.Store.Documents()
+	folders, _, err := s.paperLabels()
 	if err != nil {
 		fail(w, 500, "无法读取分类")
 		return
 	}
-	seen := map[string]bool{}
-	for _, d := range docs {
-		if d.Library == "papers" {
-			for _, f := range d.Folders {
-				seen[f] = true
+	respond(w, 200, folders)
+}
+func (s *Server) connectorLabels(w http.ResponseWriter, r *http.Request) {
+	folders, tags, err := s.paperLabels()
+	if err != nil {
+		fail(w, 500, "无法读取论文库分类和标签")
+		return
+	}
+	respond(w, 200, map[string][]string{"folders": folders, "tags": tags})
+}
+func (s *Server) paperLabels() ([]string, []string, error) {
+	var saved string
+	err := s.Store.DB.QueryRow("SELECT value FROM settings WHERE key='preferences:library'").Scan(&saved)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, err
+	}
+	var prefs struct {
+		Papers struct {
+			Categories []string `json:"categories"`
+		} `json:"papers"`
+	}
+	if saved != "" {
+		if err := json.Unmarshal([]byte(saved), &prefs); err != nil {
+			return nil, nil, err
+		}
+	}
+	docs, err := s.Store.Documents()
+	if err != nil {
+		return nil, nil, err
+	}
+	folders := []string{}
+	tags := []string{}
+	seenFolders := map[string]bool{}
+	seenTags := map[string]bool{}
+	addFolder := func(name string) {
+		parts := strings.Split(name, "/")
+		for i := range parts {
+			path := strings.Join(parts[:i+1], "/")
+			key := strings.ToLower(path)
+			if path != "" && !seenFolders[key] {
+				seenFolders[key] = true
+				folders = append(folders, path)
 			}
 		}
 	}
-	out := []string{}
-	for f := range seen {
-		out = append(out, f)
+	for _, name := range prefs.Papers.Categories {
+		addFolder(name)
 	}
-	sort.Strings(out)
-	respond(w, 200, out)
+	extraFolders := []string{}
+	extraTags := []string{}
+	for _, d := range docs {
+		if d.Library == "papers" {
+			for _, f := range d.Folders {
+				extraFolders = append(extraFolders, f)
+			}
+			for _, tag := range d.Tags {
+				extraTags = append(extraTags, tag)
+			}
+		}
+	}
+	sort.Strings(extraFolders)
+	for _, name := range extraFolders {
+		addFolder(name)
+	}
+	sort.Strings(extraTags)
+	for _, name := range extraTags {
+		key := strings.ToLower(name)
+		if name != "" && !seenTags[key] {
+			seenTags[key] = true
+			tags = append(tags, name)
+		}
+	}
+	return folders, tags, nil
 }
 func (s *Server) connectorImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)

@@ -20,6 +20,7 @@ function App() {
   const [folder, setFolder] = useState("");
   const [tags, setTags] = useState("");
   const [folders, setFolders] = useState<string[]>([]);
+  const [existingTags, setExistingTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<
     "neutral" | "success" | "error"
@@ -32,7 +33,7 @@ function App() {
         const stored = await chrome.storage.local.get("secret");
         let credential = typeof stored.secret === "string" ? stored.secret : "";
         let response = credential
-          ? await fetch(bridge + "/v1/folders", {
+          ? await fetch(bridge + "/v1/labels", {
               headers: { Authorization: `Bearer ${credential}` },
             })
           : null;
@@ -43,12 +44,17 @@ function App() {
           if (!session.ok) throw Error("无法连接 Reader");
           credential = (await session.json()).secret;
           await chrome.storage.local.set({ secret: credential });
-          response = await fetch(bridge + "/v1/folders", {
+          response = await fetch(bridge + "/v1/labels", {
             headers: { Authorization: `Bearer ${credential}` },
           });
         }
         if (!response.ok) throw Error("无法读取 Reader 论文库");
-        setFolders(await response.json());
+        const labels = (await response.json()) as {
+          folders: string[];
+          tags: string[];
+        };
+        setFolders(labels.folders);
+        setExistingTags(labels.tags);
         setSecret(credential);
       } catch {
         setMessage("请先打开 Reader 桌面应用");
@@ -399,6 +405,7 @@ function App() {
       setBusy(false);
     }
   }
+  const tagPrefix = tags.match(/^.*[,，]\s*/)?.[0] || "";
   return (
     <>
       <main>
@@ -450,11 +457,17 @@ function App() {
             <label htmlFor="tags">标签</label>
             <input
               id="tags"
+              list="reader-tags"
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="用逗号分隔，可选"
             />
+            <datalist id="reader-tags">
+              {existingTags.map((tag) => (
+                <option value={`${tagPrefix}${tag}`} key={tag} />
+              ))}
+            </datalist>
             <p className="muted">
               首次收录时，Chrome 会请求网站访问权限，用于读取所选页面、PDF
               和快照图片。
