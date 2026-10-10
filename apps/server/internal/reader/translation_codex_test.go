@@ -27,7 +27,7 @@ func TestTranslationServiceKeepsOtherProviderTaskSettings(t *testing.T) {
 	if !ok || service.primary != "claude" || claude.model != "translation-model" || claude.level != "low" || claude.task != taskTranslation {
 		t.Fatalf("translation task settings not preserved: %#v", service)
 	}
-	if service.connections["codex"].Adapter != adapter || config.Models["codex"] != "chat-codex" || config.TranslationModels["codex"] != "selected-codex" {
+	if service.connections["codex"].Adapter != adapter.codex || config.Models["codex"] != "chat-codex" || config.TranslationModels["codex"] != "selected-codex" {
 		t.Fatal("Codex adapter or saved model settings changed")
 	}
 }
@@ -284,8 +284,9 @@ func TestTranslationCodexWorkersReuseSelectedModelAndEffort(t *testing.T) {
 func TestTranslationCodexCancellationClosesSession(t *testing.T) {
 	s, _, m, _ := translationSessionFixture(t)
 	t.Setenv("READER_TRANSLATION_CANCEL", "1")
-	_, a := s.translationService(s.aiConfig())
-	defer a.close()
+	_, sessions := s.translationService(s.aiConfig())
+	defer sessions.close()
+	a := sessions.codex
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	batch := translationBatch{Paragraphs: []translationParagraph{{BlockID: m.Blocks[0].ID, SourceHash: translationHash(m.Blocks[0].Text), Source: m.Blocks[0].Text}}}

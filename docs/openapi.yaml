@@ -861,7 +861,10 @@
                               "properties":
                                 {
                                   "provider":
-                                    { "enum": ["codex", "claude", "kimi"] },
+                                    {
+                                      "enum":
+                                        ["codex", "claude", "kimi", "api"],
+                                    },
                                   "attachments":
                                     {
                                       "type": "array",
@@ -1416,7 +1419,10 @@
                     "name": "provider",
                     "required": true,
                     "schema":
-                      { "type": "string", "enum": ["codex", "claude", "kimi"] },
+                      {
+                        "type": "string",
+                        "enum": ["codex", "claude", "kimi", "api"],
+                      },
                   },
                 ],
               "responses":
@@ -1529,6 +1535,12 @@
                     "in": "query",
                     "description": "Test text or vision independently. Omit to run both. Vision requires a successful text check for the current configuration.",
                     "schema": { "type": "string", "enum": ["text", "vision"] },
+                  },
+                  {
+                    "name": "model",
+                    "in": "query",
+                    "description": 'Required for the api provider, which is checked one model at a time; the result is stored under capabilities["api:<model>"].',
+                    "schema": { "type": "string" },
                   },
                   {
                     "name": "provider",
@@ -3221,7 +3233,10 @@
               "properties":
                 {
                   "id":
-                    { "type": "string", "enum": ["codex", "claude", "kimi"] },
+                    {
+                      "type": "string",
+                      "enum": ["codex", "claude", "kimi", "api"],
+                    },
                   "installed": { "type": "boolean" },
                   "authenticated": { "type": "boolean" },
                   "status": { "type": "string" },
@@ -3473,9 +3488,22 @@
                   "recommendedFor":
                     {
                       "type": "array",
-                      "description": "Tasks that use this model when no model is chosen.",
+                      "description": "Tasks that use this model when no model is chosen. For the api provider, only models that passed the task's check are recommended.",
                       "items":
-                        { "type": "string", "enum": ["chat", "translation"] },
+                        {
+                          "type": "string",
+                          "enum": ["chat", "translation", "vision"],
+                        },
+                    },
+                  "custom":
+                    {
+                      "type": "boolean",
+                      "description": "api provider: a model ID the user added.",
+                    },
+                  "capability":
+                    {
+                      "$ref": "#/components/schemas/AICapability",
+                      "description": "api provider: this model's current check result.",
                     },
                 },
             },
@@ -3520,6 +3548,33 @@
                             { "$ref": "#/components/schemas/ReasoningEffort" },
                         },
                     },
+                  "visionModels":
+                    {
+                      "type": "object",
+                      "description": "Image-input model by provider; used by the api agent only. Empty uses the recommended model that passed the vision check.",
+                      "additionalProperties": { "type": "string" },
+                    },
+                  "visionEfforts":
+                    {
+                      "type": "object",
+                      "additionalProperties":
+                        {
+                          "type": "object",
+                          "additionalProperties":
+                            { "$ref": "#/components/schemas/ReasoningEffort" },
+                        },
+                    },
+                  "apiModels":
+                    {
+                      "type": "array",
+                      "description": "Model IDs the user added beside the api endpoint's /models list.",
+                      "items": { "type": "string" },
+                    },
+                  "api":
+                    {
+                      "$ref": "#/components/schemas/APIConnection",
+                      "description": "OpenAI-compatible endpoint of the api agent. Its models are chosen in models and translationModels; model here is unused.",
+                    },
                   "textAPI": { "$ref": "#/components/schemas/APIConnection" },
                   "imageAPI": { "$ref": "#/components/schemas/APIConnection" },
                   "capabilities":
@@ -3530,7 +3585,14 @@
                     },
                 },
               "required":
-                ["primary", "models", "textAPI", "imageAPI", "capabilities"],
+                [
+                  "primary",
+                  "models",
+                  "api",
+                  "textAPI",
+                  "imageAPI",
+                  "capabilities",
+                ],
             },
           "TranslationSentence":
             {

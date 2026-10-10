@@ -221,11 +221,19 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(config),
     }),
-  testAI: (provider: string, capability?: "text" | "vision") =>
-    request<AICapability>(
-      `/api/ai/test/${provider}${capability ? `?capability=${capability}` : ""}`,
+  testAI: (
+    provider: string,
+    capability?: "text" | "vision",
+    model?: string,
+  ) => {
+    const query = new URLSearchParams();
+    if (capability) query.set("capability", capability);
+    if (model) query.set("model", model);
+    return request<AICapability>(
+      `/api/ai/test/${provider}${query.size ? `?${query}` : ""}`,
       { method: "POST" },
-    ),
+    );
+  },
   documents: async (): Promise<Document[]> => {
     const { data, error } = await client.GET("/api/documents");
     if (error) throw new Error(error.error);

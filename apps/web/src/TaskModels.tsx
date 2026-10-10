@@ -15,7 +15,9 @@ import {
 } from "@reader/ui/components/select";
 import { toast } from "sonner";
 import {
+  catalogRevision,
   effortLabel,
+  usableModels,
   efforts,
   modelDisplayName,
   selectedAgentModel,
@@ -27,9 +29,12 @@ const tasks: [ModelTask, string][] = [
   ["chat", "问答"],
   ["translation", "翻译"],
 ];
+// Only the API agent sends images to a separately chosen model.
+const apiTasks: [ModelTask, string][] = [...tasks, ["vision", "图片"]];
 const fields = {
   chat: { models: "models", efforts: "efforts" },
   translation: { models: "translationModels", efforts: "translationEfforts" },
+  vision: { models: "visionModels", efforts: "visionEfforts" },
 } as const;
 
 export function taskChoice(config: AIConfig, task: ModelTask) {
@@ -47,6 +52,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
     setAIModelSaving,
   } = useReaderStore();
   const provider = config?.primary ?? "";
+  const revision = catalogRevision(config);
   const [catalog, setCatalog] = useState<{
     provider: string;
     models: AgentModel[];
@@ -77,7 +83,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [provider]);
+  }, [provider, revision]);
   if (!config || !provider) return null;
   const models = catalog.provider === provider ? catalog.models : [];
 
@@ -123,17 +129,37 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
       };
     });
 
+  const untested = models.some((m) => !m.capability);
+  const noVision =
+    provider === "api" &&
+    !loading &&
+    !error &&
+    models.length > 0 &&
+    !untested &&
+    usableModels(provider, models, "vision").length === 0;
   return (
     <div className="flex flex-col gap-2">
-      {tasks.map(([task, label]) => {
+      {(provider === "api" ? apiTasks : tasks).map(([task, label]) => {
         const { model, effort } = taskChoice(config, task);
-        const recommended = selectedAgentModel(models, "", task);
+        const usable = usableModels(provider, models, task);
+        const recommended = selectedAgentModel(usable, "", task);
         const current = model ? selectedAgentModel(models, model, task) : null;
-        const defaultLabel = recommended?.name ?? "默认模型";
+        // API choices list only models that passed this task's check.
+        const unavailable =
+          provider === "api" &&
+          !!current &&
+          !usable.some((m) => m.id === current.id);
+        const empty =
+          provider === "api" && !loading && !error && usable.length === 0;
+        const defaultLabel =
+          recommended?.name ??
+          (!empty ? "默认模型" : untested ? "等待检测" : "无可用模型");
         const options =
-          current && !models.some((m) => m.id === current.id)
-            ? [current, ...models]
-            : models;
+          current &&
+          provider !== "api" &&
+          !models.some((m) => m.id === current.id)
+            ? [current, ...usable]
+            : usable;
         return (
           <div key={task} className="flex items-center gap-2">
             <span className="w-10 shrink-0 text-sm" id={`${task}-model-label`}>
@@ -141,7 +167,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
             </span>
             <Select
               value={current?.id ?? recommended?.id ?? AUTO}
-              disabled={disabled || saving}
+              disabled={disabled || saving || (empty && !current)}
               onValueChange={(value) =>
                 value &&
                 void chooseModel(task, value === recommended?.id ? AUTO : value)
@@ -153,11 +179,15 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
                 aria-busy={loading || saving}
               >
                 <SelectValue>
-                  {current?.name ?? (loading ? "加载模型…" : defaultLabel)}
+                  {current
+                    ? `${current.name}${unavailable ? "（未通过检测）" : ""}`
+                    : loading
+                      ? "加载模型…"
+                      : defaultLabel}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {!recommended && (
+                {!recommended && !empty && (
                   <SelectItem value={AUTO} label={defaultLabel}>
                     {defaultLabel}
                   </SelectItem>
@@ -179,7 +209,7 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
             </Select>
             <Select
               value={effort}
-              disabled={disabled || saving}
+              disabled={disabled || saving || (empty && !current)}
               onValueChange={(value) =>
                 value && void chooseEffort(task, model, value)
               }
@@ -198,6 +228,11 @@ export function TaskModels({ disabled }: { disabled: boolean }) {
           </div>
         );
       })}
+      {noVision && (
+        <p className="text-xs text-muted-foreground" role="status">
+          此 API Key 没有通过图片理解检测的模型，公式转换与图片提问不可用。
+        </p>
+      )}
     </div>
   );
 }

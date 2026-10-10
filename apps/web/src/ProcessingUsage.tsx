@@ -24,6 +24,7 @@ const providers: Record<string, string> = {
   codex: "Codex",
   claude: "Claude Code",
   kimi: "Kimi Code",
+  api: "API",
   "text-api": "文字 API",
   "image-api": "图片 API",
 };

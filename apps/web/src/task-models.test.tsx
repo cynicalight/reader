@@ -48,6 +48,7 @@ beforeEach(() => {
     models: { claude: "opus" },
     efforts: { claude: { opus: "high" } },
     capabilities: {},
+    api: { url: "", model: "", hasKey: false },
     textAPI: { url: "", model: "", hasKey: false },
     imageAPI: { url: "", model: "", hasKey: false },
   };
@@ -107,4 +108,64 @@ it("returns translation to automatic selection", async () => {
   await act(async () => root.render(<TaskModels disabled={false} />));
   await choose("翻译模型", "Sonnet");
   expect(config.translationModels).toEqual({ claude: "" });
+});
+const checked = { checkedAt: "2026-10-09" };
+const apiModels: AgentModel[] = [
+  {
+    id: "deepseek-flash",
+    name: "Flash",
+    description: "",
+    isDefault: false,
+    recommendedFor: ["translation", "vision"],
+    capability: { text: true, vision: true, ...checked },
+  },
+  {
+    id: "deepseek-v4-pro",
+    name: "Pro",
+    description: "",
+    isDefault: false,
+    recommendedFor: ["chat"],
+    capability: { text: true, vision: false, ...checked },
+  },
+  {
+    id: "broken",
+    name: "Broken",
+    description: "",
+    isDefault: false,
+    custom: true,
+    capability: { text: false, vision: false, ...checked },
+  },
+];
+// Closed Base UI menus stay mounted in jsdom; read the latest one.
+const optionNames = () =>
+  Array.from(
+    Array.from(document.querySelectorAll('[role="listbox"]'))
+      .at(-1)!
+      .querySelectorAll('[role="option"]'),
+  ).map((item) => item.textContent);
+it("offers API models only for the tasks whose checks they passed", async () => {
+  config = { ...config, primary: "api", models: {}, efforts: {} };
+  useReaderStore.setState({ aiConfig: config });
+  vi.mocked(api.agentModels).mockResolvedValue(apiModels);
+  await act(async () => root.render(<TaskModels disabled={false} />));
+  expect(trigger("问答模型").textContent).toContain("Pro");
+  expect(trigger("图片模型").textContent).toContain("Flash");
+  await act(async () => trigger("问答模型").click());
+  expect(optionNames()).toEqual(["Flash", "Pro"]);
+  await act(async () => trigger("图片模型").click());
+  expect(optionNames()).toEqual(["Flash"]);
+});
+it("leaves the API image model empty when no model passed vision", async () => {
+  config = { ...config, primary: "api", models: {}, efforts: {} };
+  useReaderStore.setState({ aiConfig: config });
+  vi.mocked(api.agentModels).mockResolvedValue(
+    apiModels.slice(1).map((model) => ({
+      ...model,
+      recommendedFor: model.recommendedFor?.filter((t) => t !== "vision"),
+    })),
+  );
+  await act(async () => root.render(<TaskModels disabled={false} />));
+  expect(trigger("图片模型").textContent).toContain("无可用模型");
+  expect(trigger("图片模型").disabled).toBe(true);
+  expect(host.textContent).toContain("没有通过图片理解检测的模型");
 });

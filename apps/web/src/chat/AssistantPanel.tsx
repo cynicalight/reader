@@ -95,7 +95,7 @@ export function AssistantPanel({
                   >
                     <span className="chat-waiting-icon" aria-hidden="true">
                       {answer.fallback ||
-                      !["codex", "claude", "kimi"].includes(
+                      !["codex", "claude", "kimi", "api"].includes(
                         answer.input.provider,
                       ) ? (
                         <LoaderCircle size={16} />

@@ -429,10 +429,10 @@ func (s *Server) settleTranslations(ctx context.Context, p *Processing, m transl
 			return nil
 		}
 		config := s.aiConfig()
-		if !validAgent(config.Primary) || !(capable(config, config.Primary, false) || capable(config, "text-api", false)) {
+		if !validAgent(config.Primary) || !(primaryCapable(config, taskTranslation) || capable(config, "text-api", false)) {
 			s.configMu.Lock()
 			config = s.readAIConfig()
-			if !validAgent(config.Primary) || !(capable(config, config.Primary, false) || capable(config, "text-api", false)) {
+			if !validAgent(config.Primary) || !(primaryCapable(config, taskTranslation) || capable(config, "text-api", false)) {
 				s.processingMu.Lock()
 				p.Status = "waiting"
 				p.Detail = "请选择主 Agent 并完成文字能力测试，随后继续翻译"

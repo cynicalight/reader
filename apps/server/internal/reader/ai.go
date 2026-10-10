@@ -65,7 +65,17 @@ func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
 			out = append(out, providerStatus(r.Context(), name))
 		}
 	}
-	respond(w, 200, out)
+	respond(w, 200, append(out, apiProvider(s.aiConfig().API)))
+}
+
+// The API agent has nothing to install; a saved endpoint counts as installed
+// so Settings runs its capability checks.
+func apiProvider(c APIConnection) Provider {
+	p := Provider{ID: "api", Installed: c.URL != "", Authenticated: c.Key != "", Status: "未配置"}
+	if p.Installed {
+		p.Status = "已配置"
+	}
+	return p
 }
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
