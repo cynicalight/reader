@@ -105,7 +105,7 @@
   color: #60a5fa;
 }
 :root[data-theme="sepia"] .message-markdown a[href^="#reader-citation?"] {
-  color: var(--primary);
+  color: var(--brand-text);
 }
 .message-markdown a[href^="#reader-citation?"]:hover {
   text-decoration: underline;

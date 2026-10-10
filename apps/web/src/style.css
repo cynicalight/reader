@@ -48,16 +48,18 @@
 :root[data-theme="sepia"] {
   color-scheme: light;
   --brand: #c2643e;
+  --brand-90: color-mix(in srgb, var(--brand) 90%, transparent);
   --brand-10: color-mix(in srgb, var(--brand) 10%, transparent);
   --brand-30: color-mix(in srgb, var(--brand) 30%, transparent);
+  --brand-text: #ac512e;
   --background: #f7f6f2;
   --foreground: #1f1e1d;
   --card: #f7f6f2;
   --card-foreground: #1f1e1d;
   --popover: #f7f6f2;
   --popover-foreground: #1f1e1d;
-  --primary: #ac512e;
-  --primary-foreground: #ffffff;
+  --primary: var(--brand-90);
+  --primary-foreground: #1f1e1d;
   --secondary: #eeede7;
   --secondary-foreground: #1f1e1d;
   --muted: #eeede7;
@@ -66,14 +68,18 @@
   --accent-foreground: #1f1e1d;
   --border: #e2e1db;
   --input: #e2e1db;
-  --ring: var(--brand);
+  --ring: var(--brand-90);
 }
 :root[data-theme="sepia"] .app {
   background: #eeede7;
 }
 :root[data-theme="sepia"] .nav-item.active {
   background: var(--brand-10);
-  color: var(--primary);
+  color: var(--brand-text);
+}
+:root[data-theme="sepia"]
+  :is([data-slot="button"], [data-slot="badge"]).text-primary {
+  color: var(--brand-text);
 }
 :root[data-theme="sepia"] .book-card[data-selected="true"],
 :root[data-theme="sepia"] :is(.paper-row, .paper-table-row)[data-selected],
@@ -86,7 +92,7 @@
   color: var(--primary);
 }
 :root[data-theme="sepia"] .effort-panel {
-  --effort-blue: var(--brand);
+  --effort-blue: var(--brand-90);
 }
 @theme inline {
   --color-background: var(--background);
