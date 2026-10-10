@@ -1,0 +1,396 @@
+/// <reference types="chrome" />
+import { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { detectPage, type Candidate, type Detection } from "./detect";
+const bridge = "http://127.0.0.1:17841";
+const cleanDate = (value: unknown) => {
+  const match = String(value || "").match(
+    /^(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?/,
+  );
+  return match
+    ? [match[1], match[2]?.padStart(2, "0"), match[3]?.padStart(2, "0")]
+        .filter(Boolean)
+        .join("-")
+    : "";
+};
+function App() {
+  const [secret, setSecret] = useState("");
+  const [code, setCode] = useState("");
+  const [items, setItems] = useState<Candidate[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [folder, setFolder] = useState("");
+  const [tags, setTags] = useState("");
+  const [folders, setFolders] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void chrome.storage.local.get("secret").then(async (stored) => {
+      if (typeof stored.secret === "string") {
+        setSecret(stored.secret);
+        try {
+          const r = await fetch(bridge + "/v1/folders", {
+            headers: { Authorization: `Bearer ${stored.secret}` },
+          });
+          if (r.ok) setFolders(await r.json());
+          else setMessage("配对已失效，请在 Reader 中重新配对");
+        } catch {
+          setMessage("请先打开 Reader");
+        }
+      }
+    });
+  }, []);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab?.id) throw Error("无法读取当前标签页");
+        if (tab.url?.toLowerCase().includes(".pdf")) {
+          setItems([
+            {
+              title: tab.title || "PDF",
+              sourceUrl: tab.url,
+              pdfUrl: tab.url,
+              metadata: {
+                title: tab.title || "PDF",
+                url: tab.url,
+                itemType: "journal",
+              },
+              snapshot: "",
+            },
+          ]);
+          setSelected([0]);
+          return;
+        }
+        const result = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: detectPage,
+        });
+        const detection = result[0]?.result as Detection | undefined;
+        if (!detection?.items.length) throw Error("未识别到论文");
+        setItems(detection.items);
+        setSelected(detection.items.map((_, i) => i));
+      } catch (error) {
+        setMessage((error as Error).message || "无法读取此页面");
+      }
+    })();
+  }, []);
+  async function pair() {
+    setBusy(true);
+    try {
+      const response = await fetch(bridge + "/v1/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim().toLowerCase() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error);
+      await chrome.storage.local.set({ secret: data.secret });
+      setSecret(data.secret);
+      setMessage("已连接 Reader");
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function revoke() {
+    await chrome.storage.local.remove("secret");
+    setSecret("");
+    setMessage("已移除本机配对信息。请在 Reader 中撤销原配对。");
+  }
+  async function prepare(candidate: Candidate): Promise<Candidate> {
+    if (
+      candidate.pdfUrl === candidate.sourceUrl &&
+      /\.pdf(?:$|[?#])/i.test(candidate.sourceUrl)
+    )
+      return {
+        ...candidate,
+        metadata: {
+          ...candidate.metadata,
+          title: candidate.title.slice(0, 300),
+        },
+      };
+    let page: Document;
+    if (candidate.snapshot) {
+      page = new DOMParser().parseFromString(candidate.snapshot, "text/html");
+    } else {
+      const response = await fetch(candidate.sourceUrl, {
+        credentials: "include",
+      });
+      if (!response.ok) throw Error(`页面读取失败 (${response.status})`);
+      page = new DOMParser().parseFromString(
+        await response.text(),
+        "text/html",
+      );
+    }
+    const meta = (name: string) =>
+      (
+        page.querySelector(
+          `meta[name="${name}"],meta[property="${name}"]`,
+        ) as HTMLMetaElement | null
+      )?.content?.trim() || "";
+    const absolute = (value: string) => {
+      if (!value.trim()) return "";
+      try {
+        const u = new URL(value, candidate.sourceUrl);
+        return ["http:", "https:"].includes(u.protocol) ? u.href : "";
+      } catch {
+        return "";
+      }
+    };
+    const arxiv =
+      meta("citation_arxiv_id") ||
+      (candidate.sourceUrl.includes("arxiv.org")
+        ? (candidate.sourceUrl.match(/\/(?:abs|pdf)\/([^/?#]+)/) || [])[1]
+        : "") ||
+      "";
+    const pdf =
+      candidate.pdfUrl ||
+      absolute(meta("citation_pdf_url")) ||
+      absolute(
+        (
+          page.querySelector(
+            'a[href$=".pdf"],a[href*="/pdf/"],link[type="application/pdf"]',
+          ) as HTMLAnchorElement | null
+        )?.href || "",
+      ) ||
+      (arxiv ? `https://arxiv.org/pdf/${arxiv}` : "");
+    const title = (meta("citation_title") || candidate.title).slice(0, 300);
+    const authors = Array.from(
+      page.querySelectorAll<HTMLMetaElement>('meta[name="citation_author"]'),
+    )
+      .map((a) => ({ name: a.content.trim() }))
+      .filter((a) => a.name);
+    const rawDOI = String(meta("citation_doi") || candidate.metadata.doi || "")
+      .replace(/^doi:/i, "")
+      .trim();
+    const metadata: Record<string, unknown> = {
+      ...candidate.metadata,
+      title,
+      url: candidate.sourceUrl,
+      itemType: arxiv ? "preprint" : "journal",
+      date: cleanDate(
+        meta("citation_date") ||
+          meta("citation_publication_date") ||
+          candidate.metadata.date,
+      ),
+      doi: /^10\.\d{4,9}\/\S+$/.test(rawDOI) ? rawDOI : "",
+      arxiv,
+      venue: String(
+        meta("citation_journal_title") ||
+          meta("citation_conference_title") ||
+          candidate.metadata.venue ||
+          "",
+      ).slice(0, 500),
+      abstract: String(
+        meta("citation_abstract") || candidate.metadata.abstract || "",
+      ).slice(0, 20000),
+    };
+    if (authors.length) metadata.creators = authors;
+    const main = page.querySelector("main,article") || page.body;
+    let snapshot = main?.outerHTML || "";
+    // Embed small images so the sanitized snapshot remains readable offline.
+    const clone = main?.cloneNode(true) as Element | undefined;
+    if (clone) {
+      for (const img of Array.from(
+        clone.querySelectorAll<HTMLImageElement>("img"),
+      ).slice(0, 12)) {
+        try {
+          const src = absolute(img.getAttribute("src") || "");
+          if (!src) continue;
+          const response = await fetch(src, { credentials: "include" });
+          const blob = await response.blob();
+          if (
+            !blob.type.match(/^image\/(png|jpeg|webp|gif)$/) ||
+            blob.size > 150_000
+          )
+            continue;
+          const data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          img.src = data;
+        } catch {
+          img.removeAttribute("src");
+        }
+      }
+      snapshot = clone.outerHTML;
+    }
+    if (snapshot.length > 3 * 1024 * 1024) snapshot = "";
+    return { ...candidate, title, pdfUrl: pdf, metadata, snapshot };
+  }
+  async function save() {
+    if (!secret || selected.length === 0) return;
+    setBusy(true);
+    setMessage("");
+    let success = 0;
+    const failures: string[] = [];
+    const warnings: string[] = [];
+    try {
+      const allowed = await chrome.permissions.request({
+        origins: ["https://*/*", "http://*/*"],
+      });
+      if (!allowed) throw Error("需要网站访问权限才能读取论文页面和 PDF");
+      for (const index of selected) {
+        const item = items[index];
+        setMessage(
+          `正在收录 ${success + failures.length + 1}/${selected.length}：${item.title}`,
+        );
+        try {
+          const prepared = await prepare(item);
+          const request = {
+            type: "save",
+            candidate: prepared,
+            folders: folder ? [folder] : [],
+            tags: tags
+              .split(/[,，]/)
+              .map((x) => x.trim())
+              .filter(Boolean),
+          };
+          let result = (await chrome.runtime.sendMessage(request)) as {
+            ok: boolean;
+            error?: string;
+            code?: string;
+            pages?: number;
+            warnings?: string[];
+          };
+          if (
+            result.code === "large-paper" &&
+            window.confirm(
+              `这份 PDF 有 ${result.pages} 页。仍要收录到论文库吗？`,
+            )
+          )
+            result = await chrome.runtime.sendMessage({
+              ...request,
+              allowLarge: true,
+            });
+          if (result.ok) {
+            success++;
+            if (result.warnings?.length)
+              warnings.push(`${item.title}：${result.warnings.join("；")}`);
+          } else failures.push(`${item.title}：${result.error || "失败"}`);
+        } catch (error) {
+          failures.push(`${item.title}：${(error as Error).message}`);
+        }
+      }
+      setMessage(
+        `已收录 ${success} 篇，失败 ${failures.length} 篇${failures.length ? "\n" + failures.join("\n") : ""}${warnings.length ? "\n提醒：" + warnings.join("\n") : ""}`,
+      );
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <main>
+        <h1>Reader Connector</h1>
+        {!secret ? (
+          <>
+            <p>在 Reader「设置 → 论文库」生成配对码，然后在这里输入。</p>
+            <label htmlFor="code">配对码</label>
+            <input
+              id="code"
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="off"
+            />
+            <div className="row" style={{ marginTop: 10 }}>
+              <button
+                className="primary"
+                disabled={busy || code.trim().length !== 10}
+                onClick={() => void pair()}
+              >
+                连接 Reader
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="row">
+              <span className="muted">已与 Reader 配对</span>
+              <button onClick={() => void revoke()}>移除配对</button>
+            </div>
+            <p>
+              {items.length > 1
+                ? `识别到 ${items.length} 篇，选择要收录的论文。`
+                : "保存当前页面的 PDF 论文。"}
+            </p>
+            {items.map((item, i) => (
+              <label className="item" key={item.sourceUrl + i}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(i)}
+                  onChange={(e) =>
+                    setSelected((current) =>
+                      e.target.checked
+                        ? [...current, i]
+                        : current.filter((x) => x !== i),
+                    )
+                  }
+                />
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.pdfUrl ? "已发现 PDF" : "将尝试在论文页面查找 PDF"}
+                  </small>
+                </span>
+              </label>
+            ))}
+            <label htmlFor="folder">分类</label>
+            <input
+              id="folder"
+              list="reader-folders"
+              type="text"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="可选"
+            />
+            <datalist id="reader-folders">
+              {folders.map((f) => (
+                <option value={f} key={f} />
+              ))}
+            </datalist>
+            <label htmlFor="tags">标签</label>
+            <input
+              id="tags"
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="用逗号分隔，可选"
+            />
+            <p className="muted">
+              首次收录时，Chrome 会请求网站访问权限，用于读取所选页面、PDF
+              和快照图片。
+            </p>
+          </>
+        )}
+        {message && (
+          <div className={`status ${message.includes("失败") ? "error" : ""}`}>
+            {message}
+          </div>
+        )}
+      </main>
+      {secret && (
+        <div className="footer">
+          <button
+            className="primary"
+            style={{ width: "100%" }}
+            disabled={busy || !selected.length}
+            onClick={() => void save()}
+          >
+            {busy ? "正在处理…" : `收录 ${selected.length} 篇到 Reader`}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+createRoot(document.getElementById("root")!).render(<App />);
