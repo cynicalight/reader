@@ -349,6 +349,7 @@ export interface ReaderAdapter {
   /** Whether most of a remembered viewport position is on screen again. */
   isNear?(location: DocumentLocation): boolean;
   setBlocks?(blocks: PDFBlock[]): void;
+  setSearchBlocks?(blockIds: string[]): void;
   setEPUBBlocks?(blocks: EPUBReadingBlock[]): void;
   focusEPUBLocations?(locations: EPUBLocation[]): Promise<void>;
   hoverBlock?(blockId: string | null): void;

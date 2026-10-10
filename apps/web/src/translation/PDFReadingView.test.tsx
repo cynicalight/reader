@@ -152,6 +152,11 @@ it("uses repaired text for search and focuses the matching block", async () => {
   expect(results[0]).toMatchObject({ blockId: "p1-b1", side: "translation" });
   await renderView(defaultTheme, [], results);
   await click("原文译文");
+  expect(
+    host
+      .querySelector('[data-translation-block="p1-b1"]')
+      ?.hasAttribute("data-search-hit"),
+  ).toBe(true);
   await act(async () => fixture.ready!.focusLocation!(results[0].location));
   expect(adapter.focusBlock).toHaveBeenCalledWith("p1-b1", "parallel");
 });

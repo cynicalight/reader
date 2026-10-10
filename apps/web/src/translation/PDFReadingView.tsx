@@ -188,6 +188,19 @@ export function PDFReadingView({
   const visibleBlocks = blocks.filter(
     (b) => !isPDFPageDecoration(b) && !equationNumbers.pairedIds.has(b.id),
   );
+  const searchBlockIds = useMemo(
+    () => [
+      ...new Set(
+        searchResults
+          .map((result) => result.blockId)
+          .filter((id): id is string => !!id),
+      ),
+    ],
+    [searchResults],
+  );
+  useEffect(() => {
+    engine?.setSearchBlocks?.(searchBlockIds);
+  }, [engine, searchBlockIds]);
   useEffect(() => {
     if (pane.current) return installTranslationSelectionHighlight(pane.current);
   }, [mode, doc.id]);
@@ -1018,6 +1031,9 @@ export function PDFReadingView({
                     data-label={block.label}
                     data-hovered={hoveredBlock === block.id || undefined}
                     data-focused={focusedBlock === block.id || undefined}
+                    data-search-hit={
+                      searchBlockIds.includes(block.id) || undefined
+                    }
                     aria-current={focusedBlock === block.id || undefined}
                     tabIndex={0}
                     onClick={(event) => {
