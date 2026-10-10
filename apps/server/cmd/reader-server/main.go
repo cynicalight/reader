@@ -51,6 +51,15 @@ func main() {
 	}
 	server := reader.NewServer(store, token, *web)
 	defer server.Close()
+	connectorListener, connectorError := net.Listen("tcp", "127.0.0.1:"+reader.ConnectorPort)
+	if connectorError != nil {
+		log.Printf("Reader Connector unavailable: %v", connectorError)
+	} else {
+		server.SetConnectorAvailable(true)
+		connectorHTTP := &http.Server{Handler: server.ConnectorHandler(), ReadHeaderTimeout: 10 * time.Second}
+		go func() { _ = connectorHTTP.Serve(connectorListener) }()
+		defer connectorHTTP.Shutdown(context.Background())
+	}
 	runContext, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
 	stopProcessing := server.StartProcessing(runContext)

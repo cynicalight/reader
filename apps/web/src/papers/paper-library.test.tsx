@@ -11,6 +11,7 @@ import { usePaperUI } from "./state";
 import { paper } from "./fixtures";
 vi.mock("@reader/api", () => ({
   api: {
+    snapshotStatus: vi.fn(async () => ({ available: false })),
     update: vi.fn(async () => ({})),
     documents: vi.fn(async () => []),
     trash: vi.fn(async () => []),

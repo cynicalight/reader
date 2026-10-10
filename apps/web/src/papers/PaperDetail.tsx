@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   ExternalLink,
@@ -19,6 +19,13 @@ import type {
   PaperMetadataField,
 } from "@reader/core";
 import { Button } from "@reader/ui/components/button";
+import { api, publicationURL } from "@reader/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@reader/ui/components/dialog";
 import { Input } from "@reader/ui/components/input";
 import { Textarea } from "@reader/ui/components/textarea";
 import {
@@ -151,6 +158,22 @@ export function PaperDetail({
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [editingAbstract, setEditingAbstract] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
+  const [snapshotAvailable, setSnapshotAvailable] = useState(false);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api
+      .snapshotStatus(doc.id)
+      .then((result) => {
+        if (active) setSnapshotAvailable(result.available);
+      })
+      .catch(() => {
+        if (active) setSnapshotAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [doc.id]);
   const m = doc.metadata;
   const link = paperLink(m);
   const percent = Math.round(doc.percentage * 100);
@@ -158,6 +181,21 @@ export function PaperDetail({
   const pinned = !!prefs.pinned?.includes(pinKey);
   return (
     <aside className="paper-detail" aria-label="论文详情">
+      <Dialog open={snapshotOpen} onOpenChange={setSnapshotOpen}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>来源网页快照</DialogTitle>
+          </DialogHeader>
+          <iframe
+            title="来源网页快照"
+            sandbox="allow-popups"
+            className="min-h-0 flex-1 w-full rounded border"
+            src={
+              snapshotOpen ? publicationURL(doc.id, "snapshot.html") : undefined
+            }
+          />
+        </DialogContent>
+      </Dialog>
       <div className="paper-detail-body">
         <Textarea
           key={`${doc.id}:${doc.title}`}
@@ -181,6 +219,15 @@ export function PaperDetail({
           <BookOpen />
           {percent > 1 ? `继续阅读 · ${percent}%` : "开始阅读"}
         </Button>
+        {snapshotAvailable && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSnapshotOpen(true)}
+          >
+            查看网页快照
+          </Button>
+        )}
         <div className="paper-detail-actions">
           <DropdownMenu>
             <DropdownMenuTrigger

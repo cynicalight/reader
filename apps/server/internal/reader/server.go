@@ -18,11 +18,15 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"reader.local/server/internal/scholar"
 )
 
 type Server struct {
+	connectorMu            sync.Mutex
+	connectorAvailable     bool
+	connectorRevision      atomic.Int64
 	zoteroMu               sync.Mutex
 	zoteroScans            map[string]*zoteroScan
 	annotationMu           sync.Mutex
@@ -85,6 +89,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/tag-boards/{id}", s.saveTagBoard)
 	mux.HandleFunc("DELETE /api/tag-boards/{id}", s.deleteTagBoard)
 	mux.HandleFunc("GET /api/import/zotero", s.zoteroDefaults)
+	mux.HandleFunc("GET /api/connector/status", s.connectorStatus)
+	mux.HandleFunc("GET /api/connector/revision", s.connectorRevisionStatus)
+	mux.HandleFunc("GET /api/documents/{id}/snapshot", s.connectorSnapshotStatus)
 	mux.HandleFunc("POST /api/import/zotero/scan", s.scanZotero)
 	mux.HandleFunc("POST /api/import/zotero", s.importZotero)
 	mux.HandleFunc("POST /api/documents", s.importDocument)
@@ -629,6 +636,10 @@ func (s *Server) resource(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("resource")
 	if d.Type == "pdf" {
+		if name == "snapshot.html" {
+			s.connectorSnapshot(w, r, d.ID)
+			return
+		}
 		if strings.HasPrefix(name, "assets/") && strings.HasSuffix(name, ".png") {
 			blockID := strings.TrimSuffix(strings.TrimPrefix(name, "assets/"), ".png")
 			s.blockImage(w, r, d.ID, blockID)

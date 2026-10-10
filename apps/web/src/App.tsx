@@ -194,6 +194,26 @@ export function App() {
       }),
     [],
   );
+  useEffect(() => {
+    let active = true;
+    let revision: number | null = null;
+    const check = async () => {
+      try {
+        const latest = (await api.connectorRevision()).revision;
+        if (!active) return;
+        if (revision !== null && latest !== revision) await refreshLibrary();
+        revision = latest;
+      } catch {
+        /* Reader shutdown is handled by the desktop shell. */
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
   const importFiles = async (files: File[]) => {
     const target = currentMode();
     const accepted = files.filter((file) =>
