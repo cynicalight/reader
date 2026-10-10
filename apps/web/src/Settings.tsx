@@ -381,7 +381,7 @@ export function Settings({
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="settings-dialog sm:max-w-3xl">
+      <DialogContent className="settings-dialog p-6 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {apiDetails ? (

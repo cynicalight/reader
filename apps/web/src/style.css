@@ -2908,7 +2908,7 @@ textarea.paper-note-input {
 .settings-panel {
   min-height: 0;
   overflow-y: auto;
-  padding: 2px 4px 8px 0;
+  padding: 2px 4px 24px;
   scrollbar-width: none;
 }
 .settings-panel::-webkit-scrollbar {
