@@ -719,7 +719,7 @@ export function Settings({
                       <Button
                         key={name}
                         variant="outline"
-                        className="h-auto min-h-28 min-w-0 flex-col items-stretch gap-0 rounded-xl border-border bg-transparent p-4 text-left font-normal whitespace-normal hover:bg-muted/50 dark:border-border dark:bg-transparent"
+                        className="h-auto min-h-28 min-w-0 flex-col items-stretch justify-start gap-0 rounded-xl border-border bg-transparent p-4 text-left font-normal whitespace-normal hover:bg-muted/50 dark:border-border dark:bg-transparent"
                         onClick={() => setAPIDetails(true)}
                         aria-label="配置 API Key"
                       >

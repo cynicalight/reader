@@ -11,7 +11,13 @@ function APIAvatar({ size = 20 }: { size?: number; iconClassName?: string }) {
       className="inline-flex items-center justify-center rounded-full bg-muted text-foreground"
       style={{ width: size, height: size }}
     >
-      <KeyRound size={Math.round(size * 0.55)} strokeWidth={2} />
+      <KeyRound
+        style={{
+          width: Math.round(size * 0.55),
+          height: Math.round(size * 0.55),
+        }}
+        strokeWidth={2}
+      />
     </span>
   );
 }
