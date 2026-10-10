@@ -194,7 +194,7 @@ export function useSentenceMarks(
         groups.get(name)!.push(mark.range);
       }
       rules.push(
-        `::highlight(${searchName}) { background-color: color-mix(in srgb, var(--primary) 10%, transparent); }`,
+        `::highlight(${searchName}) { background-color: color-mix(in srgb, var(--primary) 25%, transparent); }`,
         `.textLayer ::highlight(${searchName}) { color: transparent; }`,
       );
       const css = rules.join("\n");
