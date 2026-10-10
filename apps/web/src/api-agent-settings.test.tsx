@@ -151,17 +151,22 @@ it("saves the API endpoint and key, then tests the new connection", async () => 
   for (const model of ["deepseek-flash", "deepseek-v4-pro"])
     for (const stage of ["text", "vision"])
       expect(api.testAI).toHaveBeenCalledWith("api", stage, model);
-  expect(host.querySelectorAll('[aria-label="图片理解：已通过"]')).toHaveLength(
-    1,
-  );
+  expect(
+    host.querySelectorAll('.api-model-list [aria-label="图片理解：已通过"]'),
+  ).toHaveLength(1);
   expect(toast.warning).not.toHaveBeenCalled();
   expect(input("API Key").value).toBe("");
   expect(input("API Key").placeholder).toBe("已保存，留空保持不变");
   await act(async () =>
-    (host.querySelector('[aria-label="返回 Agent 设置"]') as HTMLButtonElement).click(),
+    (
+      host.querySelector('[aria-label="返回 Agent 设置"]') as HTMLButtonElement
+    ).click(),
   );
   expect(input("API 地址")).toBeNull();
-  expect(host.textContent).toContain("点击卡片查看 API 配置");
+  expect(host.textContent).not.toContain("点击卡片查看 API 配置");
+  const card = host.querySelector('[aria-label="配置 API Key"]')!;
+  expect(card.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
+  expect(card.querySelector('[aria-label="图片理解：已通过"]')).not.toBeNull();
   await openAPI();
   // Editing only the address keeps the saved key without resending it.
   await type("API 地址", "https://api.deepseek.com/v1");
@@ -185,6 +190,14 @@ it("warns when no listed model passes the vision check", async () => {
   await openAPI();
   expect(api.testAI).toHaveBeenCalledWith("api", "vision", "text-only");
   expect(toast.warning).toHaveBeenCalledOnce();
+  await act(async () =>
+    (
+      host.querySelector('[aria-label="返回 Agent 设置"]') as HTMLButtonElement
+    ).click(),
+  );
+  const card = host.querySelector('[aria-label="配置 API Key"]')!;
+  expect(card.querySelector('[aria-label="文本推理：已通过"]')).not.toBeNull();
+  expect(card.querySelector('[aria-label="图片理解：未通过"]')).not.toBeNull();
 });
 it("adds and removes a model ID by hand and checks it", async () => {
   config.api = { url: "https://api.example.com", model: "", hasKey: true };

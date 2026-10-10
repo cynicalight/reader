@@ -338,6 +338,47 @@ export function Settings({
       })}
     </div>
   );
+  const apiCardStatus = () => (
+    <span className="flex flex-wrap gap-x-5">
+      {(["text", "vision"] as const).map((kind) => {
+        const label = kind === "text" ? "文本推理" : "图片理解";
+        // The API agent uses a separate model for each task. One passing model
+        // is enough for the corresponding capability on this summary card.
+        const ready = apiModels.some((model) => {
+          const id = `api:${model.id}`;
+          return (
+            !errors[`${id}:text`] &&
+            !errors[`${id}:${kind}`] &&
+            config?.capabilities[id]?.[kind]
+          );
+        });
+        const pending =
+          !ready &&
+          (loading || [...testing.keys()].some((id) => id.startsWith("api:")));
+        const state = pending ? "pending" : ready ? "passed" : "failed";
+        return (
+          <span
+            key={kind}
+            className="agent-check-status"
+            role="status"
+            aria-live="polite"
+            aria-label={`${label}：${pending ? "检测中" : ready ? "已通过" : "未通过"}`}
+          >
+            <span className="agent-check-icon" data-state={state}>
+              {pending ? (
+                <LoaderCircle className="animate-spin" />
+              ) : ready ? (
+                <CircleCheck />
+              ) : (
+                <TriangleAlert />
+              )}
+            </span>
+            <span>{label}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="settings-dialog sm:max-w-3xl">
@@ -690,16 +731,21 @@ export function Settings({
                             <Badge variant="outline">未配置</Badge>
                           )}
                         </span>
-                        <span className="mt-3 text-xs text-muted-foreground">
-                          {p?.installed
-                            ? "点击卡片查看 API 配置"
-                            : "点击卡片配置你的apikey"}
-                        </span>
+                        {p?.installed ? (
+                          apiCardStatus()
+                        ) : (
+                          <span className="mt-3 text-xs text-muted-foreground">
+                            点击卡片配置你的apikey
+                          </span>
+                        )}
                       </Button>
                     );
 
                   return (
-                    <div key={name} className="min-h-28 min-w-0 rounded-xl border p-4">
+                    <div
+                      key={name}
+                      className="min-h-28 min-w-0 rounded-xl border p-4"
+                    >
                       <div className="flex items-center gap-3">
                         <span className="flex-1 text-base font-medium">
                           <ProviderIdentity provider={name} size={36} />
