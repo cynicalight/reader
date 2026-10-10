@@ -101,7 +101,7 @@ export function CitationDialog({
   const meta = citationStyles[style];
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="truncate">
             导出引用 · {title}（{items.length} 篇）
