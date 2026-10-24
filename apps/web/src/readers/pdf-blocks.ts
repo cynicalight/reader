@@ -73,6 +73,7 @@ export class PDFBlockOverlay {
   private hovered?: string;
   private linkedId: string | null = null;
   private focusId: string | null = null;
+  private tourTarget = document.createElement("div");
   private focus = document.createElement("div");
   private referenceFlash = document.createElement("div");
   private referenceFlashId: string | null = null;
@@ -89,6 +90,20 @@ export class PDFBlockOverlay {
     private onHover: (block: PDFBlock | null) => void = () => {},
     private onFocus: (block: PDFBlock) => boolean = () => false,
   ) {
+    // A geometry-only landmark: real pointer events still reach PDF text.
+    this.tourTarget.dataset.tour = "source-block";
+    this.tourTarget.setAttribute("aria-hidden", "true");
+    Object.assign(this.tourTarget.style, {
+      position: "absolute",
+      pointerEvents: "none",
+    });
+    this.tourTarget.onclick = () => {
+      const block = this.blocks.find(
+        (b) => b.id === this.tourTarget.dataset.blockId,
+      );
+      if (block && this.onFocus(block))
+        this.tourTarget.dataset.demonstrated = "true";
+    };
     this.overlay = document.createElement("div");
     this.overlay.className = "neoread-block-hover";
     this.root = createRoot(this.overlay);
@@ -209,6 +224,8 @@ export class PDFBlockOverlay {
     if ((event.target as Element)?.closest("a, button, input, [role=button]"))
       return;
     if (this.onFocus(block)) {
+      if (block.id === this.tourTarget.dataset.blockId)
+        this.tourTarget.dataset.demonstrated = "true";
       event.preventDefault();
       event.stopPropagation();
       this.clear();
@@ -285,6 +302,9 @@ export class PDFBlockOverlay {
   }
   setFocusBlock(blockId: string | null) {
     this.focusId = blockId;
+    this.tourTarget.dataset.focused = String(
+      blockId === this.tourTarget.dataset.blockId,
+    );
     if (!blockId) {
       if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
         this.focus.remove();
@@ -347,7 +367,33 @@ export class PDFBlockOverlay {
     this.focus.dataset.blockKind = block.image ? "image" : "text";
     page.append(this.focus);
   }
+  private paintTourTarget() {
+    // Prefer a full paragraph over the title or author list.
+    const text = this.blocks.filter((b) => !b.image && b.text.trim());
+    const block =
+      text.find((b) => b.label === "text" && b.text.length > 100) ?? text[0];
+    const page =
+      block &&
+      this.host.querySelector<HTMLElement>(
+        `.page[data-page-number="${block.page}"]`,
+      );
+    if (!block || !page) {
+      this.tourTarget.remove();
+      return;
+    }
+    const b = block.bounds;
+    Object.assign(this.tourTarget.style, {
+      left: `${b.x * 100}%`,
+      top: `${b.y * 100}%`,
+      width: `${b.width * 100}%`,
+      height: `${b.height * 100}%`,
+    });
+    this.tourTarget.dataset.blockId = block.id;
+    this.tourTarget.dataset.focused = String(this.focusId === block.id);
+    if (this.tourTarget.parentElement !== page) page.append(this.tourTarget);
+  }
   repaint() {
+    this.paintTourTarget();
     this.paintReferenceFlash();
     for (const [id, element] of this.searchBlocks) {
       const match = this.blocks.find((block) => block.id === id);
@@ -391,6 +437,8 @@ export class PDFBlockOverlay {
     this.show(this.linked, page);
   }
   destroy() {
+    this.tourTarget.remove();
+    this.tourTarget.onclick = null;
     clearTimeout(this.referenceFlashTimer);
     this.referenceFlash.remove();
     for (const element of this.searchBlocks.values()) element.remove();

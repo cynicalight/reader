@@ -16,6 +16,7 @@ import { scenes } from "./scenes";
 import { guideTopics } from "./topics";
 import { guideLaunch, releaseNotes } from "./releases";
 import { GuideHost } from "./GuideHost";
+import { GuidedTour } from "./tour/GuidedTour";
 
 vi.mock("@neoread/api", () => ({
   api: { guidePreferences: vi.fn(), saveGuidePreferences: vi.fn() },
@@ -178,6 +179,70 @@ describe("guide host", () => {
     [...document.querySelectorAll("button")].find(
       (b) => b.textContent === label,
     )!;
+
+  it("advances on target clicks and observes the focus result before continuing", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const frames: FrameRequestCallback[] = [];
+      vi.mocked(requestAnimationFrame).mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      const flush = () =>
+        act(async () => {
+          for (const callback of frames.splice(0)) callback(0);
+        });
+      const finish = vi.fn();
+      await act(async () =>
+        root.render(
+          <GuidedTour
+            open
+            onFinish={finish}
+            steps={[
+              {
+                id: "click",
+                view: () => ({
+                  title: "点击目标",
+                  body: "",
+                  advanceOn: "#tour-test-target",
+                }),
+              },
+              {
+                id: "observe",
+                view: () => ({
+                  title: "查看聚焦",
+                  body: "",
+                  advanceAfter: 3000,
+                }),
+              },
+            ]}
+          />,
+        ),
+      );
+      await flush();
+      expect(document.querySelector(".tour-card")?.textContent).not.toContain(
+        "下一步",
+      );
+      const target = document.createElement("button");
+      target.id = "tour-test-target";
+      host.append(target);
+      // UI components may stop bubbling; the tour must still see the click.
+      target.onclick = (event) => event.stopPropagation();
+      await act(async () => target.click());
+      await flush();
+      expect(document.querySelector(".tour-card")?.textContent).toContain(
+        "查看聚焦",
+      );
+      await act(async () => vi.advanceTimersByTime(2999));
+      await flush();
+      expect(finish).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTime(1));
+      await flush();
+      expect(finish).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("starts the guided tour for a new user and remembers a skip", async () => {
     const frames: FrameRequestCallback[] = [];

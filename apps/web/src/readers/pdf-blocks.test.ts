@@ -372,3 +372,29 @@ it("keeps the block during fade-out and cancels stale removal when the pointer r
   expect(page.contains(overlay)).toBe(false);
   await act(async () => layer.destroy());
 });
+
+it("keeps a non-intercepting tour landmark and distinguishes a click from automatic focus", () => {
+  const host = document.createElement("div");
+  host.innerHTML = '<div class="page" data-page-number="2"></div>';
+  const onFocus = vi.fn(() => true);
+  const layer = new PDFBlockOverlay(host, undefined, undefined, onFocus);
+  const paragraph = {
+    ...block,
+    image: undefined,
+    label: "text",
+    text: "A paragraph ".repeat(12),
+  };
+  layer.setBlocks([paragraph]);
+  const target = host.querySelector<HTMLElement>('[data-tour="source-block"]')!;
+  expect(target.style.pointerEvents).toBe("none");
+  expect(target.style.left).toBe("10%");
+  layer.setFocusBlock(paragraph.id);
+  expect(target.dataset.focused).toBe("true");
+  expect(target.dataset.demonstrated).toBeUndefined();
+  target.click();
+  expect(onFocus).toHaveBeenCalledWith(paragraph);
+  expect(target.dataset.demonstrated).toBe("true");
+  layer.setBlocks([]);
+  expect(host.contains(target)).toBe(false);
+  layer.destroy();
+});

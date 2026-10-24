@@ -816,7 +816,9 @@ export function PDFReadingView({
       <Tabs value={mode} onValueChange={(v) => changeMode(v as Mode)}>
         <TabsList>
           <TabsTrigger value="source">仅原文</TabsTrigger>
-          <TabsTrigger value="parallel">原文译文</TabsTrigger>
+          <TabsTrigger value="parallel" data-tour="parallel-mode">
+            原文译文
+          </TabsTrigger>
           <TabsTrigger value="translation">仅译文</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -825,6 +827,7 @@ export function PDFReadingView({
   return (
     <div
       className="pdf-reading"
+      data-reading-mode={mode}
       ref={root}
       data-theme={theme.mode}
       data-dark-contrast={theme.pdfDarkContrast ?? "soft"}

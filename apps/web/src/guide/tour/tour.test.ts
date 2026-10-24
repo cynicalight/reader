@@ -233,7 +233,7 @@ describe("tour steps", () => {
     expect(view?.click).toEqual([
       '[data-tour="import-dialog"] > [data-slot="dialog-close"]',
     ]);
-    expect(view?.act).toBe(true);
+    expect(view?.next).toBeUndefined();
   });
   it("finishes after the last confirmation", () => {
     expect(
@@ -243,4 +243,66 @@ describe("tour steps", () => {
       }),
     ).toBe(tourSteps.length);
   });
+});
+
+it("requires parallel mode before demonstrating source block focus", () => {
+  const reading = {
+    reading: true,
+    readingModes: true,
+    pdfReading: true,
+    library: "paper" as const,
+  };
+  expect(at(index("modes"), reading).view?.pointer).toMatchObject({
+    gesture: "click",
+    target: '[data-tour="parallel-mode"]',
+  });
+  expect(
+    at(index("modes"), { ...reading, parallel: true, sourceBlock: true }).id,
+  ).toBe("focus-block");
+  expect(at(index("focus-block"), { ...reading, parallel: false }).id).toBe(
+    "modes",
+  );
+  expect(
+    at(index("focus-block"), { ...reading, parallel: true, sourceBlock: true })
+      .view?.pointer?.gesture,
+  ).toBe("click");
+  const focused = at(index("focus-block"), {
+    ...reading,
+    parallel: true,
+    sourceBlock: true,
+    blockFocused: true,
+  });
+  expect(focused.id).toBe("focus-block");
+  expect(focused.view?.next).toBeUndefined();
+  expect(focused.view?.advanceAfter).toBe(3000);
+  expect(
+    at(index("focus-block"), {
+      ...reading,
+      parallel: true,
+      acknowledged: new Set(["focus-block"]),
+    }).id,
+  ).toBe("assistant");
+  expect(
+    at(index("focus-block"), {
+      reading: true,
+      pdfReading: false,
+      parallel: true,
+    }).id,
+  ).toBe("assistant");
+});
+
+it("only offers 下一步 at Agent configuration and permits continuing without a model", () => {
+  const state = { ...base, settings: true, agentPanel: true };
+  const nextSteps = tourSteps.filter(
+    (step) => step.view(state).next === "下一步",
+  );
+  expect(nextSteps.map((step) => step.id)).toEqual(["agent"]);
+  const next = at(index("agent"), {
+    ...state,
+    acknowledged: new Set(["agent"]),
+    taskModels: true,
+  });
+  expect(next.id).toBe("close-settings");
+  expect(next.view?.title).toBe("稍后配置 Agent");
+  expect(at(index("close-settings"), { settings: false }).id).toBe("import");
 });
